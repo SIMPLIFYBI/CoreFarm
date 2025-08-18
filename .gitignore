@@ -40,3 +40,4 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 ".env.local`n.env*`n.next`nnode_modules" 
+".env.local`n.env*`n.next`nnode_modules" 

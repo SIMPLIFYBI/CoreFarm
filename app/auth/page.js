@@ -1,10 +1,21 @@
 "use client";
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import toast from 'react-hot-toast';
 
+// This page depends on URL search params and client auth; opt out of static prerendering
+export const dynamic = 'force-dynamic';
+
 export default function AuthPage() {
+  return (
+    <Suspense fallback={<div className="max-w-md mx-auto py-12">Loading…</div>}>
+      <AuthInner />
+    </Suspense>
+  );
+}
+
+function AuthInner() {
   const supabase = supabaseBrowser();
   const searchParams = useSearchParams();
   const router = useRouter();
