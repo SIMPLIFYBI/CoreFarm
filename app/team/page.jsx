@@ -18,6 +18,7 @@ export default function TeamPage() {
   // Invites UX controls
   const [inviteStatusFilter, setInviteStatusFilter] = useState("pending"); // 'pending' | 'accepted' | 'revoked' | 'all'
   const [deleteMode, setDeleteMode] = useState(false);
+  const pendingMyInvite = useMemo(() => (myInvites || []).find((i) => i.status === "pending") || null, [myInvites]);
 
   const myRole = useMemo(() => {
     const m = memberships.find((m) => m.organization_id === selectedOrgId);
@@ -236,21 +237,17 @@ export default function TeamPage() {
 
           <div className="card p-4">
             <h2 className="font-medium mb-2">Your invitations</h2>
-            {myInvites.length === 0 ? (
-              <p className="text-sm text-gray-500">No invitations.</p>
-            ) : (
+            {pendingMyInvite ? (
               <ul className="text-sm space-y-2">
-                {myInvites.map((inv) => (
-                  <li key={inv.id} className="flex items-center justify-between">
-                    <span>
-                      {inv.organizations?.name || inv.organization_id} — {inv.role} — {inv.status}
-                    </span>
-                    {inv.status === "pending" && (
-                      <button className="btn text-xs" onClick={() => acceptInvite(inv)}>Accept</button>
-                    )}
-                  </li>
-                ))}
+                <li key={pendingMyInvite.id} className="flex items-center justify-between">
+                  <span>
+                    {pendingMyInvite.organizations?.name || pendingMyInvite.organization_id} — {pendingMyInvite.role} — pending
+                  </span>
+                  <button className="btn text-xs" onClick={() => acceptInvite(pendingMyInvite)}>Accept</button>
+                </li>
               </ul>
+            ) : (
+              <p className="text-sm text-gray-500">No invitations.</p>
             )}
           </div>
         </div>
@@ -422,25 +419,41 @@ export default function TeamPage() {
             </>
           )}
 
-          <div className="card p-4">
-            <h2 className="font-medium mb-2">Your invitations</h2>
-            {myInvites.length === 0 ? (
-              <p className="text-sm text-gray-500">No invitations.</p>
-            ) : (
-              <ul className="text-sm space-y-2">
-                {myInvites.map((inv) => (
-                  <li key={inv.id} className="flex items-center justify-between">
+          {myRole === 'admin' ? (
+            <div className="card p-4">
+              <h2 className="font-medium mb-2">Your invitations</h2>
+              {myInvites.length === 0 ? (
+                <p className="text-sm text-gray-500">No invitations.</p>
+              ) : (
+                <ul className="text-sm space-y-2">
+                  {myInvites.map((inv) => (
+                    <li key={inv.id} className="flex items-center justify-between">
+                      <span>
+                        {inv.organizations?.name || inv.organization_id} — {inv.role} — {inv.status}
+                      </span>
+                      {inv.status === "pending" && (
+                        <button className="btn text-xs" onClick={() => acceptInvite(inv)}>Accept</button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : (
+            pendingMyInvite && (
+              <div className="card p-4">
+                <h2 className="font-medium mb-2">Your invitation</h2>
+                <ul className="text-sm space-y-2">
+                  <li key={pendingMyInvite.id} className="flex items-center justify-between">
                     <span>
-                      {inv.organizations?.name || inv.organization_id} — {inv.role} — {inv.status}
+                      {pendingMyInvite.organizations?.name || pendingMyInvite.organization_id} — {pendingMyInvite.role} — pending
                     </span>
-                    {inv.status === "pending" && (
-                      <button className="btn text-xs" onClick={() => acceptInvite(inv)}>Accept</button>
-                    )}
+                    <button className="btn text-xs" onClick={() => acceptInvite(pendingMyInvite)}>Accept</button>
                   </li>
-                ))}
-              </ul>
-            )}
-          </div>
+                </ul>
+              </div>
+            )
+          )}
         </div>
       )}
     </div>

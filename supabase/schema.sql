@@ -493,6 +493,7 @@ create policy "write consumable items (org)" on public.consumable_items for all 
 create table if not exists public.purchase_orders (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
+  name text, -- human-friendly name used before PO number is generated
   po_number text, -- nullable until assigned
   status text not null check (status in ('not_ordered','ordered','received')) default 'not_ordered',
   ordered_date date,
