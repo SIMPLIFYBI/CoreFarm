@@ -523,6 +523,8 @@ create table if not exists public.purchase_order_items (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   po_id uuid references public.purchase_orders(id) on delete cascade,
+  -- Order number is a client-provided pre-PO grouping identifier (different from PO number)
+  order_number text,
   item_key text not null,
   label text not null,
   quantity integer not null check (quantity > 0),
@@ -542,6 +544,9 @@ end $$;
 
 create index if not exists idx_po_items_org on public.purchase_order_items(organization_id);
 create index if not exists idx_po_items_po on public.purchase_order_items(po_id);
+-- Ensure column exists for existing databases
+alter table public.purchase_order_items add column if not exists order_number text;
+create index if not exists idx_po_items_order_number on public.purchase_order_items(organization_id, order_number);
 
 alter table public.purchase_order_items enable row level security;
 

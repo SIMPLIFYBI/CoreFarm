@@ -19,6 +19,7 @@ export default function ConsumablesPage() {
   // Inventory
   const [items, setItems] = useState([]); // list of {key,label,count}
   const [loadingItems, setLoadingItems] = useState(false);
+  const [orderNumbers, setOrderNumbers] = useState({}); // per-inventory-item order number input
 
   // Purchase requests
   const [poList, setPoList] = useState([]); // {id, po_number, status, ordered_date, received_date, comments}
@@ -93,42 +94,27 @@ export default function ConsumablesPage() {
   };
 
   const addToPurchaseRequest = async (key) => {
+    const order_number = (orderNumbers[key] || "").trim();
+    if (!order_number) {
+      return toast.error("Enter an order number first");
+    }
     const qty = prompt("Quantity to request?");
     if (!qty) return;
     const quantity = parseInt(qty, 10);
     if (!Number.isFinite(quantity) || quantity <= 0) return toast.error("Enter a valid quantity");
     const item = items.find((i) => i.key === key);
     if (!item) return;
-    // Create or reuse a draft PO (status not_ordered and empty po_number)
+    // Insert as a pre-PO requested item, grouped by order_number
     try {
-      let poId = null;
-      const { data: existing } = await supabase
-        .from("purchase_orders")
-        .select("id")
-        .eq("organization_id", orgId)
-        .eq("status", "not_ordered")
-        .is("po_number", null)
-        .limit(1)
-        .maybeSingle();
-      if (existing?.id) poId = existing.id;
-      else {
-        const { data: created, error: poErr } = await supabase
-          .from("purchase_orders")
-          .insert({ organization_id: orgId, status: "not_ordered" })
-          .select("id")
-          .single();
-        if (poErr) throw poErr;
-        poId = created.id;
-      }
       const { error: itemErr } = await supabase
         .from("purchase_order_items")
-        .insert({ organization_id: orgId, po_id: poId, item_key: item.key, label: item.label, quantity, status: "outstanding" });
+        .insert({ organization_id: orgId, po_id: null, order_number, item_key: item.key, label: item.label, quantity, status: "outstanding" });
       if (itemErr) throw itemErr;
-      toast.success("Added to purchase request");
+      toast.success("Added to order");
       await loadPurchaseData(orgId);
       setTab("requests");
     } catch {
-      toast.error("Could not add to purchase request (check setup)");
+      toast.error("Could not add to order (check setup)");
     }
   };
 
@@ -143,7 +129,7 @@ export default function ConsumablesPage() {
           .order("created_at", { ascending: false }),
         supabase
           .from("purchase_order_items")
-      .select("id, po_id, item_key, label, quantity, status")
+      .select("id, po_id, order_number, item_key, label, quantity, status")
           .eq("organization_id", org),
       ]);
       setPoList(pos || []);
@@ -171,7 +157,17 @@ export default function ConsumablesPage() {
     return ids;
   }, [poFilter, poList]);
 
-  const unassignedItems = useMemo(() => poItems.filter((i) => i.po_id == null), [poItems]);
+  const requestGroups = useMemo(() => {
+    const groups = {};
+    for (const it of poItems) {
+      if (it.po_id == null) {
+        const key = (it.order_number || "").trim();
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(it);
+      }
+    }
+    return groups;
+  }, [poItems]);
   const visiblePoItems = useMemo(() => {
     let items = poItems.filter((i) => i.po_id && filteredPoIds.includes(i.po_id));
     if (statusFilter !== "all") items = items.filter((i) => i.status === statusFilter);
@@ -219,6 +215,36 @@ export default function ConsumablesPage() {
     }
   };
 
+  const placeOrderForGroup = async (groupOrderNumber) => {
+    const ord = (groupOrderNumber || "").trim();
+    const itemsInGroup = requestGroups[ord] || [];
+    if (itemsInGroup.length === 0) return;
+    try {
+      // Create a PO with status 'ordered' and no PO number yet
+      const { data: created, error: poErr } = await supabase
+        .from("purchase_orders")
+        .insert({ organization_id: orgId, status: "ordered", ordered_date: new Date().toISOString().slice(0,10) })
+        .select("id")
+        .single();
+      if (poErr) throw poErr;
+      const poId = created.id;
+      // Move all items in the group onto the PO and mark ordered
+      const ids = itemsInGroup.map((i) => i.id);
+      const { error: updErr } = await supabase
+        .from("purchase_order_items")
+        .update({ po_id: poId, status: "ordered" })
+        .in("id", ids)
+        .eq("organization_id", orgId);
+      if (updErr) throw updErr;
+      // Update local state
+      setPoItems((arr) => arr.map((i) => (ids.includes(i.id) ? { ...i, po_id: poId, status: "ordered" } : i)));
+      await loadPurchaseData(orgId);
+      toast.success("Order placed; items moved to PO");
+    } catch {
+      toast.error("Failed to place order");
+    }
+  };
+
   const updatePoMeta = async (poId, fields) => {
     try {
       const { error } = await supabase
@@ -257,10 +283,10 @@ export default function ConsumablesPage() {
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2">
-        <button className={`btn ${tab === "inventory" ? "bg-gray-100" : ""}`} onClick={() => setTab("inventory")}>
+        <button className={`btn ${tab === "inventory" ? "btn-primary" : ""}`} onClick={() => setTab("inventory")}>
           Current inventory
         </button>
-        <button className={`btn ${tab === "requests" ? "bg-gray-100" : ""}`} onClick={() => setTab("requests")}>
+        <button className={`btn ${tab === "requests" ? "btn-primary" : ""}`} onClick={() => setTab("requests")}>
           Purchase requests
         </button>
         {memberships.length > 1 && (
@@ -287,7 +313,8 @@ export default function ConsumablesPage() {
                   <tr>
                     <th>Item</th>
                     <th className="w-32">Count</th>
-                    <th className="w-48">Actions</th>
+                    <th className="w-36">Order #</th>
+                    <th className="w-40">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -304,8 +331,17 @@ export default function ConsumablesPage() {
                         />
                       </td>
                       <td>
+                        <input
+                          type="text"
+                          className="input input-sm w-32"
+                          placeholder="Order number"
+                          value={orderNumbers[it.key] || ""}
+                          onChange={(e) => setOrderNumbers((m) => ({ ...m, [it.key]: e.target.value }))}
+                        />
+                      </td>
+                      <td>
                         <button className="btn text-xs" onClick={() => addToPurchaseRequest(it.key)}>
-                          Add to Purchase Request
+                          Add to Order
                         </button>
                       </td>
                     </tr>
@@ -319,38 +355,41 @@ export default function ConsumablesPage() {
 
       {tab === "requests" && (
         <div className="space-y-4">
-          {/* Unassigned bucket */}
-          <div className="card p-4">
-            <h3 className="font-medium mb-2">Unassigned items</h3>
-            {unassignedItems.length === 0 ? (
-              <div className="text-sm text-gray-500">No unassigned items.</div>
-            ) : (
-              <div className="table-container">
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Item</th>
-                      <th className="w-20 text-right">Qty</th>
-                      <th className="w-44">Assign to PO</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {unassignedItems.map((it) => (
-                      <tr key={it.id}>
-                        <td>{it.label}</td>
-                        <td className="text-right">{it.quantity}</td>
-                        <td>
-                          <button className="btn text-xs" disabled={assigning[it.id]} onClick={() => assignItemToPo(it.id)}>
-                            {assigning[it.id] ? 'Assigning…' : 'Assign to PO'}
-                          </button>
-                        </td>
+          {/* Requested items grouped by Order # (pre-PO) */}
+          {Object.keys(requestGroups).length === 0 ? (
+            <div className="card p-4 text-sm text-gray-500">No requested items yet. Add items with an Order # from the Inventory tab.</div>
+          ) : (
+            Object.entries(requestGroups).map(([ord, list]) => (
+              <div key={ord || 'no-order'} className="card p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <h3 className="font-medium">Order number: {ord || '(none)'}</h3>
+                  <button className="btn text-xs ml-auto" onClick={() => placeOrderForGroup(ord)}>
+                    Place order (create PO)
+                  </button>
+                </div>
+                <div className="table-container">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Item</th>
+                        <th className="w-20 text-right">Qty</th>
+                        <th className="w-28">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {list.map((it) => (
+                        <tr key={it.id}>
+                          <td>{it.label}</td>
+                          <td className="text-right">{it.quantity}</td>
+                          <td className="text-xs capitalize">{it.status}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            )}
-          </div>
+            ))
+          )}
 
           <div className="card p-4">
             <div className="flex flex-wrap items-center gap-3">
