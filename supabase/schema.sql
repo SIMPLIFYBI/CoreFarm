@@ -454,3 +454,118 @@ select
   case when sum(c.planned_m) > 0 then round((sum(c.done_m) / sum(c.planned_m)) * 100, 1) else 0 end as percent_done
 from public.hole_task_completion c
 group by c.hole_id;
+
+-- ============================================================
+-- Consumables: inventory, purchase requests, and purchase orders
+-- ============================================================
+
+-- Inventory items per organization
+create table if not exists public.consumable_items (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  key text not null,
+  label text not null,
+  count integer not null default 0 check (count >= 0),
+  updated_at timestamptz default now()
+);
+
+create unique index if not exists uniq_consumable_item_org_key
+on public.consumable_items (organization_id, key);
+
+create index if not exists idx_consumable_items_org
+on public.consumable_items (organization_id);
+
+alter table public.consumable_items enable row level security;
+
+drop policy if exists "read consumable items (org)" on public.consumable_items;
+drop policy if exists "write consumable items (org)" on public.consumable_items;
+create policy "read consumable items (org)" on public.consumable_items for select using (
+  public.is_current_org_member(organization_id)
+);
+create policy "write consumable items (org)" on public.consumable_items for all using (
+  public.is_current_org_member(organization_id)
+) with check (
+  public.is_current_org_member(organization_id)
+);
+
+-- Purchase Orders per organization
+-- status: not_ordered (draft / request bucket), ordered, received
+create table if not exists public.purchase_orders (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  po_number text, -- nullable until assigned
+  status text not null check (status in ('not_ordered','ordered','received')) default 'not_ordered',
+  ordered_date date,
+  received_date date,
+  comments text,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_purchase_orders_org on public.purchase_orders(organization_id);
+create index if not exists idx_purchase_orders_po_number on public.purchase_orders(po_number);
+
+alter table public.purchase_orders enable row level security;
+
+drop policy if exists "read purchase orders (org)" on public.purchase_orders;
+drop policy if exists "write purchase orders (org)" on public.purchase_orders;
+create policy "read purchase orders (org)" on public.purchase_orders for select using (
+  public.is_current_org_member(organization_id)
+);
+create policy "write purchase orders (org)" on public.purchase_orders for all using (
+  public.is_current_org_member(organization_id)
+) with check (
+  public.is_current_org_member(organization_id)
+);
+
+-- Items within a purchase order (also denormalized organization_id for simple RLS filtering)
+-- item status: outstanding, ordered, received
+create table if not exists public.purchase_order_items (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  po_id uuid references public.purchase_orders(id) on delete cascade,
+  item_key text not null,
+  label text not null,
+  quantity integer not null check (quantity > 0),
+  status text not null check (status in ('outstanding','ordered','received')) default 'outstanding',
+  created_at timestamptz default now()
+);
+
+-- Ensure existing databases drop NOT NULL on po_id if present
+do $$ begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'purchase_order_items' and column_name = 'po_id' and is_nullable = 'NO'
+  ) then
+    alter table public.purchase_order_items alter column po_id drop not null;
+  end if;
+end $$;
+
+create index if not exists idx_po_items_org on public.purchase_order_items(organization_id);
+create index if not exists idx_po_items_po on public.purchase_order_items(po_id);
+
+alter table public.purchase_order_items enable row level security;
+
+drop policy if exists "read purchase order items (org)" on public.purchase_order_items;
+drop policy if exists "write purchase order items (org)" on public.purchase_order_items;
+create policy "read purchase order items (org)" on public.purchase_order_items for select using (
+  public.is_current_org_member(organization_id)
+);
+create policy "write purchase order items (org)" on public.purchase_order_items for all using (
+  public.is_current_org_member(organization_id)
+) with check (
+  public.is_current_org_member(organization_id)
+);
+
+-- Optional: maintain updated_at on consumable_items
+create or replace function public.touch_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at := now();
+  return new;
+end; $$;
+
+drop trigger if exists trg_touch_consumable_items on public.consumable_items;
+create trigger trg_touch_consumable_items
+before update on public.consumable_items
+for each row execute function public.touch_updated_at();
+
