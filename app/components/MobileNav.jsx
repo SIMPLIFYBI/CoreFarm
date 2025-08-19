@@ -4,10 +4,11 @@ import { usePathname } from "next/navigation";
 import { IconCore, IconAdmin, IconTeam, IconUser } from "./icons";
 
 const tabs = [
-  { href: "/core", label: "Core", icon: IconAdmin },
-  { href: "/admin", label: "Add Holes/Tasks", icon: IconCore },
+  { href: "/core", label: "Logging", icon: IconAdmin },
+  { href: "/admin", label: "Add Core", icon: IconCore },
   { href: "/team", label: "Team", icon: IconTeam },
   { href: "/user", label: "Me", icon: IconUser },
+  { href: "/consumables", label: "Consumables", icon: IconCore },
 ];
 
 export default function MobileNav() {
@@ -17,12 +18,15 @@ export default function MobileNav() {
   className="md:hidden fixed bottom-0 left-0 right-0 border-t bg-gradient-to-r from-indigo-50 via-indigo-100 to-purple-50"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <ul className="grid grid-cols-4">
+      <ul
+        className="flex gap-1 overflow-x-auto no-scrollbar px-1"
+        style={{ WebkitOverflowScrolling: 'touch' }}
+      >
         {tabs.map((t) => {
           const active = pathname?.startsWith(t.href);
           const Icon = t.icon;
           return (
-            <li key={t.href}>
+            <li key={t.href} className="flex-none w-20">
               <Link
                 href={t.href}
                 className={

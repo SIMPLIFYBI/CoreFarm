@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseClient";
+import { redirectTo } from "@/lib/siteUrl";
 import toast from "react-hot-toast";
 
 export default function HomePage() {
@@ -81,7 +82,7 @@ export default function HomePage() {
       password,
       options: {
         data: { name: trimmed },
-        emailRedirectTo: `${window.location.origin}`,
+        emailRedirectTo: redirectTo("/"),
       },
     });
     setLoading(false);
@@ -127,7 +128,7 @@ export default function HomePage() {
     setLoading(true);
   const normalized = (email || "").trim().toLowerCase();
   const { error } = await supabase.auth.resetPasswordForEmail(normalized, {
-      redirectTo: `${window.location.origin}/register`,
+      redirectTo: redirectTo("/register"),
     });
     setLoading(false);
     if (error) return toast.error(error.message);

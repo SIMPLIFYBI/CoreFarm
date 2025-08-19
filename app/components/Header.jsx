@@ -76,10 +76,11 @@ export default function Header() {
           </Link>
           <nav className="hidden md:flex gap-2 text-sm">
             {[
-              { href: "/core", label: "Core", icon: IconAdmin },
+              { href: "/core", label: "Logging", icon: IconAdmin },
               { href: "/user", label: "My Dashboard", icon: IconUser },
-              { href: "/admin", label: "Add Holes/Tasks", icon: IconCore },
+              { href: "/admin", label: "Add Core", icon: IconCore },
               { href: "/team", label: "Team", icon: IconTeam },
+              { href: "/consumables", label: "Consumables", icon: IconCore },
             ].map((t) => {
               const active = pathname?.startsWith(t.href);
               const Icon = t.icon;
@@ -95,7 +96,7 @@ export default function Header() {
                   <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 text-white">
                     <Icon />
                   </span>
-                  <span>{t.label}</span>
+                  <span className="text-center">{t.label}</span>
                 </Link>
               );
             })}

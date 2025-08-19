@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
+import { redirectTo } from "@/lib/siteUrl";
 import toast from "react-hot-toast";
 
 export default function TeamPage() {
@@ -114,7 +115,7 @@ export default function TeamPage() {
   const { error: mailErr } = await supabase.auth.signInWithOtp({
       email: inviteEmail,
       options: {
-    emailRedirectTo: `${window.location.origin}/register`,
+    emailRedirectTo: redirectTo('/register'),
       },
     });
     if (mailErr) {

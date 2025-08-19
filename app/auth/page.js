@@ -2,6 +2,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseClient';
+import { redirectTo } from '@/lib/siteUrl';
 import toast from 'react-hot-toast';
 
 // This page depends on URL search params and client auth; opt out of static prerendering
@@ -91,10 +92,10 @@ function AuthInner() {
   const signIn = async (e) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOtp({
+  const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth`,
+    emailRedirectTo: redirectTo('/auth'),
       },
     });
     setLoading(false);

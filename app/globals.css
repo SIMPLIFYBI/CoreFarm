@@ -12,20 +12,8 @@
   --bg-linear-bottom: 218, 222, 228; /* deeper cool-gray */
 }
 
-
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    /* Dark mode accents (blue/gray/purple/black range) */
-    --bg-accent-blue: 23, 37, 84;    /* blue-950 */
-    --bg-accent-purple: 46, 16, 101; /* purple-950 */
-    --bg-accent-gray: 17, 24, 39;    /* gray-900 */
-    --bg-linear-top: 10, 10, 10;
-    --bg-linear-bottom: 16, 16, 20;
-  }
-}
+/* Force light theme regardless of system preference */
+html { color-scheme: light; }
 
 html {
   /* Base */
