@@ -15,6 +15,9 @@ export default function TeamPage() {
   const [inviteRole, setInviteRole] = useState("member");
   const [orgName, setOrgName] = useState("");
   const [myInvites, setMyInvites] = useState([]); // invites addressed to current user email
+  // Invites UX controls
+  const [inviteStatusFilter, setInviteStatusFilter] = useState("pending"); // 'pending' | 'accepted' | 'revoked' | 'all'
+  const [deleteMode, setDeleteMode] = useState(false);
 
   const myRole = useMemo(() => {
     const m = memberships.find((m) => m.organization_id === selectedOrgId);
@@ -51,21 +54,24 @@ export default function TeamPage() {
     })();
   }, [user, supabase]);
 
+  // Load members and invites based on org and filter
   useEffect(() => {
     if (!selectedOrgId) return;
     (async () => {
-      const [{ data: mems }, { data: invs }] = await Promise.all([
-        supabase
-          .rpc("get_org_members_with_email", { org: selectedOrgId }),
-        supabase
-          .from("organization_invites")
-          .select("id, email, role, status, created_at")
-          .eq("organization_id", selectedOrgId),
-      ]);
+      const membersPromise = supabase.rpc("get_org_members_with_email", { org: selectedOrgId });
+      let invitesQuery = supabase
+        .from("organization_invites")
+        .select("id, email, role, status, created_at")
+        .eq("organization_id", selectedOrgId)
+        .order("created_at", { ascending: false });
+      if (inviteStatusFilter !== "all") {
+        invitesQuery = invitesQuery.eq("status", inviteStatusFilter);
+      }
+      const [{ data: mems }, { data: invs }] = await Promise.all([membersPromise, invitesQuery]);
       setMembers(mems || []);
       setInvites(invs || []);
     })();
-  }, [selectedOrgId, supabase]);
+  }, [selectedOrgId, inviteStatusFilter, supabase]);
 
   const createOrg = async (e) => {
     e.preventDefault();
@@ -124,11 +130,14 @@ export default function TeamPage() {
       toast.success("Invite sent and email delivered");
     }
     setEmailToInvite("");
-    const { data: invs } = await supabase
+    // Refresh list using current filter
+    let q = supabase
       .from("organization_invites")
       .select("id, email, role, status, created_at")
       .eq("organization_id", selectedOrgId)
       .order("created_at", { ascending: false });
+    if (inviteStatusFilter !== "all") q = q.eq("status", inviteStatusFilter);
+    const { data: invs } = await q;
     setInvites(invs || []);
   };
 
@@ -138,7 +147,21 @@ export default function TeamPage() {
       .update({ status: "revoked" })
       .eq("id", id);
     if (error) return toast.error("Could not revoke invite");
-    setInvites((arr) => arr.map((i) => (i.id === id ? { ...i, status: "revoked" } : i)));
+    // If filtering to pending, remove it from view; otherwise, update in place
+    setInvites((arr) =>
+      inviteStatusFilter === "pending"
+        ? arr.filter((i) => i.id !== id)
+        : arr.map((i) => (i.id === id ? { ...i, status: "revoked" } : i))
+    );
+  };
+
+  const deleteInvite = async (id) => {
+    const { error } = await supabase
+      .from("organization_invites")
+      .delete()
+      .eq("id", id);
+    if (error) return toast.error("Could not delete invite");
+    setInvites((arr) => arr.filter((i) => i.id !== id));
   };
 
   const acceptInvite = async (inv) => {
@@ -294,9 +317,34 @@ export default function TeamPage() {
               </form>
 
               <div className="card p-4">
-                <h3 className="font-medium mb-2">Pending invites</h3>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-medium">Invites</h3>
+                  <div className="flex items-center gap-3 text-sm">
+                    <label className="flex items-center gap-1">
+                      <span className="text-gray-600">Filter</span>
+                      <select
+                        className="select input-sm text-sm w-auto"
+                        value={inviteStatusFilter}
+                        onChange={(e) => setInviteStatusFilter(e.target.value)}
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="accepted">Accepted</option>
+                        <option value="revoked">Revoked</option>
+                        <option value="all">All</option>
+                      </select>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={deleteMode}
+                        onChange={(e) => setDeleteMode(e.target.checked)}
+                      />
+                      <span className="text-gray-700">Delete mode</span>
+                    </label>
+                  </div>
+                </div>
                 {invites.length === 0 ? (
-                  <p className="text-sm text-gray-500">No invites.</p>
+                  <p className="text-sm text-gray-500">No invites{inviteStatusFilter !== 'all' ? ` (${inviteStatusFilter})` : ''}.</p>
                 ) : (
                   <div className="table-container">
                     <table className="table">
@@ -314,9 +362,13 @@ export default function TeamPage() {
                           <td>{i.email}</td>
                           <td>{i.role}</td>
                           <td>{i.status}</td>
-                          <td>
-                            {i.status === "pending" && (
-                              <button className="btn text-xs" onClick={() => revokeInvite(i.id)}>Revoke</button>
+                          <td className="space-x-2">
+                            {deleteMode ? (
+                              <button className="btn text-xs" onClick={() => deleteInvite(i.id)}>Delete</button>
+                            ) : (
+                              i.status === "pending" && (
+                                <button className="btn text-xs" onClick={() => revokeInvite(i.id)}>Revoke</button>
+                              )
                             )}
                           </td>
                         </tr>
