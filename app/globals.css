@@ -163,3 +163,16 @@ button, a {
 .table tbody tr:hover { background: #f9fafb; }
 .table tbody tr:nth-child(even) { background: #fcfcfd; }
 
+/* Selected row styling (applies app-wide) */
+.table tbody tr[aria-selected="true"],
+.table tbody tr[data-selected="true"],
+.table tbody tr.row-selected {
+  /* Light blue→purple gradient to match app theme */
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.12) 0%, rgba(99, 102, 241, 0.12) 100%) !important;
+}
+.table tbody tr[aria-selected="true"]:hover,
+.table tbody tr[data-selected="true"]:hover,
+.table tbody tr.row-selected:hover {
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.16) 0%, rgba(99, 102, 241, 0.16) 100%) !important;
+}
+

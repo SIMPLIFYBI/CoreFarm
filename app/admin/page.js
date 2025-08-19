@@ -393,7 +393,7 @@ export default function AdminPage() {
                 {holes.map((h) => (
                   <tr
                     key={h.id}
-                    className={`cursor-pointer ${selectedId === h.id ? 'bg-yellow-50' : ''}`}
+                    className={`cursor-pointer ${selectedId === h.id ? 'row-selected' : ''}`}
                     onClick={() => selectHole(h)}
                   >
                     <td>{h.hole_id}</td>
