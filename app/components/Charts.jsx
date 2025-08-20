@@ -4,28 +4,38 @@
 
 export function BarChart({ data = [], valueSuffix = " m" }) {
   const max = Math.max(0, ...data.map((d) => d.value || 0));
+  // Abbreviation mapping
+  const abbr = {
+    "Orientation": "Ori",
+    "Whole core sampling": "WC SMPL",
+    "Magnetic susceptibility": "Mag",
+    "Cutting": "Cut",
+  };
   return (
     <div className="w-full">
       <div className="grid grid-cols-6 md:grid-cols-12 gap-3 items-end min-h-[10rem] p-2">
-        {data.map((d) => (
-          <div key={d.label} className="flex flex-col items-center gap-1">
-            <div
-              className="w-full rounded-t-md"
-              style={{
-                background: d.color,
-                height: max > 0 ? `${Math.max(4, (d.value / max) * 120)}px` : 4,
-              }}
-              title={`${d.label}: ${formatNum(d.value)}${valueSuffix}`}
-            />
-            <div className="text-[11px] text-gray-600 text-center truncate max-w-[5rem]" title={d.label}>
-              {d.label}
+        {data.map((d) => {
+          const shortLabel = abbr[d.label] || d.label;
+          return (
+            <div key={d.label} className="flex flex-col items-center gap-1">
+              <div
+                className="w-full rounded-t-md"
+                style={{
+                  background: d.color,
+                  height: max > 0 ? `${Math.max(4, (d.value / max) * 120)}px` : 4,
+                }}
+                title={`${d.label}: ${formatNum(d.value)}${valueSuffix}`}
+              />
+              <div className="text-[11px] text-gray-600 text-center truncate max-w-[5rem]" title={d.label}>
+                {shortLabel}
+              </div>
+              <div className="text-[11px] text-gray-900 font-medium">
+                {formatNum(d.value)}
+                {valueSuffix}
+              </div>
             </div>
-            <div className="text-[11px] text-gray-900 font-medium">
-              {formatNum(d.value)}
-              {valueSuffix}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

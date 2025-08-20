@@ -19,8 +19,9 @@ export default function UserDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [orgId, setOrgId] = useState("");
   const [memberships, setMemberships] = useState([]);
+  const [tab, setTab] = useState("dashboard");
 
-  // Filters
+  // Filters (dashboard)
   const [fromDate, setFromDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 29);
@@ -29,9 +30,15 @@ export default function UserDashboardPage() {
   const [toDate, setToDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [types, setTypes] = useState(TASK_TYPES);
 
-  // Data
+  // Data (dashboard)
   const [byType, setByType] = useState([]); // [{label, value, color}]
   const [trend, setTrend] = useState([]); // [{label: yyyy-mm-dd, value}]
+
+  // Data (logging activity)
+  const [activityRows, setActivityRows] = useState([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [editRowId, setEditRowId] = useState(null);
+  const [editRow, setEditRow] = useState({});
 
   useEffect(() => {
     let sub;
@@ -51,6 +58,21 @@ export default function UserDashboardPage() {
     })();
     return () => sub?.unsubscribe?.();
   }, [supabase]);
+
+  // Load logging activity for user
+  useEffect(() => {
+    if (tab !== "activity" || !user) return;
+    setActivityLoading(true);
+    (async () => {
+      const { data: rows, error } = await supabase
+        .from("hole_task_progress")
+        .select("id, hole_id, task_type, from_m, to_m, logged_on, holes(hole_id)")
+        .eq("user_id", user.id)
+        .order("logged_on", { ascending: false });
+      setActivityRows(rows || []);
+      setActivityLoading(false);
+    })();
+  }, [tab, user]);
 
   const typeOptions = useMemo(
     () => TASK_TYPES.map((t, i) => ({ key: t, label: labelForTask(t), color: COLORS[i % COLORS.length] })),
@@ -130,64 +152,187 @@ export default function UserDashboardPage() {
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-6">
-      <h1 className="text-2xl font-semibold mb-4">My Dashboard</h1>
+      <h1 className="text-2xl font-semibold mb-4">Me</h1>
+      <div className="mb-6 flex gap-2 border-b">
+        <button
+          className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm ${tab === "dashboard" ? "border-indigo-500 text-indigo-700" : "border-transparent text-gray-500"}`}
+          onClick={() => setTab("dashboard")}
+        >
+          Dashboard
+        </button>
+        <button
+          className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm ${tab === "activity" ? "border-indigo-500 text-indigo-700" : "border-transparent text-gray-500"}`}
+          onClick={() => setTab("activity")}
+        >
+          Logging Activity
+        </button>
+      </div>
 
-      {/* Filters */}
-  <div className="card p-4 mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label className="block text-xs text-gray-600 mb-1">From</label>
-          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-full border rounded px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-600 mb-1">To</label>
-          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full border rounded px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-600 mb-1">Task types</label>
-          <div className="flex flex-wrap gap-2">
-            {typeOptions.map((opt) => (
-              <button
-                key={opt.key}
-                onClick={() => toggleType(opt.key)}
-                className={`px-2.5 py-1.5 rounded-full text-xs border flex items-center gap-2 ${
-                  types.includes(opt.key) ? "bg-indigo-50 border-indigo-300 text-indigo-800" : "bg-white hover:bg-gray-50"
-                }`}
-              >
-                <span className="inline-block h-2.5 w-2.5 rounded" style={{ background: opt.color }} />
-                {opt.label}
-              </button>
-            ))}
+      {tab === "dashboard" && (
+        <>
+          {/* Filters */}
+          <div className="card p-4 mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">From</label>
+              <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-full border rounded px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">To</label>
+              <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full border rounded px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Task types</label>
+              <div className="flex flex-wrap gap-2">
+                {typeOptions.map((opt) => (
+                  <button
+                    key={opt.key}
+                    onClick={() => toggleType(opt.key)}
+                    className={`px-2.5 py-1.5 rounded-full text-xs border flex items-center gap-2 ${
+                      types.includes(opt.key) ? "bg-indigo-50 border-indigo-300 text-indigo-800" : "bg-white hover:bg-gray-50"
+                    }`}
+                  >
+                    <span className="inline-block h-2.5 w-2.5 rounded" style={{ background: opt.color }} />
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* KPI tiles */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <Kpi title="Total meters" value={sum(byType.map((d) => d.value))} suffix=" m" />
-        <Kpi title="Active task types" value={byType.filter((d) => d.value > 0).length} />
-        <Kpi title="Days logged" value={trend.filter((p) => p.value > 0).length} />
-        <Kpi title="Avg m/day" value={avg(trend.map((p) => p.value))} suffix=" m" />
-      </div>
+          {/* KPI tiles */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <Kpi title="Total meters" value={sum(byType.map((d) => d.value))} suffix=" m" />
+            <Kpi title="Active task types" value={byType.filter((d) => d.value > 0).length} />
+            <Kpi title="Days logged" value={trend.filter((p) => p.value > 0).length} />
+            <Kpi title="Avg m/day" value={avg(trend.map((p) => p.value))} suffix=" m" />
+          </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Charts */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="card p-4">
+              <div className="text-sm font-medium mb-2">Meters by task type</div>
+              <BarChart data={byType} />
+            </div>
+            <div className="card p-4">
+              <div className="text-sm font-medium mb-2">Distribution</div>
+              <DonutChart data={byType} />
+            </div>
+            <div className="card p-4 md:col-span-2">
+              <div className="text-sm font-medium mb-2">Meters over time</div>
+              <TrendChart points={trend} />
+            </div>
+          </div>
+
+          {loading && <div className="mt-4 text-sm text-gray-500">Loading…</div>}
+          {!loading && byType.length === 0 && (
+            <div className="mt-4 text-sm text-gray-500">No data in the selected range.</div>
+          )}
+        </>
+      )}
+
+      {tab === "activity" && (
         <div className="card p-4">
-          <div className="text-sm font-medium mb-2">Meters by task type</div>
-          <BarChart data={byType} />
+          <div className="text-sm font-medium mb-2">My Logging Activity</div>
+          {activityLoading ? (
+            <div className="text-sm text-gray-500">Loading…</div>
+          ) : activityRows.length === 0 ? (
+            <div className="text-sm text-gray-500">No logging activity found.</div>
+          ) : (
+            <table className="w-full text-xs border">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="p-2 border">Hole</th>
+                  <th className="p-2 border">Task</th>
+                  <th className="p-2 border">Interval (m)</th>
+                  <th className="p-2 border">Date</th>
+                  <th className="p-2 border">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activityRows.map((row) => (
+                  <tr key={row.id}>
+                    <td className="p-2 border">{row.holes?.hole_id || row.hole_id}</td>
+                    <td className="p-2 border">{labelForTask(row.task_type)}</td>
+                    <td className="p-2 border">{row.from_m}–{row.to_m}</td>
+                    <td className="p-2 border">{row.logged_on}</td>
+                    <td className="p-2 border">
+                      {editRowId === row.id ? (
+                        <>
+                          <input
+                            type="number"
+                            className="input input-xs w-16 mr-1"
+                            value={editRow.from_m}
+                            onChange={(e) => setEditRow((r) => ({ ...r, from_m: e.target.value }))}
+                          />
+                          <input
+                            type="number"
+                            className="input input-xs w-16 mr-1"
+                            value={editRow.to_m}
+                            onChange={(e) => setEditRow((r) => ({ ...r, to_m: e.target.value }))}
+                          />
+                          <input
+                            type="date"
+                            className="input input-xs w-24 mr-1"
+                            value={editRow.logged_on}
+                            onChange={(e) => setEditRow((r) => ({ ...r, logged_on: e.target.value }))}
+                          />
+                          <button
+                            className="btn btn-primary btn-xs mr-1"
+                            onClick={async () => {
+                              // Save edit
+                              const { error } = await supabase
+                                .from("hole_task_progress")
+                                .update({
+                                  from_m: editRow.from_m,
+                                  to_m: editRow.to_m,
+                                  logged_on: editRow.logged_on,
+                                })
+                                .eq("id", row.id);
+                              setEditRowId(null);
+                              setEditRow({});
+                              // Reload
+                              const { data: rows } = await supabase
+                                .from("hole_task_progress")
+                                .select("id, hole_id, task_type, from_m, to_m, logged_on, holes(hole_id)")
+                                .eq("user_id", user.id)
+                                .order("logged_on", { ascending: false });
+                              setActivityRows(rows || []);
+                            }}
+                          >Save</button>
+                          <button className="btn btn-xs" onClick={() => { setEditRowId(null); setEditRow({}); }}>Cancel</button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            className="btn btn-xs mr-1"
+                            onClick={() => { setEditRowId(row.id); setEditRow({ from_m: row.from_m, to_m: row.to_m, logged_on: row.logged_on }); }}
+                          >Amend</button>
+                          <button
+                            className="btn btn-danger btn-xs"
+                            onClick={async () => {
+                              // Delete entry
+                              const { error } = await supabase
+                                .from("hole_task_progress")
+                                .delete()
+                                .eq("id", row.id);
+                              // Reload
+                              const { data: rows } = await supabase
+                                .from("hole_task_progress")
+                                .select("id, hole_id, task_type, from_m, to_m, logged_on, holes(hole_id)")
+                                .eq("user_id", user.id)
+                                .order("logged_on", { ascending: false });
+                              setActivityRows(rows || []);
+                            }}
+                          >Delete</button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
-        <div className="card p-4">
-          <div className="text-sm font-medium mb-2">Distribution</div>
-          <DonutChart data={byType} />
-        </div>
-        <div className="card p-4 md:col-span-2">
-          <div className="text-sm font-medium mb-2">Meters over time</div>
-          <TrendChart points={trend} />
-        </div>
-      </div>
-
-      {loading && <div className="mt-4 text-sm text-gray-500">Loading…</div>}
-      {!loading && byType.length === 0 && (
-        <div className="mt-4 text-sm text-gray-500">No data in the selected range.</div>
       )}
     </div>
   );
