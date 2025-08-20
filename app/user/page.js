@@ -238,99 +238,101 @@ export default function UserDashboardPage() {
           ) : activityRows.length === 0 ? (
             <div className="text-sm text-gray-500">No logging activity found.</div>
           ) : (
-            <table className="w-full text-xs border">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="p-2 border">Hole</th>
-                  <th className="p-2 border">Task</th>
-                  <th className="p-2 border">Interval (m)</th>
-                  <th className="p-2 border">Date</th>
-                  <th className="p-2 border">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {activityRows.map((row) => (
-                  <tr key={row.id}>
-                    <td className="p-2 border">{row.holes?.hole_id || row.hole_id}</td>
-                    <td className="p-2 border">{labelForTask(row.task_type)}</td>
-                    <td className="p-2 border">{row.from_m}–{row.to_m}</td>
-                    <td className="p-2 border">{row.logged_on}</td>
-                    <td className="p-2 border">
-                      {editRowId === row.id ? (
-                        <>
-                          <input
-                            type="number"
-                            className="input input-xs w-16 mr-1"
-                            value={editRow.from_m}
-                            onChange={(e) => setEditRow((r) => ({ ...r, from_m: e.target.value }))}
-                          />
-                          <input
-                            type="number"
-                            className="input input-xs w-16 mr-1"
-                            value={editRow.to_m}
-                            onChange={(e) => setEditRow((r) => ({ ...r, to_m: e.target.value }))}
-                          />
-                          <input
-                            type="date"
-                            className="input input-xs w-24 mr-1"
-                            value={editRow.logged_on}
-                            onChange={(e) => setEditRow((r) => ({ ...r, logged_on: e.target.value }))}
-                          />
-                          <button
-                            className="btn btn-primary btn-xs mr-1"
-                            onClick={async () => {
-                              // Save edit
-                              const { error } = await supabase
-                                .from("hole_task_progress")
-                                .update({
-                                  from_m: editRow.from_m,
-                                  to_m: editRow.to_m,
-                                  logged_on: editRow.logged_on,
-                                })
-                                .eq("id", row.id);
-                              setEditRowId(null);
-                              setEditRow({});
-                              // Reload
-                              const { data: rows } = await supabase
-                                .from("hole_task_progress")
-                                .select("id, hole_id, task_type, from_m, to_m, logged_on, holes(hole_id)")
-                                .eq("user_id", user.id)
-                                .order("logged_on", { ascending: false });
-                              setActivityRows(rows || []);
-                            }}
-                          >Save</button>
-                          <button className="btn btn-xs" onClick={() => { setEditRowId(null); setEditRow({}); }}>Cancel</button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            className="btn btn-xs mr-1"
-                            onClick={() => { setEditRowId(row.id); setEditRow({ from_m: row.from_m, to_m: row.to_m, logged_on: row.logged_on }); }}
-                          >Amend</button>
-                          <button
-                            className="btn btn-danger btn-xs"
-                            onClick={async () => {
-                              // Delete entry
-                              const { error } = await supabase
-                                .from("hole_task_progress")
-                                .delete()
-                                .eq("id", row.id);
-                              // Reload
-                              const { data: rows } = await supabase
-                                .from("hole_task_progress")
-                                .select("id, hole_id, task_type, from_m, to_m, logged_on, holes(hole_id)")
-                                .eq("user_id", user.id)
-                                .order("logged_on", { ascending: false });
-                              setActivityRows(rows || []);
-                            }}
-                          >Delete</button>
-                        </>
-                      )}
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[500px] text-[10px] border">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="p-1 border">Hole</th>
+                    <th className="p-1 border">Task</th>
+                    <th className="p-1 border">Interval (m)</th>
+                    <th className="p-1 border">Date</th>
+                    <th className="p-1 border">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {activityRows.map((row) => (
+                    <tr key={row.id}>
+                      <td className="p-1 border">{row.holes?.hole_id || row.hole_id}</td>
+                      <td className="p-1 border">{labelForTask(row.task_type)}</td>
+                      <td className="p-1 border">{row.from_m}–{row.to_m}</td>
+                      <td className="p-1 border">{row.logged_on}</td>
+                      <td className="p-1 border whitespace-nowrap">
+                        {editRowId === row.id ? (
+                          <>
+                            <input
+                              type="number"
+                              className="input input-xs w-12 mr-1"
+                              value={editRow.from_m}
+                              onChange={(e) => setEditRow((r) => ({ ...r, from_m: e.target.value }))}
+                            />
+                            <input
+                              type="number"
+                              className="input input-xs w-12 mr-1"
+                              value={editRow.to_m}
+                              onChange={(e) => setEditRow((r) => ({ ...r, to_m: e.target.value }))}
+                            />
+                            <input
+                              type="date"
+                              className="input input-xs w-16 mr-1"
+                              value={editRow.logged_on}
+                              onChange={(e) => setEditRow((r) => ({ ...r, logged_on: e.target.value }))}
+                            />
+                            <button
+                              className="btn btn-primary btn-xs px-2 py-0 mr-1"
+                              onClick={async () => {
+                                // Save edit
+                                const { error } = await supabase
+                                  .from("hole_task_progress")
+                                  .update({
+                                    from_m: editRow.from_m,
+                                    to_m: editRow.to_m,
+                                    logged_on: editRow.logged_on,
+                                  })
+                                  .eq("id", row.id);
+                                setEditRowId(null);
+                                setEditRow({});
+                                // Reload
+                                const { data: rows } = await supabase
+                                  .from("hole_task_progress")
+                                  .select("id, hole_id, task_type, from_m, to_m, logged_on, holes(hole_id)")
+                                  .eq("user_id", user.id)
+                                  .order("logged_on", { ascending: false });
+                                setActivityRows(rows || []);
+                              }}
+                            >Save</button>
+                            <button className="btn btn-xs px-2 py-0" onClick={() => { setEditRowId(null); setEditRow({}); }}>Cancel</button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              className="btn btn-xs px-2 py-0 mr-1"
+                              onClick={() => { setEditRowId(row.id); setEditRow({ from_m: row.from_m, to_m: row.to_m, logged_on: row.logged_on }); }}
+                            >Amend</button>
+                            <button
+                              className="btn btn-danger btn-xs px-2 py-0"
+                              onClick={async () => {
+                                // Delete entry
+                                const { error } = await supabase
+                                  .from("hole_task_progress")
+                                  .delete()
+                                  .eq("id", row.id);
+                                // Reload
+                                const { data: rows } = await supabase
+                                  .from("hole_task_progress")
+                                  .select("id, hole_id, task_type, from_m, to_m, logged_on, holes(hole_id)")
+                                  .eq("user_id", user.id)
+                                  .order("logged_on", { ascending: false });
+                                setActivityRows(rows || []);
+                              }}
+                            >Delete</button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
