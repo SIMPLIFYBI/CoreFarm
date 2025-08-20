@@ -37,10 +37,26 @@ export default function CorePage() {
   const [savingKey, setSavingKey] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(null);
   const [loggedOn, setLoggedOn] = useState(() => new Date().toISOString().slice(0, 10)); // yyyy-mm-dd
+  const [selectedProject, setSelectedProject] = useState("");
+
+  const projects = useMemo(() => {
+    const set = new Set();
+    (holes || []).forEach((h) => {
+      if (h.project_name) set.add(h.project_name);
+    });
+    return Array.from(set).sort();
+  }, [holes]);
+
+  const filteredHoles = useMemo(() => {
+    if (!selectedProject) return holes;
+    return (holes || []).filter((h) => h.project_name === selectedProject);
+  }, [holes, selectedProject]);
 
   useEffect(() => {
     (async () => {
-      const { data: holesData } = await supabase.from("holes").select("id, hole_id");
+      const { data: holesData } = await supabase
+        .from("holes")
+        .select("id, hole_id, depth, project_name");
       setHoles(holesData || []);
       const ids = (holesData || []).map((h) => h.id);
       if (ids.length > 0) {
@@ -220,7 +236,7 @@ export default function CorePage() {
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-6">
       <h1 className="text-2xl font-semibold mb-2">Core Logging</h1>
-      <div className="mb-4 flex items-center gap-3">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         <label className="text-sm text-gray-700">Entering actuals for the date of</label>
         <input
           type="date"
@@ -228,6 +244,19 @@ export default function CorePage() {
           value={loggedOn}
           onChange={(e) => setLoggedOn(e.target.value)}
         />
+        <div className="ml-auto flex items-center gap-2">
+          <label className="text-sm text-gray-700">Project</label>
+          <select
+            className="input input-sm w-auto"
+            value={selectedProject}
+            onChange={(e) => setSelectedProject(e.target.value)}
+          >
+            <option value="">All projects</option>
+            {projects.map((p) => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+        </div>
       </div>
       {loading ? (
         <p>Loading…</p>
@@ -242,10 +271,11 @@ export default function CorePage() {
               <tr>
                 <th className="text-left p-2 border w-10"></th>
                 <th className="text-left p-2 border">Hole</th>
+                <th className="text-left p-2 border w-32">Depth (m)</th>
               </tr>
             </thead>
             <tbody>
-              {holes.map((h) => (
+              {filteredHoles.map((h) => (
                 <Fragment key={h.id}>
                   <tr className="hover:bg-gray-50">
                     <td className="p-2 border align-top">
@@ -263,10 +293,11 @@ export default function CorePage() {
                         ) : null}
                       </div>
                     </td>
+                    <td className="p-2 border align-top">{h?.depth ?? "-"}</td>
                   </tr>
                   {expandedHole[h.id] && (
                     <tr>
-                      <td className="p-0 border-l border-r" colSpan={2}>
+                      <td className="p-0 border-l border-r" colSpan={3}>
                         <div className="bg-gray-50/50 p-3">
                           {!details[h.id] ? (
                             <p className="text-sm text-gray-500">Loading…</p>
@@ -400,10 +431,13 @@ export default function CorePage() {
 
           {/* Mobile card list */}
           <div className="md:hidden space-y-3">
-            {holes.map((h) => (
+            {filteredHoles.map((h) => (
               <div key={h.id} className="card p-3">
                 <div className="flex items-center justify-between">
-                  <div className="font-medium">{h.hole_id}</div>
+                  <div className="font-medium flex items-center gap-2">
+                    <span>{h.hole_id}</span>
+                    <span className="text-xs text-gray-500">· Depth {h?.depth ?? "-"} m</span>
+                  </div>
                   {(holeStatus[h.id]?.hasPlanned && holeStatus[h.id]?.complete) ? (
                     <span className="text-[10px] px-2 py-0.5 rounded bg-green-100 text-green-700">Complete</span>
                   ) : (holeStatus[h.id]?.hasPlanned) ? (
