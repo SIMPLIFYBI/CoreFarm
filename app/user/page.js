@@ -152,7 +152,7 @@ export default function UserDashboardPage() {
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-6">
-      <h1 className="text-2xl font-semibold mb-4">Me</h1>
+      <h1 className="text-2xl font-semibold mb-4">Report</h1>
       <div className="mb-6 flex gap-2 border-b">
         <button
           className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm ${tab === "dashboard" ? "border-indigo-500 text-indigo-700" : "border-transparent text-gray-500"}`}

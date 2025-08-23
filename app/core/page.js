@@ -435,7 +435,7 @@ export default function CorePage() {
               <div key={h.id} className="card p-3">
                 <div className="flex items-center justify-between">
                   <div className="font-medium flex items-center gap-2">
-                    <span>{h.hole_id}</span>
+                    <span>Hole ID {h.hole_id}</span>
                     <span className="text-xs text-gray-500">· Depth {h?.depth ?? "-"} m</span>
                   </div>
                   {(holeStatus[h.id]?.hasPlanned && holeStatus[h.id]?.complete) ? (

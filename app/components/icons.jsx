@@ -52,3 +52,15 @@ export function IconLogin(props) {
     </svg>
   );
 }
+
+export function IconReport(props) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="1.6"/>
+      <path d="M8 15v-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+      <path d="M12 15V9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+      <path d="M16 15v-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+      <path d="M7 7h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+    </svg>
+  );
+}

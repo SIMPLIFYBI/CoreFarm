@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
-import { IconCore, IconAdmin, IconTeam, IconUser, IconLogout, IconLogin } from "../components/icons";
+import { IconCore, IconAdmin, IconTeam, IconUser, IconLogout, IconLogin, IconReport } from "../components/icons";
 
 export default function Header() {
   const supabase = supabaseBrowser();
@@ -77,7 +77,7 @@ export default function Header() {
           <nav className="hidden md:flex gap-2 text-sm">
             {[
               { href: "/core", label: "Logging", icon: IconAdmin },
-              { href: "/user", label: "My Dashboard", icon: IconUser },
+              { href: "/user", label: "Report", icon: IconReport },
               { href: "/admin", label: "Add Core", icon: IconCore },
               { href: "/team", label: "Team", icon: IconTeam },
               { href: "/consumables", label: "Consumables", icon: IconCore },

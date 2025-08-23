@@ -87,6 +87,17 @@ button, a {
 }
 .input-sm { padding: 0.375rem 0.5rem; font-size: 0.8125rem; border-radius: 0.375rem; }
 
+/* Avoid iOS Safari auto-zoom on focus (ensure at least 16px font-size on mobile) */
+@media (max-width: 640px) {
+  input, select, textarea, .input, .select, .textarea {
+    font-size: 16px !important;
+  }
+  /* Keep smaller visual size for compact variants via transform scaling without triggering zoom */
+  .input-sm, .input.input-sm, .select.input-sm {
+    font-size: 16px !important; /* prevent zoom */
+  }
+}
+
 /* Modern buttons */
 .btn {
   display: inline-flex;
