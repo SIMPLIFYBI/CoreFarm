@@ -29,6 +29,8 @@ export default function AdminPage() {
     project_name: "",
     drilling_contractor: "",
   });
+  const [showHoleModal, setShowHoleModal] = useState(false);
+  const [editingId, setEditingId] = useState(null); // hole id being edited (null = new)
   // Bulk upload modal state
   const [showBulk, setShowBulk] = useState(false);
   const [bulkText, setBulkText] = useState("");
@@ -149,16 +151,16 @@ export default function AdminPage() {
       };
       setSavingHole(true);
       let res;
-      if (selectedId) {
-  // Do not change organization_id on update to avoid cross-org moves
-  const { organization_id, ...updateFields } = payload;
-  res = await supabase.from("holes").update(updateFields).eq("id", selectedId).select().single();
+      if (editingId) {
+        // Do not change organization_id on update to avoid cross-org moves
+        const { organization_id, ...updateFields } = payload;
+        res = await supabase.from("holes").update(updateFields).eq("id", editingId).select().single();
       } else {
         res = await supabase.from("holes").insert(payload).select().single();
       }
       if (res.error) throw res.error;
-      toast.success(selectedId ? "Hole updated" : "Hole created");
-      // Select the created/updated hole and reveal intervals
+      toast.success(editingId ? "Hole updated" : "Hole created");
+      // Select the created/updated hole for intervals
       setSelectedId(res.data.id);
       setIntervals(emptyIntervals);
       // refresh list
@@ -176,6 +178,9 @@ export default function AdminPage() {
       } else if (data) {
         setHoles(data);
       }
+      // Close modal
+      setShowHoleModal(false);
+      setEditingId(null);
     } catch (e) {
       toast.error(e.message || "Failed to save");
     } finally {
@@ -184,14 +189,12 @@ export default function AdminPage() {
   };
 
   const onBulkUpload = async () => {
-  const rows = parsed.length ? parsed : parseTable(bulkText);
+    const rows = parsed.length ? parsed : parseTable(bulkText);
     if (!rows.length) return toast.error("No rows found");
     // Expect headers matching keys
     const allowed = ["hole_id", "depth", "drilling_diameter", "project_name", "drilling_contractor"];
     const invalid = Object.keys(rows[0]).filter((k) => !allowed.includes(k));
-    if (invalid.length) {
-      return toast.error(`Unexpected headers: ${invalid.join(", ")}`);
-    }
+    if (invalid.length) return toast.error(`Unexpected headers: ${invalid.join(", ")}`);
     const payloads = rows.map((r) => ({
       hole_id: String(r.hole_id || "").trim(),
       depth: (() => { const n = Number(r.depth); return r.depth === "" || r.depth == null || !Number.isFinite(n) ? null : n; })(),
@@ -199,16 +202,16 @@ export default function AdminPage() {
       project_name: r.project_name || null,
       drilling_contractor: r.drilling_contractor || null,
       organization_id: selectedOrgId || null,
-    })).filter(p => p.hole_id);
+    })).filter((p) => p.hole_id);
     if (!payloads.length) return toast.error("No valid rows (missing hole_id)");
-  setImporting(true);
-  const { error } = await supabase.from("holes").insert(payloads);
-  setImporting(false);
+    setImporting(true);
+    const { error } = await supabase.from("holes").insert(payloads);
+    setImporting(false);
     if (error) return toast.error(error.message);
-  toast.success(`Inserted ${payloads.length} holes`);
-  setBulkText("");
-  setParsed([]);
-  setShowBulk(false);
+    toast.success(`Inserted ${payloads.length} holes`);
+    setBulkText("");
+    setParsed([]);
+    setShowBulk(false);
     const { data } = await supabase
       .from("holes")
       .select("id, hole_id, depth, drilling_diameter, project_name, drilling_contractor, created_at, organization_id")
@@ -217,55 +220,45 @@ export default function AdminPage() {
     setHoles(data || []);
   };
 
-  const addInterval = (type) => {
-    setIntervals((m) => {
-      const base = TASK_TYPES.reduce((acc, t) => ({ ...acc, [t]: m?.[t] || [] }), {});
-      base[type] = [...base[type], { from_m: "", to_m: "" }];
-      return base;
+  // Interval helpers
+  const addInterval = (taskType) => {
+    setIntervals((prev) => ({
+      ...prev,
+      [taskType]: [...(prev[taskType] || []), { from_m: "", to_m: "" }],
+    }));
+  };
+  const changeInterval = (taskType, idx, field, value) => {
+    setIntervals((prev) => {
+      const arr = [...(prev[taskType] || [])];
+      arr[idx] = { ...arr[idx], [field]: value };
+      return { ...prev, [taskType]: arr };
     });
   };
-
-  const changeInterval = (type, idx, key, value) => {
-    setIntervals((m) => {
-      const base = TASK_TYPES.reduce((acc, t) => ({ ...acc, [t]: m?.[t] || [] }), {});
-      const list = [...base[type]];
-      list[idx] = { ...(list[idx] || { from_m: "", to_m: "" }), [key]: value };
-      base[type] = list;
-      return base;
+  const removeInterval = (taskType, idx) => {
+    setIntervals((prev) => {
+      const arr = [...(prev[taskType] || [])];
+      arr.splice(idx, 1);
+      return { ...prev, [taskType]: arr };
     });
   };
-
-  const removeInterval = (type, idx) => {
-    setIntervals((m) => {
-      const base = TASK_TYPES.reduce((acc, t) => ({ ...acc, [t]: m?.[t] || [] }), {});
-      const list = [...base[type]];
-      list.splice(idx, 1);
-      base[type] = list;
-      return base;
-    });
-  };
-
   const saveIntervals = async () => {
     if (!selectedId) return toast.error("Select a hole first");
-    // For simplicity: delete existing intervals for selected hole, then insert current ones
+    // Build rows
+    const rows = TASK_TYPES.flatMap((t) =>
+      (intervals[t] || []).map((r) => ({
+        hole_id: selectedId,
+        task_type: t,
+        from_m: parseFloat(r.from_m),
+        to_m: parseFloat(r.to_m),
+      }))
+    ).filter((r) => Number.isFinite(r.from_m) && Number.isFinite(r.to_m));
+    // Replace existing intervals for simplicity
     const { error: delErr } = await supabase.from("hole_task_intervals").delete().eq("hole_id", selectedId);
     if (delErr) return toast.error(delErr.message);
-    const rows = [];
-    for (const type of TASK_TYPES) {
-      for (const row of intervals[type] || []) {
-        const from_m = row.from_m === "" ? null : Number(row.from_m);
-        const to_m = row.to_m === "" ? null : Number(row.to_m);
-        if (Number.isFinite(from_m) && Number.isFinite(to_m)) {
-          rows.push({ hole_id: selectedId, task_type: type, from_m, to_m });
-        }
-      }
+    if (rows.length) {
+      const { error: insErr } = await supabase.from("hole_task_intervals").insert(rows);
+      if (insErr) return toast.error(insErr.message);
     }
-    if (rows.length === 0) {
-      toast.success("Cleared intervals");
-      return;
-    }
-    const { error } = await supabase.from("hole_task_intervals").insert(rows);
-    if (error) return toast.error(error.message);
     toast.success("Intervals saved");
   };
 
@@ -310,54 +303,7 @@ export default function AdminPage() {
         </div>
       )}
 
-      <section className="space-y-3">
-        <h2 className="text-xl font-medium">Add / Edit Hole</h2>
-        <div className="card p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <label className="block text-sm">Hole ID
-            <input type="text" name="hole_id" value={single.hole_id} onChange={onChangeSingle} className="input" placeholder="HOLE-001" />
-          </label>
-          <label className="block text-sm">Depth (m)
-            <input type="number" step="any" name="depth" value={single.depth} onChange={onChangeSingle} className="input" placeholder="e.g. 220" />
-          </label>
-          <label className="block text-sm">Drilling Diameter
-            <select name="drilling_diameter" value={single.drilling_diameter} onChange={onChangeSingle} className="select">
-              <option value="">Select…</option>
-              <option value="NQ">NQ</option>
-              <option value="HQ">HQ</option>
-              <option value="PQ">PQ</option>
-              <option value="Other">Other</option>
-            </select>
-          </label>
-          <label className="block text-sm">Project Name
-            <input type="text" name="project_name" value={single.project_name} onChange={onChangeSingle} className="input" />
-          </label>
-          <label className="block text-sm">Drilling Contractor
-            <input type="text" name="drilling_contractor" value={single.drilling_contractor} onChange={onChangeSingle} className="input" />
-          </label>
-        </div>
-        <div className="flex gap-2">
-          <button type="button" onClick={saveSingle} disabled={savingHole || !single.hole_id || !user} className="btn btn-primary">
-            {savingHole ? "Saving…" : "Save hole"}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedId(null);
-              setSingle({
-                hole_id: "",
-                depth: "",
-                drilling_diameter: "",
-                project_name: "",
-                drilling_contractor: "",
-              });
-              setIntervals({});
-            }}
-            className="btn"
-          >
-            New
-          </button>
-        </div>
-      </section>
+  {/* Add / Edit Hole now handled via modal; trigger button below */}
 
       {/* Bulk upload: hidden on mobile, available on desktop */}
       <section className="space-y-3 hidden md:block">
@@ -373,7 +319,18 @@ export default function AdminPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-medium">Holes</h2>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-xl font-medium">Holes</h2>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              setEditingId(null);
+              setSingle({ hole_id: "", depth: "", drilling_diameter: "", project_name: "", drilling_contractor: "" });
+              setShowHoleModal(true);
+            }}
+          >Add New Core</button>
+        </div>
         {loading ? (
           <p>Loading…</p>
         ) : (
@@ -403,6 +360,25 @@ export default function AdminPage() {
                     <td>{h.drilling_contractor}</td>
                     <td>
                       <div className="flex gap-2">
+                        <button
+                          type="button"
+                          className="btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingId(h.id);
+                            setSingle({
+                              hole_id: h.hole_id || "",
+                              depth: h.depth ?? "",
+                              drilling_diameter: h.drilling_diameter || "",
+                              project_name: h.project_name || "",
+                              drilling_contractor: h.drilling_contractor || "",
+                            });
+                            setShowHoleModal(true);
+                          }}
+                          title="Edit hole"
+                        >
+                          Edit
+                        </button>
                         <button
                           type="button"
                           className="btn btn-danger"
@@ -537,6 +513,64 @@ export default function AdminPage() {
               <button type="button" className="btn" onClick={() => { setBulkText(""); setParsed([]); }}>Clear</button>
               <div className="text-xs text-gray-600 ml-auto">Required column: hole_id. Optional: depth, drilling_diameter, project_name, drilling_contractor.</div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showHoleModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="card w-full max-w-lg p-5 relative">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">{editingId ? 'Edit Core' : 'Add New Core'}</h2>
+              <button
+                className="btn"
+                onClick={() => { setShowHoleModal(false); setEditingId(null); }}
+              >Close</button>
+            </div>
+            <div className="grid grid-cols-1 gap-4 mb-4">
+              <label className="block text-sm">Hole ID
+                <input type="text" name="hole_id" value={single.hole_id} onChange={onChangeSingle} className="input" placeholder="HOLE-001" />
+              </label>
+              <label className="block text-sm">Depth (m)
+                <input type="number" step="any" name="depth" value={single.depth} onChange={onChangeSingle} className="input" placeholder="e.g. 220" />
+              </label>
+              <label className="block text-sm">Drilling Diameter
+                <select name="drilling_diameter" value={single.drilling_diameter} onChange={onChangeSingle} className="select">
+                  <option value="">Select…</option>
+                  <option value="NQ">NQ</option>
+                  <option value="HQ">HQ</option>
+                  <option value="PQ">PQ</option>
+                  <option value="Other">Other</option>
+                </select>
+              </label>
+              <label className="block text-sm">Project Name
+                <input type="text" name="project_name" value={single.project_name} onChange={onChangeSingle} className="input" />
+              </label>
+              <label className="block text-sm">Drilling Contractor
+                <input type="text" name="drilling_contractor" value={single.drilling_contractor} onChange={onChangeSingle} className="input" />
+              </label>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={saveSingle}
+                disabled={savingHole || !single.hole_id || !user}
+                className="btn btn-primary flex-1"
+              >
+                {savingHole ? 'Saving…' : editingId ? 'Save Changes' : 'Add Hole'}
+              </button>
+              {editingId && (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    setEditingId(null);
+                    setSingle({ hole_id: '', depth: '', drilling_diameter: '', project_name: '', drilling_contractor: '' });
+                  }}
+                >New</button>
+              )}
+            </div>
+            <div className="mt-3 text-xs text-gray-500">After saving you can manage task intervals below the table.</div>
           </div>
         </div>
       )}

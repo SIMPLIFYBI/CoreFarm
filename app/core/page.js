@@ -434,9 +434,9 @@ export default function CorePage() {
             {filteredHoles.map((h) => (
               <div key={h.id} className="card p-3">
                 <div className="flex items-center justify-between">
-                  <div className="font-medium flex items-center gap-2">
-                    <span>Hole ID {h.hole_id}</span>
-                    <span className="text-xs text-gray-500">· Depth {h?.depth ?? "-"} m</span>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-gray-700">Hole ID: {h.hole_id}</span>
+                    <span className="text-gray-500">· Depth {h?.depth ?? "-"} m</span>
                   </div>
                   {(holeStatus[h.id]?.hasPlanned && holeStatus[h.id]?.complete) ? (
                     <span className="text-[10px] px-2 py-0.5 rounded bg-green-100 text-green-700">Complete</span>
