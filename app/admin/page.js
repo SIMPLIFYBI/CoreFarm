@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Fragment } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import toast from "react-hot-toast";
 import { parseTable } from "@/lib/parseTable";
@@ -50,6 +50,16 @@ export default function AdminPage() {
     });
     // Clear intervals immediately so UI reflects the new selection
     setIntervals(emptyIntervals);
+  };
+
+  const toggleExpandHole = (h) => {
+    if (selectedId === h.id) {
+      // collapse
+      setSelectedId(null);
+      setIntervals(emptyIntervals);
+      return;
+    }
+    selectHole(h);
   };
 
   // Load user and memberships; holes are loaded when org is selected
@@ -286,7 +296,7 @@ export default function AdminPage() {
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-8">
-      <h1 className="text-2xl font-semibold">Add Holes/Tasks</h1>
+  <h1 className="text-2xl font-semibold">Add Holes / Tasks</h1>
       <div className="flex items-center gap-2">
         <span className="text-sm text-gray-700">Organization</span>
         {memberships && memberships.length > 0 ? (
@@ -320,7 +330,7 @@ export default function AdminPage() {
 
       <section className="space-y-3">
         <div className="flex items-start justify-between gap-3">
-          <h2 className="text-xl font-medium">Holes</h2>
+          <h2 className="text-xl font-medium">Holes & Tasks</h2>
           <button
             type="button"
             className="btn btn-primary"
@@ -338,6 +348,7 @@ export default function AdminPage() {
             <table className="table">
               <thead>
                 <tr>
+                  <th style={{width:40}}></th>
                   <th>Hole ID</th>
                   <th>Depth</th>
                   <th>Diameter</th>
@@ -348,48 +359,107 @@ export default function AdminPage() {
               </thead>
               <tbody>
                 {holes.map((h) => (
-                  <tr
-                    key={h.id}
-                    className={`cursor-pointer ${selectedId === h.id ? 'row-selected' : ''}`}
-                    onClick={() => selectHole(h)}
-                  >
-                    <td>{h.hole_id}</td>
-                    <td>{h.depth}</td>
-                    <td>{h.drilling_diameter}</td>
-                    <td>{h.project_name}</td>
-                    <td>{h.drilling_contractor}</td>
-                    <td>
-                      <div className="flex gap-2">
+                  <Fragment key={h.id}>
+                    <tr
+                      className={`${selectedId === h.id ? 'row-selected' : ''}`}
+                    >
+                      <td>
                         <button
                           type="button"
-                          className="btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingId(h.id);
-                            setSingle({
-                              hole_id: h.hole_id || "",
-                              depth: h.depth ?? "",
-                              drilling_diameter: h.drilling_diameter || "",
-                              project_name: h.project_name || "",
-                              drilling_contractor: h.drilling_contractor || "",
-                            });
-                            setShowHoleModal(true);
-                          }}
-                          title="Edit hole"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-danger"
-                          onClick={(e) => { e.stopPropagation(); deleteHole(h.id); }}
-                          title="Delete this hole"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                          className="btn btn-xs"
+                          onClick={() => toggleExpandHole(h)}
+                          title={selectedId === h.id ? 'Collapse' : 'Expand'}
+                        >{selectedId === h.id ? '−' : '+'}</button>
+                      </td>
+                      <td className="font-medium">{h.hole_id}</td>
+                      <td>{h.depth}</td>
+                      <td>{h.drilling_diameter}</td>
+                      <td>{h.project_name}</td>
+                      <td>{h.drilling_contractor}</td>
+                      <td>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            className="btn btn-xs"
+                            onClick={() => {
+                              setEditingId(h.id);
+                              setSingle({
+                                hole_id: h.hole_id || "",
+                                depth: h.depth ?? "",
+                                drilling_diameter: h.drilling_diameter || "",
+                                project_name: h.project_name || "",
+                                drilling_contractor: h.drilling_contractor || "",
+                              });
+                              setShowHoleModal(true);
+                            }}
+                          >Edit</button>
+                          <button
+                            type="button"
+                            className="btn btn-xs btn-danger"
+                            onClick={() => deleteHole(h.id)}
+                          >Del</button>
+                        </div>
+                      </td>
+                    </tr>
+                    {selectedId === h.id && (
+                      <tr className="bg-gray-50/60">
+                        <td colSpan={7} className="p-0">
+                          <div className="p-4 space-y-4 border-t">
+                            <div className="flex items-center justify-between">
+                              <h3 className="font-medium text-sm">Task intervals</h3>
+                              <button
+                                type="button"
+                                className="btn btn-xs"
+                                onClick={() => saveIntervals()}
+                                disabled={!selectedId}
+                              >Save Tasks</button>
+                            </div>
+                            <div className="grid md:grid-cols-2 gap-4">
+                              {TASK_TYPES.map((t) => (
+                                <div key={t} className="card p-3 space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-medium text-xs uppercase tracking-wide">{t.replace(/_/g,' ')}</span>
+                                    <button
+                                      type="button"
+                                      className="btn btn-xs btn-primary"
+                                      onClick={() => addInterval(t)}
+                                    >+ Interval</button>
+                                  </div>
+                                  <div className="space-y-2">
+                                    {(intervals[t] || []).map((row, idx) => (
+                                      <div key={idx} className="flex items-center gap-2">
+                                        <input
+                                          className="input input-xs w-20"
+                                          placeholder="From"
+                                          value={row.from_m}
+                                          onChange={(e) => changeInterval(t, idx, 'from_m', e.target.value)}
+                                        />
+                                        <span className="text-xs">→</span>
+                                        <input
+                                          className="input input-xs w-20"
+                                          placeholder="To"
+                                          value={row.to_m}
+                                          onChange={(e) => changeInterval(t, idx, 'to_m', e.target.value)}
+                                        />
+                                        <button
+                                          type="button"
+                                          className="btn btn-xs"
+                                          onClick={() => removeInterval(t, idx)}
+                                        >×</button>
+                                      </div>
+                                    ))}
+                                    {!intervals[t]?.length && (
+                                      <div className="text-xs text-gray-500 italic">None</div>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -397,40 +467,7 @@ export default function AdminPage() {
         )}
       </section>
 
-      {selectedId && (
-        <section className="space-y-3">
-          <h2 className="text-xl font-medium">Tasks for selected hole</h2>
-          <p className="text-sm text-gray-600">Add intervals for each task type (meters)</p>
-          <div className="space-y-6">
-            {TASK_TYPES.map((t) => (
-              <div key={t} className="card p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-medium">{t.replace(/_/g, " ")}</h3>
-                  <button type="button" onClick={() => addInterval(t)} className="btn btn-primary">Add interval</button>
-                </div>
-                <div className="space-y-2">
-                  {(intervals[t] || []).map((row, idx) => (
-                    <div key={idx} className="grid grid-cols-8 gap-2 items-center">
-                      <label className="col-span-3 text-sm">From (m)
-                        <input value={row.from_m} onChange={(e) => changeInterval(t, idx, "from_m", e.target.value)} className="input input-sm" />
-                      </label>
-                      <label className="col-span-3 text-sm">To (m)
-                        <input value={row.to_m} onChange={(e) => changeInterval(t, idx, "to_m", e.target.value)} className="input input-sm" />
-                      </label>
-                      <div className="col-span-2 flex justify-end">
-                        <button type="button" onClick={() => removeInterval(t, idx)} className="btn">Remove</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div>
-            <button type="button" onClick={saveIntervals} className="btn btn-primary">Save tasks</button>
-          </div>
-        </section>
-      )}
+  {/* Tasks editor now embedded inline per hole row above */}
 
       {/* Bulk upload modal */}
       {showBulk && (

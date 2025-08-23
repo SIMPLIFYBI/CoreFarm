@@ -78,7 +78,7 @@ export default function Header() {
             {[
               { href: "/core", label: "Logging", icon: IconAdmin },
               { href: "/user", label: "Report", icon: IconReport },
-              { href: "/admin", label: "Add Core", icon: IconCore },
+              { href: "/addcore", label: "Add Core", icon: IconCore },
               { href: "/team", label: "Team", icon: IconTeam },
               { href: "/consumables", label: "Consumables", icon: IconCore },
             ].map((t) => {

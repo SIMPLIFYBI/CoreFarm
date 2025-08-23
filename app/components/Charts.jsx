@@ -87,27 +87,74 @@ export function DonutChart({ data = [], size = 160, valueSuffix = " m" }) {
   );
 }
 
-export function TrendChart({ points = [], height = 120, color = "#4f46e5" }) {
+export function TrendChart({ points = [], height = 180, color = "#4f46e5" }) {
+  // Layout: reserve bottom band for x-axis labels so they don't overlap chart area
+  const chartTop = 4;          // top padding
+  const chartBottom = 82;      // baseline (leave ~18 units for labels)
+  const chartHeightUnits = chartBottom - chartTop; // usable vertical span
   const max = Math.max(0, ...points.map((p) => p.value || 0));
   const n = points.length;
   const px = (i) => (n <= 1 ? 0 : (i / (n - 1)) * 100);
-  const py = (v) => (max > 0 ? 100 - (v / max) * 90 - 5 : 95);
-  const path = points
-    .map((p, i) => `${i === 0 ? "M" : "L"}${px(i).toFixed(2)},${py(p.value).toFixed(2)}`)
-    .join(" ");
-  const area = `${path} L100,100 L0,100 Z`;
+  const py = (v) => (max > 0 ? chartBottom - (v / max) * (chartHeightUnits - 2) : chartBottom - 1);
+
+  // Smooth path via simple Catmull-Rom to Bezier conversion
+  function buildSmoothPath(pts) {
+    if (pts.length < 2) return "";
+    const coords = pts.map((p, i) => [px(i), py(p.value)]);
+    if (coords.length === 2) {
+      return `M${coords[0][0]},${coords[0][1]} L${coords[1][0]},${coords[1][1]}`;
+    }
+    const path = [`M${coords[0][0]},${coords[0][1]}`];
+    for (let i = 0; i < coords.length - 1; i++) {
+      const p0 = coords[i - 1] || coords[i];
+      const p1 = coords[i];
+      const p2 = coords[i + 1];
+      const p3 = coords[i + 2] || p2;
+      // Catmull-Rom to cubic Bezier
+      const cp1x = p1[0] + (p2[0] - p0[0]) / 6;
+      const cp1y = p1[1] + (p2[1] - p0[1]) / 6;
+      const cp2x = p2[0] - (p3[0] - p1[0]) / 6;
+      const cp2y = p2[1] - (p3[1] - p1[1]) / 6;
+      path.push(`C${cp1x},${cp1y} ${cp2x},${cp2y} ${p2[0]},${p2[1]}`);
+    }
+    return path.join(" ");
+  }
+
+  const linePath = buildSmoothPath(points);
+  const areaPath = linePath ? `${linePath} L100,${chartBottom} L0,${chartBottom} Z` : "";
+
+  // Month labels (use first day of each month present)
+  const monthLabels = [];
+  const seen = new Set();
+  points.forEach((p, i) => {
+    if (!p.label) return;
+    const date = new Date(p.label);
+    if (isNaN(date)) return;
+    const key = `${date.getUTCFullYear()}-${date.getUTCMonth()}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      monthLabels.push({ x: px(i), text: date.toLocaleString(undefined, { month: 'short' }) });
+    }
+  });
+
   return (
-    <div className="w-full">
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full" style={{ height }}>
+    <div className="w-full relative" style={{ height }}>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
         <defs>
           <linearGradient id="trendFill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.2" />
+            <stop offset="0%" stopColor={color} stopOpacity="0.18" />
             <stop offset="100%" stopColor={color} stopOpacity="0" />
           </linearGradient>
         </defs>
-        <rect x="0" y="0" width="100" height="100" fill="#ffffff" />
-        <path d={area} fill="url(#trendFill)" />
-        <path d={path} stroke={color} strokeWidth="1.5" fill="none" />
+        {/* Transparent background (no rect) */}
+        {/* Horizontal grid / baseline */}
+        <line x1="0" x2="100" y1={chartBottom} y2={chartBottom} stroke="#e5e7eb" strokeWidth="0.5" />
+        {areaPath && <path d={areaPath} fill="url(#trendFill)" stroke="none" />}
+        {linePath && <path d={linePath} stroke={color} strokeWidth={1.5} fill="none" strokeLinejoin="round" strokeLinecap="round" />}
+        {/* X-axis month labels */}
+        {monthLabels.map((m) => (
+          <text key={m.x} x={m.x} y={chartBottom + 10} fontSize={4} textAnchor="middle" fill="#6b7280">{m.text}</text>
+        ))}
       </svg>
     </div>
   );
