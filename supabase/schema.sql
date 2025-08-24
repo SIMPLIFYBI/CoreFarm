@@ -466,6 +466,8 @@ create table if not exists public.consumable_items (
   key text not null,
   label text not null,
   count integer not null default 0 check (count >= 0),
+  -- Reorder threshold (when inventory at or below this value, highlight for reorder). 0 disables threshold.
+  reorder_value integer not null default 0 check (reorder_value >= 0),
   -- Whether this item should appear in the consumables report dashboard
   include_in_report boolean not null default false,
   updated_at timestamptz default now()
@@ -489,6 +491,9 @@ create policy "write consumable items (org)" on public.consumable_items for all 
 ) with check (
   public.is_current_org_member(organization_id)
 );
+
+-- Ensure reorder_value column exists for environments created before this field was added
+alter table public.consumable_items add column if not exists reorder_value integer not null default 0 check (reorder_value >= 0);
 
 -- Purchase Orders per organization
 -- status: not_ordered (draft / request bucket), ordered, received

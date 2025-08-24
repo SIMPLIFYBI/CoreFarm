@@ -17,7 +17,7 @@ export default function ConsumablesPage() {
   const [tab, setTab] = useState("inventory"); // 'inventory' | 'requests' | 'orders'
 
   // Inventory
-  const [items, setItems] = useState([]); // list of {id,key,label,count,include_in_report}
+  const [items, setItems] = useState([]); // list of {id,key,label,count,include_in_report,reorder_value}
   const [loadingItems, setLoadingItems] = useState(false);
   // No order number captured at inventory level anymore
 
@@ -66,7 +66,7 @@ export default function ConsumablesPage() {
       // Try load existing
       const { data: existing } = await supabase
         .from("consumable_items")
-        .select("id, key, label, count, include_in_report")
+        .select("id, key, label, count, include_in_report, reorder_value")
         .eq("organization_id", org);
       if ((existing || []).length > 0) {
         setItems(existing);
@@ -80,7 +80,7 @@ export default function ConsumablesPage() {
           label: d.label,
           count: 0,
         }));
-  const { data: inserted, error: seedErr } = await supabase.from("consumable_items").insert(seedRows).select("id, key, label, count, include_in_report");
+  const { data: inserted, error: seedErr } = await supabase.from("consumable_items").insert(seedRows).select("id, key, label, count, include_in_report, reorder_value");
         if (seedErr) throw seedErr;
         setItems(inserted || seedRows.map(({ organization_id, ...rest }) => rest));
         return;
@@ -89,7 +89,7 @@ export default function ConsumablesPage() {
       setItems([]);
     } catch (e) {
       // Fallback: if table not ready; show defaults client-side (read-only)
-  setItems(DEFAULT_CONSUMABLE_ITEMS.map((d) => ({ id: `temp-${d.key}`, key: d.key, label: d.label, count: 0, include_in_report: false })));
+  setItems(DEFAULT_CONSUMABLE_ITEMS.map((d) => ({ id: `temp-${d.key}`, key: d.key, label: d.label, count: 0, include_in_report: false, reorder_value: 0 })));
     } finally {
       setLoadingItems(false);
     }
@@ -105,6 +105,19 @@ export default function ConsumablesPage() {
       if (error) throw error;
     } catch {
       // swallow for now, optimistic UI
+    }
+  };
+
+  const saveReorderValue = async (key, reorder_value) => {
+    setItems(arr => arr.map(it => it.key === key ? { ...it, reorder_value } : it));
+    if (!orgId) return;
+    try {
+      const { error } = await supabase
+        .from('consumable_items')
+        .upsert({ organization_id: orgId, key, label: items.find(i=>i.key===key)?.label || key, reorder_value }, { onConflict: 'organization_id,key' });
+      if (error) throw error;
+    } catch {
+      /* ignore */
     }
   };
 
@@ -158,7 +171,7 @@ export default function ConsumablesPage() {
       key = `${baseKey}_${i++}`;
     }
     try {
-  const { data, error } = await supabase.from('consumable_items').insert({ organization_id: orgId, key, label, count: 0 }).select('id, key, label, count, include_in_report').single();
+  const { data, error } = await supabase.from('consumable_items').insert({ organization_id: orgId, key, label, count: 0, reorder_value: 0 }).select('id, key, label, count, include_in_report, reorder_value').single();
       if (error) throw error;
       setItems(arr => [...arr, data]);
     } catch (e) {
@@ -434,9 +447,11 @@ export default function ConsumablesPage() {
                 <thead>
                   <tr>
                     <th className="text-xs md:text-sm">Item</th>
-                    <th className="w-24 text-center text-[10px] md:text-xs hidden md:table-cell">Include in Report</th>
-                    <th className="w-32 text-xs md:text-sm">Count</th>
-                    <th className="w-40 text-xs md:text-sm">Actions</th>
+                    <th className="w-20 text-center text-[10px] md:text-xs hidden md:table-cell">Include</th>
+                    <th className="w-24 text-center text-[10px] md:text-xs hidden md:table-cell">Reorder @</th>
+                    <th className="w-28 text-xs md:text-sm">Count</th>
+                    <th className="w-24 text-xs md:text-sm">Status</th>
+                    <th className="w-32 text-xs md:text-sm">Actions</th>
                     {isAdmin && <th className="w-10 hidden md:table-cell" />}
                   </tr>
                 </thead>
@@ -450,6 +465,25 @@ export default function ConsumablesPage() {
                           checked={!!it.include_in_report}
                           onChange={() => toggleIncludeInReport(it.key)}
                         />
+                      </td>
+                      <td className="align-middle py-1 hidden md:table-cell text-center">
+                        {isAdmin ? (
+                          <input
+                            type="number"
+                            min={0}
+                            className="input input-sm w-20 text-right"
+                            value={it.reorder_value ?? 0}
+                            onFocus={(e)=>e.target.select()}
+                            onChange={(e)=>{
+                              const v=e.target.value;
+                              if(v===''){ saveReorderValue(it.key,0); return; }
+                              const num=Math.max(0, parseInt(v,10));
+                              saveReorderValue(it.key, Number.isFinite(num)?num:0);
+                            }}
+                          />
+                        ) : (
+                          <span>{it.reorder_value ?? 0}</span>
+                        )}
                       </td>
                       <td className="align-middle py-1">
                         <input
@@ -476,10 +510,22 @@ export default function ConsumablesPage() {
                           }}
                         />
                       </td>
-                      <td>
-                          <button className="btn text-xs" onClick={() => addToPurchaseRequest(it.key)}>
-                            Order More
-                        </button>
+                      <td className="align-middle py-1">
+                        {(() => {
+                          const rv = it.reorder_value || 0;
+                          const c = Number(it.count) || 0;
+                          let badgeClass = 'badge-gray';
+                          let label = '—';
+                          if (rv > 0) {
+                            if (c <= rv) { badgeClass='badge-red'; label='Reorder'; }
+                            else if (c <= rv * 1.5) { badgeClass='badge-amber'; label='Low'; }
+                            else { badgeClass='badge-green'; label='OK'; }
+                          }
+                          return <span className={`badge ${badgeClass} text-[9px] md:text-[10px]`}>{label}</span>;
+                        })()}
+                      </td>
+                      <td className="align-middle py-1">
+                        <button className="btn btn-sm text-xs" onClick={() => addToPurchaseRequest(it.key)}>Order More</button>
                       </td>
                       {isAdmin && (
                         <td className="hidden md:table-cell">
@@ -490,7 +536,7 @@ export default function ConsumablesPage() {
                   ))}
                   {items.length === 0 && (
                     <tr>
-                      <td colSpan={isAdmin ? 5 : 4} className="text-xs md:text-sm text-gray-500 text-center py-4">
+                      <td colSpan={isAdmin ? 8 : 7} className="text-xs md:text-sm text-gray-500 text-center py-4">
                         {isAdmin ? 'No items yet. Add your first item.' : 'No consumable items configured. Ask an admin to add items.'}
                       </td>
                     </tr>

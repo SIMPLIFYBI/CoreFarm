@@ -160,65 +160,44 @@ export function TrendChart({ points = [], height = 180, color = "#4f46e5" }) {
   );
 }
 
-// Improved line chart with full x-axis label support (rotated if dense)
-export function LineChartX({ points = [], height = 200, color = '#2563eb', area = true, showValues = false }) {
-  const max = Math.max(0, ...points.map(p => p.value || 0));
-  const n = points.length;
-  const topPad = 8; // svg units
-  const bottomPad = 30; // space for labels
-  const leftPad = 4;
-  const rightPad = 2;
-  const innerWidth = 100 - leftPad - rightPad;
-  const innerHeight = 100 - topPad - bottomPad;
-  const xAt = (i) => n <= 1 ? leftPad + innerWidth/2 : leftPad + (i/(n-1))*innerWidth;
-  const yAt = (v) => max > 0 ? topPad + (1 - (v/max)) * innerHeight : topPad + innerHeight;
-  // Build path
-  const path = points.reduce((acc,p,i)=>{
-    const x = xAt(i), y = yAt(p.value || 0);
-    if (i===0) return `M${x},${y}`;
-    return acc + ` L${x},${y}`;
-  }, '');
-  const areaPath = area && path ? path + ` L${xAt(n-1)},${topPad+innerHeight} L${xAt(0)},${topPad+innerHeight} Z` : '';
-  // Decide which labels to show to avoid overlap
-  let labelIdxs = [];
-  if (n <= 12) {
-    labelIdxs = points.map((_p,i)=>i);
-  } else {
-    const target = 12;
-    const step = (n-1)/(target-1);
-    for (let i=0;i<target;i++) labelIdxs.push(Math.round(i*step));
-    const set = new Set(labelIdxs);
-    // ensure first/last
-    set.add(0); set.add(n-1);
-    labelIdxs = Array.from(set).sort((a,b)=>a-b);
-  }
+// Fresh, simplified responsive line chart to avoid layout skew/stretch issues
+// Features: auto-thinning of x labels, aspect-preserving scaling, optional area fill.
+export function LineChart({ points = [], height = '100%', color = '#2563eb', area = true, fullBleed = false }) {
+  const clean = (points || []).filter(p => p && typeof p.value === 'number');
+  const n = clean.length;
+  const max = Math.max(0, ...clean.map(p => p.value));
+  const min = Math.min(0, ...clean.map(p => p.value));
+  const range = max - min || 1;
+  // Reduced padding since no x labels now
+  const pad = { top: 6, right: 4, bottom: 6, left: 6 };
+  const iw = 100 - pad.left - pad.right;
+  const ih = 100 - pad.top - pad.bottom;
+  const xAt = i => pad.left + (n <= 1 ? iw/2 : (i/(n-1))*iw);
+  const yAt = v => pad.top + (1 - ((v - min)/range)) * ih;
+  let path = '';
+  clean.forEach((p,i) => { path += (i? ' L':'M') + xAt(i) + ',' + yAt(p.value); });
+  const areaPath = area && path ? `${path} L${xAt(n-1)},${pad.top+ih} L${xAt(0)},${pad.top+ih} Z` : '';
+  const grids = [0,0.25,0.5,0.75,1];
   return (
-    <div className="w-full" style={{height}}>
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
+    <div className={`w-full h-full ${fullBleed ? 'ml-[-1rem] mr-[-1rem] md:ml-[-1.25rem] md:mr-[-1.25rem]' : ''}`} style={{height}}>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" className="w-full h-full block">
         <defs>
-          <linearGradient id="lcxFill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.25" />
+          <linearGradient id="lcFill" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.3" />
             <stop offset="100%" stopColor={color} stopOpacity="0" />
           </linearGradient>
         </defs>
-        {/* Grid lines */}
-        {[0,0.25,0.5,0.75,1].map(g => (
-          <line key={g} x1={leftPad} x2={100-rightPad} y1={topPad + g*innerHeight} y2={topPad + g*innerHeight} stroke="#f1f5f9" strokeWidth="0.5" />
+        {grids.map(g => (
+          <line key={g} x1={pad.left} x2={100-pad.right} y1={pad.top + g*ih} y2={pad.top + g*ih} stroke="#e5e7eb" strokeWidth={0.4} />
         ))}
-        {/* Axis */}
-        <line x1={leftPad} x2={100-rightPad} y1={topPad+innerHeight} y2={topPad+innerHeight} stroke="#cbd5e1" strokeWidth="0.6" />
-        {areaPath && <path d={areaPath} fill="url(#lcxFill)" stroke="none" />}
+        <line x1={pad.left} x2={pad.left} y1={pad.top} y2={pad.top+ih} stroke="#cbd5e1" strokeWidth={0.5} />
+        <line x1={pad.left} x2={100-pad.right} y1={pad.top+ih} y2={pad.top+ih} stroke="#cbd5e1" strokeWidth={0.5} />
+        {areaPath && <path d={areaPath} fill="url(#lcFill)" stroke="none" />}
         {path && <path d={path} fill="none" stroke={color} strokeWidth={1.4} strokeLinejoin="round" strokeLinecap="round" />}
-        {points.map((p,i)=>(
+        {clean.map((p,i)=>(
           <g key={i}>
-            <circle cx={xAt(i)} cy={yAt(p.value || 0)} r={1.3} fill={color} />
+            <circle cx={xAt(i)} cy={yAt(p.value)} r={1.2} fill={color} />
             <title>{p.label}: {formatNum(p.value)}</title>
-            {showValues && <text x={xAt(i)} y={yAt(p.value || 0)-2} fontSize={3} textAnchor="middle" fill="#334155">{formatNum(p.value)}</text>}
-          </g>
-        ))}
-        {labelIdxs.map(i => (
-          <g key={'lbl'+i} transform={`translate(${xAt(i)}, ${topPad+innerHeight+2})`}>
-            <text fontSize={3.2} textAnchor="end" transform="rotate(-45)" fill="#475569">{points[i].label}</text>
           </g>
         ))}
       </svg>

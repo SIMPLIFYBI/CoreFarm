@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState, Fragment } from "react";
+import { useEffect, useMemo, useState, Fragment, useRef } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import toast from "react-hot-toast";
 
@@ -38,6 +38,12 @@ export default function CorePage() {
   const [currentUserId, setCurrentUserId] = useState(null);
   const [loggedOn, setLoggedOn] = useState(() => new Date().toISOString().slice(0, 10)); // yyyy-mm-dd
   const [selectedProject, setSelectedProject] = useState("");
+  // Multi-select status filters; empty or all selected => show all
+  const [holeFilters, setHoleFilters] = useState(['complete','in_progress','not_started']);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const statusMenuRef = useRef(null);
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  const projectMenuRef = useRef(null);
 
   const projects = useMemo(() => {
     const set = new Set();
@@ -47,10 +53,52 @@ export default function CorePage() {
     return Array.from(set).sort();
   }, [holes]);
 
+  const classifyHole = (h) => {
+    const s = holeStatus[h.id] || {};
+    if (s.hasPlanned) {
+      if (s.complete) return 'complete';
+      if (s.hasProgress) return 'in_progress';
+      return 'not_started';
+    }
+    return s.hasProgress ? 'in_progress' : 'not_started';
+  };
+
   const filteredHoles = useMemo(() => {
-    if (!selectedProject) return holes;
-    return (holes || []).filter((h) => h.project_name === selectedProject);
-  }, [holes, selectedProject]);
+    const byProject = !selectedProject ? holes : (holes || []).filter(h => h.project_name === selectedProject);
+    const active = holeFilters || [];
+    if (active.length === 0 || active.length === 3) return byProject; // all
+    return byProject.filter(h => active.includes(classifyHole(h)));
+  }, [holes, selectedProject, holeFilters, holeStatus]);
+
+  // Click outside to close status menu
+  useEffect(() => {
+    if (!statusMenuOpen && !projectMenuOpen) return;
+    const handler = (e) => {
+      if (statusMenuOpen && statusMenuRef.current && !statusMenuRef.current.contains(e.target)) {
+        setStatusMenuOpen(false);
+      }
+      if (projectMenuOpen && projectMenuRef.current && !projectMenuRef.current.contains(e.target)) {
+        setProjectMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [statusMenuOpen, projectMenuOpen]);
+
+  const toggleStatusFilter = (status) => {
+    setHoleFilters((prev) => {
+      const exists = prev.includes(status);
+      let next = exists ? prev.filter(s => s !== status) : [...prev, status];
+      // If none selected, treat as all (reset to all three for clarity)
+      if (next.length === 0) next = ['complete','in_progress','not_started'];
+      return next;
+    });
+  };
+
+  const allSelected = holeFilters.length === 3;
+  const summaryLabel = allSelected ? 'All' : holeFilters
+    .map(s => s === 'complete' ? 'Completed' : s === 'in_progress' ? 'In progress' : 'Not started')
+    .join(', ');
 
   useEffect(() => {
     (async () => {
@@ -89,7 +137,7 @@ export default function CorePage() {
             (byTask[p.task_type] ||= []).push(p);
           });
           const complete = isFullyCovered(planned, byTask);
-          statusMap[id] = { hasPlanned: planned.length > 0, complete };
+          statusMap[id] = { hasPlanned: planned.length > 0, complete, hasProgress: progArr.length > 0 };
         });
         setHoleStatus(statusMap);
       }
@@ -175,7 +223,7 @@ export default function CorePage() {
       const fullyCovered = isFullyCovered(allPlanned, byTask);
       setDetails((d) => ({ ...d, [holeId]: { tasks, order, complete: fullyCovered } }));
       // update status map based on detailed computation
-      setHoleStatus((m) => ({ ...m, [holeId]: { hasPlanned: allPlanned.length > 0, complete: fullyCovered } }));
+  setHoleStatus((m) => ({ ...m, [holeId]: { hasPlanned: allPlanned.length > 0, complete: fullyCovered, hasProgress: (progress || []).length > 0 } }));
       initInputsForHole(holeId, intervals, progress);
     } catch (e) {
       // noop
@@ -244,18 +292,119 @@ export default function CorePage() {
           value={loggedOn}
           onChange={(e) => setLoggedOn(e.target.value)}
         />
-        <div className="ml-auto flex items-center gap-2">
-          <label className="text-sm text-gray-700">Project</label>
-          <select
-            className="input input-sm w-auto"
-            value={selectedProject}
-            onChange={(e) => setSelectedProject(e.target.value)}
-          >
-            <option value="">All projects</option>
-            {projects.map((p) => (
-              <option key={p} value={p}>{p}</option>
-            ))}
-          </select>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="relative" ref={projectMenuRef}>
+            <button
+              type="button"
+              className="input input-sm w-auto flex items-center gap-1 cursor-pointer"
+              onClick={() => setProjectMenuOpen(o => !o)}
+            >
+              <span className="text-gray-700">Project:</span>
+              {selectedProject ? (
+                <span className="flex items-center gap-1 text-gray-700">
+                  <span className="text-gray-600">{selectedProject}</span>
+                </span>
+              ) : (
+                <span className="text-gray-500">All</span>
+              )}
+              <svg className={`w-3 h-3 ml-1 transition-transform ${projectMenuOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path d="M5.23 7.21a.75.75 0 011.06.02L10 11.189l3.71-3.96a.75.75 0 111.08 1.04l-4.24 4.53a.75.75 0 01-1.08 0l-4.24-4.53a.75.75 0 01.02-1.06z" /></svg>
+            </button>
+            {projectMenuOpen && (
+              <div className="absolute right-0 mt-1 w-56 rounded-md border bg-white shadow-lg z-30 p-2 space-y-1 text-sm max-h-64 overflow-auto">
+                <button
+                  type="button"
+                  onClick={() => { setSelectedProject(''); setProjectMenuOpen(false); }}
+                  className={`w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-50 text-left ${selectedProject === '' ? 'bg-gray-100' : ''}`}
+                >
+                  <span className="flex-1">All projects</span>
+                  <span className={`w-4 h-4 inline-flex items-center justify-center text-[10px] rounded ${selectedProject === '' ? 'text-indigo-600' : 'text-transparent'}`}>✓</span>
+                </button>
+                {projects.map(p => {
+                  const active = selectedProject === p;
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => { setSelectedProject(p); setProjectMenuOpen(false); }}
+                      className={`w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-50 text-left ${active ? 'bg-gray-100' : ''}`}
+                    >
+                      <span className="flex-1">{p}</span>
+                      <span className={`w-4 h-4 inline-flex items-center justify-center text-[10px] rounded ${active ? 'text-indigo-600' : 'text-transparent'}`}>✓</span>
+                    </button>
+                  );
+                })}
+                {selectedProject && (
+                  <div className="pt-1 mt-1 border-t">
+                    <button
+                      type="button"
+                      className="text-[11px] text-gray-500 hover:underline"
+                      onClick={() => { setSelectedProject(''); setProjectMenuOpen(false); }}
+                    >Clear selection</button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="relative" ref={statusMenuRef}>
+            <button
+              type="button"
+              className="input input-sm w-auto flex items-center gap-1 cursor-pointer"
+              onClick={() => setStatusMenuOpen(o => !o)}
+            >
+              <span className="text-gray-700">Status:</span>
+              <span className="flex items-center gap-1">
+                {allSelected ? (
+                  <span className="text-gray-600">All</span>
+                ) : holeFilters.map(s => {
+                  const color = s === 'complete' ? 'bg-green-500' : s === 'in_progress' ? 'bg-amber-500' : 'bg-gray-400';
+                  return <span key={s} className="flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full bg-gray-100">
+                    <span className={`inline-block w-2 h-2 rounded-full ${color}`}></span>
+                    {s === 'complete' ? 'Done' : s === 'in_progress' ? 'Progress' : 'New'}
+                  </span>;
+                })}
+              </span>
+              <svg className={`w-3 h-3 ml-1 transition-transform ${statusMenuOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path d="M5.23 7.21a.75.75 0 011.06.02L10 11.189l3.71-3.96a.75.75 0 111.08 1.04l-4.24 4.53a.75.75 0 01-1.08 0l-4.24-4.53a.75.75 0 01.02-1.06z" /></svg>
+            </button>
+            {statusMenuOpen && (
+              <div className="absolute right-0 mt-1 w-48 rounded-md border bg-white shadow-lg z-30 p-2 space-y-1 text-sm">
+                {[
+                  { key: 'complete', label: 'Completed', color: 'bg-green-500' },
+                  { key: 'in_progress', label: 'In progress', color: 'bg-amber-500' },
+                  { key: 'not_started', label: 'Not started', color: 'bg-gray-400' },
+                ].map(opt => {
+                  const active = holeFilters.includes(opt.key);
+                  return (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => toggleStatusFilter(opt.key)}
+                      className={`w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-50 text-left ${active ? 'bg-gray-100' : ''}`}
+                    >
+                      <span className={`inline-block w-2.5 h-2.5 rounded-full ${opt.color}`}></span>
+                      <span className="flex-1">{opt.label}</span>
+                      <span className={`w-4 h-4 inline-flex items-center justify-center text-[10px] rounded ${active ? 'text-indigo-600' : 'text-transparent'}`}>✓</span>
+                    </button>
+                  );
+                })}
+                <div className="pt-1 mt-1 border-t flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="text-[11px] text-indigo-600 hover:underline"
+                    onClick={() => setHoleFilters(['complete','in_progress','not_started'])}
+                  >
+                    All
+                  </button>
+                  <button
+                    type="button"
+                    className="text-[11px] text-gray-500 hover:underline"
+                    onClick={() => setHoleFilters([])}
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
       {loading ? (

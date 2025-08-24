@@ -38,7 +38,7 @@ export default function RootLayout({ children }) {
       >
   <Header />
   <AuthGuard>
-    <main className="min-h-screen md:pb-0 pb-[calc(env(safe-area-inset-bottom)+64px)]">
+    <main className="min-h-screen md:pt-[72px] md:pb-0 pb-[calc(env(safe-area-inset-bottom)+64px)]">
       {children}
     </main>
   </AuthGuard>

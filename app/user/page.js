@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { TASK_TYPES } from "@/lib/taskTypes";
-import { BarChart, DonutChart, TrendChart, LineChartX } from "@/app/components/Charts";
+import { BarChart, DonutChart, LineChart } from "@/app/components/Charts";
 
 const COLORS = [
   "#4f46e5",
@@ -33,6 +33,7 @@ export default function UserDashboardPage() {
   });
   const [toDate, setToDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [types, setTypes] = useState(TASK_TYPES);
+  const [taskSelectOpen, setTaskSelectOpen] = useState(false);
 
   // Data (dashboard)
   const [byType, setByType] = useState([]); // [{label, value, color}]
@@ -87,7 +88,7 @@ export default function UserDashboardPage() {
         // Current included inventory
         const { data: inv } = await supabase
           .from('consumable_items')
-          .select('key,label,count')
+          .select('key,label,count,reorder_value')
           .eq('organization_id', orgId)
           .eq('include_in_report', true)
           .order('label');
@@ -200,8 +201,22 @@ export default function UserDashboardPage() {
   }, [orgId, user, fromDate, toDate, types, supabase]);
 
   const toggleType = (t) => {
-    setTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
+    setTypes((prev) => {
+      const exists = prev.includes(t);
+      if (exists) {
+        const next = prev.filter((x) => x !== t);
+        return next.length === 0 ? prev : next; // prevent empty selection
+      } else {
+        return [...prev, t];
+      }
+    });
   };
+
+  const allSelected = types.length === TASK_TYPES.length;
+  const selectedLabels = typeOptions.filter(o => types.includes(o.key)).map(o => o.label);
+  const buttonLabel = allSelected
+    ? `All Tasks (${types.length})`
+    : selectedLabels.slice(0,3).join(', ') + (selectedLabels.length > 3 ? ` +${selectedLabels.length-3}` : '');
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-6">
@@ -230,7 +245,7 @@ export default function UserDashboardPage() {
       {tab === "dashboard" && (
         <>
           {/* Filters */}
-          <div className="card p-4 mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="card p-4 mb-6 grid grid-cols-1 md:grid-cols-3 gap-4 relative z-30 overflow-visible">
             <div>
               <label className="block text-xs text-gray-600 mb-1">From</label>
               <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-full border rounded px-3 py-2 text-sm" />
@@ -239,22 +254,74 @@ export default function UserDashboardPage() {
               <label className="block text-xs text-gray-600 mb-1">To</label>
               <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full border rounded px-3 py-2 text-sm" />
             </div>
-            <div>
+            <div className="relative">
               <label className="block text-xs text-gray-600 mb-1">Task types</label>
-              <div className="flex flex-wrap gap-2">
-                {typeOptions.map((opt) => (
-                  <button
-                    key={opt.key}
-                    onClick={() => toggleType(opt.key)}
-                    className={`px-2.5 py-1.5 rounded-full text-xs border flex items-center gap-2 ${
-                      types.includes(opt.key) ? "bg-indigo-50 border-indigo-300 text-indigo-800" : "bg-white hover:bg-gray-50"
-                    }`}
-                  >
-                    <span className="inline-block h-2.5 w-2.5 rounded" style={{ background: opt.color }} />
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
+              <button
+                type="button"
+                onClick={() => setTaskSelectOpen(o => !o)}
+                className="w-full border rounded px-3 py-2 text-xs flex items-center justify-between hover:bg-gray-50"
+              >
+                <span className="flex items-center gap-2">
+                  {/* Color dots summary */}
+                  <span className="flex -space-x-1">
+                    {typeOptions.filter(o=>types.includes(o.key)).slice(0,5).map(o => (
+                      <span key={o.key} className="inline-block h-3 w-3 rounded-full ring-1 ring-white" style={{background:o.color}} />
+                    ))}
+                    {selectedLabels.length > 5 && (
+                      <span className="inline-block h-3 w-3 rounded-full bg-gray-300 text-[8px] flex items-center justify-center ring-1 ring-white">+{selectedLabels.length-5}</span>
+                    )}
+                  </span>
+                  <span className="truncate max-w-[9rem] md:max-w-[12rem]">{buttonLabel}</span>
+                </span>
+                <span className="text-gray-400 text-[10px]">{taskSelectOpen ? '▲' : '▼'}</span>
+              </button>
+              {taskSelectOpen && (
+                <div className="absolute mt-1 w-full max-h-64 overflow-auto border rounded bg-white shadow-lg z-50 text-xs">
+                  <div className="sticky top-0 bg-white p-2 flex items-center gap-2 border-b">
+                    <button
+                      type="button"
+                      className="btn btn-xs"
+                      onClick={() => setTypes(TASK_TYPES)}
+                    >Select all</button>
+                    <button
+                      type="button"
+                      className="btn btn-xs"
+                      onClick={() => setTypes(TASK_TYPES.slice(0,0).concat(TASK_TYPES)) /* no-op placeholder */}
+                      disabled
+                    >|</button>
+                    <button
+                      type="button"
+                      className="btn btn-xs"
+                      onClick={() => setTypes(prev => prev.length===TASK_TYPES.length ? [TASK_TYPES[0]] : TASK_TYPES)}
+                    >Toggle bulk</button>
+                  </div>
+                  <ul className="divide-y">
+                    {typeOptions.map(opt => {
+                      const active = types.includes(opt.key);
+                      return (
+                        <li key={opt.key}>
+                          <button
+                            type="button"
+                            onClick={() => toggleType(opt.key)}
+                            className={`w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-indigo-50 ${active ? 'bg-indigo-50/60' : ''}`}
+                          >
+                            <span className="inline-block h-3 w-3 rounded" style={{background: opt.color}} />
+                            <span className="flex-1 truncate">{opt.label}</span>
+                            <span className={`text-[10px] ${active ? 'text-indigo-600' : 'text-gray-300'}`}>{active ? '✔' : ''}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <div className="p-2 text-right">
+                    <button
+                      type="button"
+                      className="btn btn-xs"
+                      onClick={() => setTaskSelectOpen(false)}
+                    >Close</button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -278,7 +345,7 @@ export default function UserDashboardPage() {
             </div>
             <div className="card p-4 md:col-span-2">
               <div className="text-sm font-medium mb-2">Meters over time</div>
-              <LineChartX points={trend} />
+              <LineChart points={trend} height="160px" fullBleed />
             </div>
           </div>
 
@@ -416,6 +483,7 @@ export default function UserDashboardPage() {
                       <tr className="text-left bg-gray-50">
                         <th className="p-2">Item</th>
                         <th className="p-2 text-right">Count</th>
+                        <th className="p-2 text-right">Status</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -423,6 +491,20 @@ export default function UserDashboardPage() {
                         <tr key={it.key} className="border-b last:border-b-0">
                           <td className="p-2">{it.label}</td>
                           <td className="p-2 text-right">{it.count}</td>
+                          <td className="p-2 text-right">
+                            {(() => {
+                              const rv = it.reorder_value || 0;
+                              const c = it.count || 0;
+                              let cls = 'badge-gray';
+                              let txt = '—';
+                              if (rv > 0) {
+                                if (c <= rv) { cls='badge-red'; txt='Reorder'; }
+                                else if (c <= rv*1.5) { cls='badge-amber'; txt='Low'; }
+                                else { cls='badge-green'; txt='OK'; }
+                              }
+                              return <span className={`badge ${cls} text-[10px]`}>{txt}</span>;
+                            })()}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -435,7 +517,7 @@ export default function UserDashboardPage() {
               {consumableTrend.length === 0 ? (
                 <div className="text-xs text-gray-500">No ordered items yet.</div>
               ) : (
-                <LineChartX points={consumableTrend.map(p => ({ label: p.label, value: p.value }))} />
+                <LineChart points={consumableTrend.map(p => ({ label: p.label, value: p.value }))} height="160px" fullBleed />
               )}
             </div>
           </div>
@@ -464,11 +546,11 @@ function labelForTask(t) {
   return (
     {
       orientation: "Orientation",
-      magnetic_susceptibility: "Magnetic Susceptibility",
-      whole_core_sampling: "Whole-core Sampling",
+  magnetic_susceptibility: "Mag Sus",
+  whole_core_sampling: "WC Samp",
       cutting: "Cutting",
       rqd: "RQD",
-      specific_gravity: "Specific Gravity",
+  specific_gravity: "SG",
     }[t] || t
   );
 }

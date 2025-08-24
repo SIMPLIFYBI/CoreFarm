@@ -67,7 +67,7 @@ export default function Header() {
   };
 
   return (
-    <header className="border-b bg-gradient-to-r from-indigo-50 via-indigo-100 to-purple-50">
+    <header className="border-b bg-gradient-to-r from-indigo-50 via-indigo-100 to-purple-50 md:sticky md:top-0 md:z-40 backdrop-blur supports-[backdrop-filter]:bg-white/70">
       <div className="mx-auto max-w-6xl flex items-center justify-between p-4">
         <div className="flex items-center gap-3">
           <Link href="/core" className="flex items-center gap-2 text-sm font-semibold">
@@ -109,8 +109,8 @@ export default function Header() {
             </span>
           )}
           {email ? (
-            <button onClick={onSignOut} className="btn">
-              <IconLogout /> <span className="hidden sm:block">Sign out</span> <span className="sm:hidden">Out</span>
+            <button onClick={onSignOut} className="btn" aria-label="Sign out" title="Sign out">
+              <IconLogout />
             </button>
           ) : (
             <Link href="/" className="btn">
