@@ -466,6 +466,8 @@ create table if not exists public.consumable_items (
   key text not null,
   label text not null,
   count integer not null default 0 check (count >= 0),
+  -- Whether this item should appear in the consumables report dashboard
+  include_in_report boolean not null default false,
   updated_at timestamptz default now()
 );
 

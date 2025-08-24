@@ -160,6 +160,72 @@ export function TrendChart({ points = [], height = 180, color = "#4f46e5" }) {
   );
 }
 
+// Improved line chart with full x-axis label support (rotated if dense)
+export function LineChartX({ points = [], height = 200, color = '#2563eb', area = true, showValues = false }) {
+  const max = Math.max(0, ...points.map(p => p.value || 0));
+  const n = points.length;
+  const topPad = 8; // svg units
+  const bottomPad = 30; // space for labels
+  const leftPad = 4;
+  const rightPad = 2;
+  const innerWidth = 100 - leftPad - rightPad;
+  const innerHeight = 100 - topPad - bottomPad;
+  const xAt = (i) => n <= 1 ? leftPad + innerWidth/2 : leftPad + (i/(n-1))*innerWidth;
+  const yAt = (v) => max > 0 ? topPad + (1 - (v/max)) * innerHeight : topPad + innerHeight;
+  // Build path
+  const path = points.reduce((acc,p,i)=>{
+    const x = xAt(i), y = yAt(p.value || 0);
+    if (i===0) return `M${x},${y}`;
+    return acc + ` L${x},${y}`;
+  }, '');
+  const areaPath = area && path ? path + ` L${xAt(n-1)},${topPad+innerHeight} L${xAt(0)},${topPad+innerHeight} Z` : '';
+  // Decide which labels to show to avoid overlap
+  let labelIdxs = [];
+  if (n <= 12) {
+    labelIdxs = points.map((_p,i)=>i);
+  } else {
+    const target = 12;
+    const step = (n-1)/(target-1);
+    for (let i=0;i<target;i++) labelIdxs.push(Math.round(i*step));
+    const set = new Set(labelIdxs);
+    // ensure first/last
+    set.add(0); set.add(n-1);
+    labelIdxs = Array.from(set).sort((a,b)=>a-b);
+  }
+  return (
+    <div className="w-full" style={{height}}>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
+        <defs>
+          <linearGradient id="lcxFill" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.25" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {/* Grid lines */}
+        {[0,0.25,0.5,0.75,1].map(g => (
+          <line key={g} x1={leftPad} x2={100-rightPad} y1={topPad + g*innerHeight} y2={topPad + g*innerHeight} stroke="#f1f5f9" strokeWidth="0.5" />
+        ))}
+        {/* Axis */}
+        <line x1={leftPad} x2={100-rightPad} y1={topPad+innerHeight} y2={topPad+innerHeight} stroke="#cbd5e1" strokeWidth="0.6" />
+        {areaPath && <path d={areaPath} fill="url(#lcxFill)" stroke="none" />}
+        {path && <path d={path} fill="none" stroke={color} strokeWidth={1.4} strokeLinejoin="round" strokeLinecap="round" />}
+        {points.map((p,i)=>(
+          <g key={i}>
+            <circle cx={xAt(i)} cy={yAt(p.value || 0)} r={1.3} fill={color} />
+            <title>{p.label}: {formatNum(p.value)}</title>
+            {showValues && <text x={xAt(i)} y={yAt(p.value || 0)-2} fontSize={3} textAnchor="middle" fill="#334155">{formatNum(p.value)}</text>}
+          </g>
+        ))}
+        {labelIdxs.map(i => (
+          <g key={'lbl'+i} transform={`translate(${xAt(i)}, ${topPad+innerHeight+2})`}>
+            <text fontSize={3.2} textAnchor="end" transform="rotate(-45)" fill="#475569">{points[i].label}</text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
 function formatNum(n) {
   if (!n && n !== 0) return "0";
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(n);

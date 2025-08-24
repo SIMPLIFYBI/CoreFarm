@@ -12,12 +12,12 @@ import toast from "react-hot-toast";
 export default function ConsumablesPage() {
   const supabase = supabaseBrowser();
   const [user, setUser] = useState(null);
-  const [memberships, setMemberships] = useState([]);
+  const [memberships, setMemberships] = useState([]); // {organization_id, organizations:{name}, role}
   const [orgId, setOrgId] = useState("");
   const [tab, setTab] = useState("inventory"); // 'inventory' | 'requests' | 'orders'
 
   // Inventory
-  const [items, setItems] = useState([]); // list of {key,label,count}
+  const [items, setItems] = useState([]); // list of {id,key,label,count,include_in_report}
   const [loadingItems, setLoadingItems] = useState(false);
   // No order number captured at inventory level anymore
 
@@ -50,7 +50,7 @@ export default function ConsumablesPage() {
     (async () => {
       const { data: ms } = await supabase
         .from("organization_members")
-        .select("organization_id, organizations(name)")
+        .select("organization_id, role, organizations(name)")
         .eq("user_id", user.id);
       setMemberships(ms || []);
       if ((ms || []).length > 0) setOrgId(ms[0].organization_id);
@@ -58,31 +58,38 @@ export default function ConsumablesPage() {
   }, [user, supabase]);
 
   // Seed inventory if empty and then load
-  const loadInventory = async (org) => {
+  const isAdmin = useMemo(() => memberships.some((m) => m.organization_id === orgId && m.role === 'admin'), [memberships, orgId]);
+
+  const loadInventory = async (org, opts = {}) => {
     setLoadingItems(true);
     try {
       // Try load existing
       const { data: existing } = await supabase
         .from("consumable_items")
-        .select("key, label, count")
+        .select("id, key, label, count, include_in_report")
         .eq("organization_id", org);
       if ((existing || []).length > 0) {
         setItems(existing);
         return;
       }
-      // Seed defaults
-      const seedRows = DEFAULT_CONSUMABLE_ITEMS.map((d) => ({
-        organization_id: org,
-        key: d.key,
-        label: d.label,
-        count: 0,
-      }));
-      const { error: seedErr } = await supabase.from("consumable_items").insert(seedRows);
-      if (seedErr) throw seedErr;
-      setItems(seedRows.map(({ organization_id, ...rest }) => rest));
+      // If admin, seed defaults automatically (initial bootstrap)
+      if (opts.allowSeed !== false && memberships.some((m)=> m.organization_id===org && m.role==='admin')) {
+        const seedRows = DEFAULT_CONSUMABLE_ITEMS.map((d) => ({
+          organization_id: org,
+          key: d.key,
+          label: d.label,
+          count: 0,
+        }));
+  const { data: inserted, error: seedErr } = await supabase.from("consumable_items").insert(seedRows).select("id, key, label, count, include_in_report");
+        if (seedErr) throw seedErr;
+        setItems(inserted || seedRows.map(({ organization_id, ...rest }) => rest));
+        return;
+      }
+      // Non-admin and no items: show empty list until admin configures
+      setItems([]);
     } catch (e) {
-      // Fallback to client-only state if table doesn’t exist
-      setItems(DEFAULT_CONSUMABLE_ITEMS.map((d) => ({ key: d.key, label: d.label, count: 0 })));
+      // Fallback: if table not ready; show defaults client-side (read-only)
+  setItems(DEFAULT_CONSUMABLE_ITEMS.map((d) => ({ id: `temp-${d.key}`, key: d.key, label: d.label, count: 0, include_in_report: false })));
     } finally {
       setLoadingItems(false);
     }
@@ -98,6 +105,78 @@ export default function ConsumablesPage() {
       if (error) throw error;
     } catch {
       // swallow for now, optimistic UI
+    }
+  };
+
+  const toggleIncludeInReport = async (key) => {
+    const current = items.find(i => i.key === key);
+    if (!current || !orgId) return;
+    const prevVal = current.include_in_report;
+    const nextVal = !prevVal;
+    // optimistic UI
+    setItems(arr => arr.map(it => it.key === key ? { ...it, include_in_report: nextVal } : it));
+    try {
+      // Try plain update first (most common)
+      let { error, data } = await supabase
+        .from('consumable_items')
+        .update({ include_in_report: nextVal })
+        .eq('organization_id', orgId)
+        .eq('key', key)
+        .select('id');
+      // If no row updated (data empty) attempt insert (rare edge if seed skipped)
+      if (!error && (!data || data.length === 0)) {
+        const ins = await supabase
+          .from('consumable_items')
+          .insert({ organization_id: orgId, key, label: current.label, count: current.count || 0, include_in_report: nextVal })
+          .select('id');
+        error = ins.error;
+      }
+      if (error) {
+        // Column missing? code 42703
+        if (error.code === '42703') {
+          throw new Error('Column include_in_report missing. Run migration: ALTER TABLE public.consumable_items ADD COLUMN IF NOT EXISTS include_in_report boolean NOT NULL DEFAULT false;');
+        }
+        throw error;
+      }
+    } catch (e) {
+      console.error('toggleIncludeInReport failed', e);
+      // revert
+      setItems(arr => arr.map(it => it.key === key ? { ...it, include_in_report: prevVal } : it));
+      toast.error(e.message || 'Failed to update');
+    }
+  };
+
+  const addConsumableItem = async () => {
+    if (!isAdmin) return;
+    const label = prompt('New item label?');
+    if (!label) return;
+    let baseKey = label.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40) || 'item';
+    let key = baseKey;
+    const existingKeys = new Set(items.map(i => i.key));
+    let i = 1;
+    while (existingKeys.has(key)) {
+      key = `${baseKey}_${i++}`;
+    }
+    try {
+  const { data, error } = await supabase.from('consumable_items').insert({ organization_id: orgId, key, label, count: 0 }).select('id, key, label, count, include_in_report').single();
+      if (error) throw error;
+      setItems(arr => [...arr, data]);
+    } catch (e) {
+      toast.error('Failed to add item');
+    }
+  };
+
+  const deleteConsumableItem = async (id, key) => {
+    if (!isAdmin) return;
+    if (!confirm('Delete this item? This cannot be undone.')) return;
+    const prev = items;
+    setItems(arr => arr.filter(i => i.id !== id));
+    try {
+      const { error } = await supabase.from('consumable_items').delete().eq('organization_id', orgId).eq('key', key);
+      if (error) throw error;
+    } catch (e) {
+      toast.error('Failed to delete item');
+      setItems(prev); // revert
     }
   };
 
@@ -148,7 +227,7 @@ export default function ConsumablesPage() {
 
   useEffect(() => {
     if (!orgId) return;
-    loadInventory(orgId);
+  loadInventory(orgId);
     loadPurchaseData(orgId);
   }, [orgId]);
 
@@ -341,39 +420,81 @@ export default function ConsumablesPage() {
 
       {tab === "inventory" && (
         <div className="card p-4">
-          <h2 className="font-medium mb-3">Inventory</h2>
+          <div className="flex items-center mb-3 gap-3">
+            <h2 className="font-medium">Inventory</h2>
+            {isAdmin && (
+              <button className="btn btn-primary text-xs" onClick={addConsumableItem}>Add Item</button>
+            )}
+          </div>
           {loadingItems ? (
             <div className="text-sm text-gray-500">Loading…</div>
           ) : (
             <div className="table-container">
-              <table className="table">
+              <table className="table text-xs md:text-sm">
                 <thead>
                   <tr>
-                    <th>Item</th>
-                    <th className="w-32">Count</th>
-                    <th className="w-40">Actions</th>
+                    <th className="text-xs md:text-sm">Item</th>
+                    <th className="w-24 text-center text-[10px] md:text-xs hidden md:table-cell">Include in Report</th>
+                    <th className="w-32 text-xs md:text-sm">Count</th>
+                    <th className="w-40 text-xs md:text-sm">Actions</th>
+                    {isAdmin && <th className="w-10 hidden md:table-cell" />}
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((it) => (
-                    <tr key={it.key}>
-                      <td>{it.label}</td>
-                      <td>
+                    <tr key={it.id || it.key}>
+                      <td className="align-middle py-1">{it.label}</td>
+                      <td className="align-middle py-1 hidden md:table-cell text-center">
+                        <input
+                          type="checkbox"
+                          checked={!!it.include_in_report}
+                          onChange={() => toggleIncludeInReport(it.key)}
+                        />
+                      </td>
+                      <td className="align-middle py-1">
                         <input
                           type="number"
                           min={0}
-                          className="input input-sm text-right"
+                          step={1}
+                          className="input input-sm text-right text-xs md:text-sm"
                           value={it.count}
-                          onChange={(e) => saveItemCount(it.key, Math.max(0, parseInt(e.target.value || "0", 10)))}
+                          onFocus={(e) => e.target.select()}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            // Allow empty while typing
+                            if (v === "") {
+                              setItems(arr => arr.map(x => x.key === it.key ? { ...x, count: "" } : x));
+                              return;
+                            }
+                            const num = Math.max(0, parseInt(v, 10));
+                            saveItemCount(it.key, Number.isFinite(num) ? num : 0);
+                          }}
+                          onBlur={(e) => {
+                            if (e.target.value === "") {
+                              saveItemCount(it.key, 0);
+                            }
+                          }}
                         />
                       </td>
                       <td>
-                        <button className="btn text-xs" onClick={() => addToPurchaseRequest(it.key)}>
-                          Add to Order
+                          <button className="btn text-xs" onClick={() => addToPurchaseRequest(it.key)}>
+                            Order More
                         </button>
                       </td>
+                      {isAdmin && (
+                        <td className="hidden md:table-cell">
+                          <button className="btn text-xs" title="Delete item" onClick={() => deleteConsumableItem(it.id, it.key)}>✕</button>
+                        </td>
+                      )}
                     </tr>
                   ))}
+                  {items.length === 0 && (
+                    <tr>
+                      <td colSpan={isAdmin ? 5 : 4} className="text-xs md:text-sm text-gray-500 text-center py-4">
+                        {isAdmin ? 'No items yet. Add your first item.' : 'No consumable items configured. Ask an admin to add items.'}
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

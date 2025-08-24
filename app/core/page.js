@@ -365,21 +365,25 @@ export default function CorePage() {
                                                         {fullyCovered ? (
                                                           <span className="text-xs text-green-700 bg-green-100 px-2 py-1 rounded">Complete</span>
                                                         ) : (
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1 md:gap-2">
                                                             <input
                                                               type="number"
                                                               step="0.1"
-                                className="input input-sm w-20"
+                                                              maxLength={4}
+                                                              inputMode="decimal"
+                                className="input input-xs w-14 md:input-sm md:w-20 text-[10px] md:text-xs"
                                                               value={state.from_m}
                                                               onChange={(e) =>
                                                                 setInputs((m) => ({ ...m, [key]: { ...state, from_m: e.target.value } }))
                                                               }
                                                             />
-                                                            <span className="text-gray-500">to</span>
+                                                            <span className="text-[10px] md:text-xs text-gray-500">to</span>
                                                             <input
                                                               type="number"
                                                               step="0.1"
-                                className="input input-sm w-20"
+                                                              maxLength={4}
+                                                              inputMode="decimal"
+                                className="input input-xs w-14 md:input-sm md:w-20 text-[10px] md:text-xs"
                                                               value={state.to_m}
                                                               placeholder={pi.to_m}
                                                               onChange={(e) =>
@@ -388,7 +392,7 @@ export default function CorePage() {
                                                             />
                                                             <button
                                                               type="button"
-                                className="btn btn-primary text-xs shrink-0 whitespace-nowrap"
+                                className="btn btn-primary text-[10px] md:text-xs shrink-0 whitespace-nowrap px-2"
                                                               onClick={() => saveInterval(h.id, task, pi.from_m, pi.to_m)}
                                                               disabled={savingKey === key}
                                                             >
@@ -396,7 +400,7 @@ export default function CorePage() {
                                                             </button>
                                                             <button
                                                               type="button"
-                                className="btn text-xs shrink-0 whitespace-nowrap"
+                                className="btn text-[10px] md:text-xs shrink-0 whitespace-nowrap px-2"
                                                               onClick={() => saveInterval(h.id, task, pi.from_m, pi.to_m, state.from_m, pi.to_m)}
                                                               disabled={savingKey === key}
                                                             >
@@ -476,9 +480,9 @@ export default function CorePage() {
                                   );
                                   const fullyCovered = state.disabled;
                                   return (
-                                    <div key={key} className="text-xs">
-                                      <div className="text-gray-700 mb-1">Planned {pi.from_m}–{pi.to_m} m</div>
-                                      <div className="mb-1">
+                                    <div key={key} className="text-[11px] md:text-xs">
+                                      <div className="text-gray-700 mb-1 text-[11px] md:text-xs">Planned {pi.from_m}–{pi.to_m} m</div>
+                                      <div className="mb-1 text-[10px] md:text-[11px]">
                                         {overlaps.length === 0 ? (
                                           <span className="text-gray-500">No progress yet</span>
                                         ) : (
@@ -489,26 +493,30 @@ export default function CorePage() {
                                           ))
                                         )}
                                       </div>
-                                      <div className="flex items-center gap-2">
+                                      <div className="flex items-center gap-1 md:gap-2">
                                         <input
                                           type="number"
                                           step="0.1"
-                                          className="input input-sm w-20"
+                                          maxLength={4}
+                                          inputMode="decimal"
+                                          className="input input-xs w-8 md:input-sm md:w-20 text-[10px] md:text-xs"
                                           value={state.from_m}
                                           onChange={(e) => setInputs((m) => ({ ...m, [key]: { ...state, from_m: e.target.value } }))}
                                           disabled={state.disabled}
                                         />
-                                        <span>to</span>
+                                        <span className="text-[10px] md:text-xs">to</span>
                                         <input
                                           type="number"
                                           step="0.1"
-                                          className="input input-sm w-20"
+                                          maxLength={4}
+                                          inputMode="decimal"
+                                          className="input input-xs w-8 md:input-sm md:w-20 text-[10px] md:text-xs"
                                           value={state.to_m}
                                           onChange={(e) => setInputs((m) => ({ ...m, [key]: { ...state, to_m: e.target.value } }))}
                                           disabled={state.disabled}
                                         />
                                         <button
-                                          className="btn btn-primary text-xs"
+                                          className="btn btn-primary text-[10px] md:text-xs px-2"
                                           onClick={() => saveInterval(h.id, task, pi.from_m, pi.to_m)}
                                           disabled={state.disabled || savingKey === key}
                                         >

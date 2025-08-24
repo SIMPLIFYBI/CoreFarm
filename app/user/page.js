@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { TASK_TYPES } from "@/lib/taskTypes";
-import { BarChart, DonutChart, TrendChart } from "@/app/components/Charts";
+import { BarChart, DonutChart, TrendChart, LineChartX } from "@/app/components/Charts";
 
 const COLORS = [
   "#4f46e5",
@@ -19,7 +19,11 @@ export default function UserDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [orgId, setOrgId] = useState("");
   const [memberships, setMemberships] = useState([]);
-  const [tab, setTab] = useState("dashboard");
+  const [tab, setTab] = useState("dashboard"); // 'dashboard' | 'activity' | 'consumables'
+  // Consumables report state
+  const [consumableItems, setConsumableItems] = useState([]); // included items with counts
+  const [consumableTrend, setConsumableTrend] = useState([]); // ordered over time
+  const [consumableLoading, setConsumableLoading] = useState(false);
 
   // Filters (dashboard)
   const [fromDate, setFromDate] = useState(() => {
@@ -73,6 +77,55 @@ export default function UserDashboardPage() {
       setActivityLoading(false);
     })();
   }, [tab, user]);
+
+  // Load consumables report data
+  useEffect(() => {
+    if (tab !== 'consumables' || !orgId) return;
+    (async () => {
+      setConsumableLoading(true);
+      try {
+        // Current included inventory
+        const { data: inv } = await supabase
+          .from('consumable_items')
+          .select('key,label,count')
+          .eq('organization_id', orgId)
+          .eq('include_in_report', true)
+          .order('label');
+        setConsumableItems(inv || []);
+        // Ordered trend: count quantity of items that have been ordered (po.status in ordered/received OR item.status in ordered/received)
+        const { data: orderedItems } = await supabase
+          .from('purchase_order_items')
+          .select('created_at, quantity, status, item_key, label, po:purchase_orders(status, ordered_date)')
+          .eq('organization_id', orgId);
+        // Group by month for included items only where item has transitioned to ordered or received
+        const monthMap = {};
+        for (const row of orderedItems || []) {
+          if (!inv?.some(i => i.key === row.item_key)) continue; // only included items
+          const isOrdered = row.status === 'ordered' || row.status === 'received' || (row.po && (row.po.status === 'ordered' || row.po.status === 'received'));
+          if (!isOrdered) continue;
+          const dt = row.po?.ordered_date || row.created_at || new Date().toISOString();
+          const month = (dt || '').slice(0,7); // YYYY-MM
+          if (!month) continue;
+          monthMap[month] = (monthMap[month] || 0) + (row.quantity || 0);
+        }
+        // Produce last 6 months timeline
+        const now = new Date();
+        const months = [];
+        for (let i=5;i>=0;i--) {
+          const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth()-i, 1));
+          const m = d.toISOString().slice(0,7);
+          months.push(m);
+        }
+        setConsumableTrend(months.map(m => ({ label: m, value: monthMap[m] || 0 })));
+      } catch(e) {
+        console.error(e);
+        setConsumableItems([]);
+        setConsumableTrend([]);
+      } finally {
+        setConsumableLoading(false);
+      }
+    })();
+  }, [tab, orgId, supabase]);
 
   const typeOptions = useMemo(
     () => TASK_TYPES.map((t, i) => ({ key: t, label: labelForTask(t), color: COLORS[i % COLORS.length] })),
@@ -166,6 +219,12 @@ export default function UserDashboardPage() {
         >
           Logging Activity
         </button>
+        <button
+          className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm ${tab === "consumables" ? "border-indigo-500 text-indigo-700" : "border-transparent text-gray-500"}`}
+          onClick={() => setTab("consumables")}
+        >
+          Consumables
+        </button>
       </div>
 
       {tab === "dashboard" && (
@@ -219,7 +278,7 @@ export default function UserDashboardPage() {
             </div>
             <div className="card p-4 md:col-span-2">
               <div className="text-sm font-medium mb-2">Meters over time</div>
-              <TrendChart points={trend} />
+              <LineChartX points={trend} />
             </div>
           </div>
 
@@ -334,6 +393,52 @@ export default function UserDashboardPage() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {tab === "consumables" && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Kpi title="Tracked items" value={consumableItems.length} />
+            <Kpi title="Total on hand" value={consumableItems.reduce((a,b)=>a+(b.count||0),0)} />
+            <Kpi title="Avg / item" value={consumableItems.length ? consumableItems.reduce((a,b)=>a+(b.count||0),0)/consumableItems.length : 0} />
+            <Kpi title="Months shown" value={consumableTrend.length} />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="card p-4">
+              <div className="text-sm font-medium mb-2">Current Inventory (Included)</div>
+              {consumableLoading ? <div className="text-xs text-gray-500">Loading…</div> : consumableItems.length === 0 ? (
+                <div className="text-xs text-gray-500">No consumable items selected for report. Use the checkbox on the Inventory page.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs md:text-sm">
+                    <thead>
+                      <tr className="text-left bg-gray-50">
+                        <th className="p-2">Item</th>
+                        <th className="p-2 text-right">Count</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {consumableItems.map(it => (
+                        <tr key={it.key} className="border-b last:border-b-0">
+                          <td className="p-2">{it.label}</td>
+                          <td className="p-2 text-right">{it.count}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            <div className="card p-4">
+              <div className="text-sm font-medium mb-2">Ordered Quantity (last 6 months)</div>
+              {consumableTrend.length === 0 ? (
+                <div className="text-xs text-gray-500">No ordered items yet.</div>
+              ) : (
+                <LineChartX points={consumableTrend.map(p => ({ label: p.label, value: p.value }))} />
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

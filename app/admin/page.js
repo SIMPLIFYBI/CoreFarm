@@ -351,10 +351,10 @@ export default function AdminPage() {
                   <th style={{width:40}}></th>
                   <th>Hole ID</th>
                   <th>Depth</th>
-                  <th>Diameter</th>
-                  <th>Project</th>
-                  <th>Contractor</th>
-                  <th>Actions</th>
+                  <th className="hidden md:table-cell">Diameter</th>
+                  <th className="hidden md:table-cell">Project</th>
+                  <th className="hidden md:table-cell">Contractor</th>
+                  <th className="hidden md:table-cell">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -373,10 +373,10 @@ export default function AdminPage() {
                       </td>
                       <td className="font-medium">{h.hole_id}</td>
                       <td>{h.depth}</td>
-                      <td>{h.drilling_diameter}</td>
-                      <td>{h.project_name}</td>
-                      <td>{h.drilling_contractor}</td>
-                      <td>
+                      <td className="hidden md:table-cell">{h.drilling_diameter}</td>
+                      <td className="hidden md:table-cell">{h.project_name}</td>
+                      <td className="hidden md:table-cell">{h.drilling_contractor}</td>
+                      <td className="hidden md:table-cell">
                         <div className="flex gap-2">
                           <button
                             type="button"
@@ -421,22 +421,23 @@ export default function AdminPage() {
                                     <span className="font-medium text-xs uppercase tracking-wide">{t.replace(/_/g,' ')}</span>
                                     <button
                                       type="button"
-                                      className="btn btn-xs btn-primary"
+                                      className="btn btn-xs btn-primary shrink-0 w-20 text-[10px] justify-center"
                                       onClick={() => addInterval(t)}
+                                      style={{letterSpacing:"0.5px"}}
                                     >+ Interval</button>
                                   </div>
                                   <div className="space-y-2">
                                     {(intervals[t] || []).map((row, idx) => (
                                       <div key={idx} className="flex items-center gap-2">
                                         <input
-                                          className="input input-xs w-20"
+                                          className="input input-xs w-8 md:w-20"
                                           placeholder="From"
                                           value={row.from_m}
                                           onChange={(e) => changeInterval(t, idx, 'from_m', e.target.value)}
                                         />
                                         <span className="text-xs">→</span>
                                         <input
-                                          className="input input-xs w-20"
+                                          className="input input-xs w-8 md:w-20"
                                           placeholder="To"
                                           value={row.to_m}
                                           onChange={(e) => changeInterval(t, idx, 'to_m', e.target.value)}
