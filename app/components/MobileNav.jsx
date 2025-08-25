@@ -4,10 +4,10 @@ import { usePathname } from "next/navigation";
 import { IconCore, IconAdmin, IconTeam, IconUser, IconReport } from "./icons";
 
 const tabs = [
+  { href: "/user", label: "Dashboard", icon: IconReport },
   { href: "/core", label: "Logging", icon: IconAdmin },
   { href: "/addcore", label: "Add Core", icon: IconCore },
   { href: "/team", label: "Team", icon: IconTeam },
-  { href: "/user", label: "Report", icon: IconReport },
   { href: "/consumables", label: "Consumables", icon: IconCore },
 ];
 
