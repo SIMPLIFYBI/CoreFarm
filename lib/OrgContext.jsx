@@ -15,13 +15,19 @@ export function OrgProvider({ children }) {
   const supabase = supabaseBrowser();
   const [user, setUser] = useState(null);
   const [memberships, setMemberships] = useState([]);
-  const [orgId, setOrgId] = useState('');
+  // orgId initialised from localStorage (persist last selection)
+  const [orgId, _setOrgId] = useState('');
   const [loading, setLoading] = useState(true);
 
+  // Load user and any persisted org selection
   useEffect(() => {
     (async () => {
       const { data } = await supabase.auth.getUser();
       setUser(data?.user || null);
+      try {
+        const stored = typeof window !== 'undefined' ? window.localStorage.getItem('cf_org_id') : null;
+        if (stored) _setOrgId(stored);
+      } catch (_) { /* ignore storage errors */ }
     })();
   }, [supabase]);
 
@@ -31,12 +37,15 @@ export function OrgProvider({ children }) {
     try {
       const { data: ms, error } = await supabase
         .from('organization_members')
-        .select('organization_id, role, organizations(name)')
-        .eq('user_id', user.id);
+        .select('organization_id, role, created_at, organizations(name)')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false }); // newest membership first (recent invite just accepted)
       if (error) throw error;
       setMemberships(ms || []);
+      // If current orgId not in refreshed memberships (first load or user just accepted new invite), pick newest membership
       if ((ms || []).length > 0 && !ms.find(m => m.organization_id === orgId)) {
-        setOrgId(ms[0].organization_id);
+        _setOrgId(ms[0].organization_id);
+        try { if (ms[0].organization_id) window.localStorage.setItem('cf_org_id', ms[0].organization_id); } catch (_) {}
       }
     } catch (e) {
       toast.error('Could not load organizations');
@@ -46,6 +55,12 @@ export function OrgProvider({ children }) {
   }, [user, supabase, orgId]);
 
   useEffect(() => { loadMemberships(); }, [loadMemberships]);
+
+  // Wrapped setter persists to localStorage
+  const setOrgId = (val) => {
+    _setOrgId(val);
+    try { if (val) window.localStorage.setItem('cf_org_id', val); } catch (_) {}
+  };
 
   const value = { orgId, setOrgId, memberships, loading, refreshMemberships: loadMemberships };
   return <OrgContext.Provider value={value}>{children}</OrgContext.Provider>;

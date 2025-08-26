@@ -466,15 +466,15 @@ export default function ConsumablesPage() {
             <div className="text-sm text-gray-500">Loading…</div>
           ) : (
             <div className="table-container">
-              <table className="table text-xs md:text-sm">
+              <table className="table text-[11px] md:text-sm">
                 <thead>
                   <tr>
                     <th className="text-xs md:text-sm">Item</th>
                     <th className="w-20 text-center text-[10px] md:text-xs hidden md:table-cell">Include</th>
                     <th className="w-24 text-center text-[10px] md:text-xs hidden md:table-cell">Reorder @</th>
-                    <th className="w-28 text-xs md:text-sm">Count</th>
-                    <th className="w-24 text-xs md:text-sm">Status</th>
-                    <th className="w-40 text-xs md:text-sm">Actions</th>
+                    <th className="md:w-28 text-xs md:text-sm">Count</th>
+                    <th className="md:w-24 text-xs md:text-sm">Status</th>
+                    <th className="md:w-40 text-xs md:text-sm">Actions</th>
                     {isAdmin && <th className="w-10 hidden md:table-cell" />}
                   </tr>
                 </thead>
@@ -482,18 +482,16 @@ export default function ConsumablesPage() {
                   {items.map((it) => (
                     <tr key={it.id || it.key}>
                       <td className="align-middle py-1">
-                        <div className="flex items-center gap-2">
-                          {isAdmin && !(it.id || '').startsWith('temp-') && (
-                            // Hidden on mobile (md breakpoint) per requirement
-                            <button
-                              type="button"
-                              className="btn btn-primary btn-xs hidden md:inline-flex px-2 py-0"
-                              title="Edit item"
-                              onClick={() => startEditItem(it)}
-                            >Edit</button>
-                          )}
-                          <span>{it.label}</span>
-                        </div>
+                        {isAdmin && !(it.id || '').startsWith('temp-') ? (
+                          <button
+                            type="button"
+                            aria-label={`Edit item ${it.label}`}
+                            onClick={() => startEditItem(it)}
+                            className="block truncate max-w-[140px] md:max-w-none leading-snug text-left font-medium hover:underline underline-offset-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded"
+                          >{it.label}</button>
+                        ) : (
+                          <span className="block truncate max-w-[140px] md:max-w-none leading-snug">{it.label}</span>
+                        )}
                       </td>
                       <td className="align-middle py-1 hidden md:table-cell text-center">
                         <input
@@ -526,12 +524,11 @@ export default function ConsumablesPage() {
                           type="number"
                           min={0}
                           step={1}
-                          className="input input-sm text-right text-xs md:text-sm"
+                          className="input input-sm text-right text-[11px] md:text-sm w-16 md:w-20"
                           value={it.count}
                           onFocus={(e) => e.target.select()}
                           onChange={(e) => {
                             const v = e.target.value;
-                            // Allow empty while typing
                             if (v === "") {
                               setItems(arr => arr.map(x => x.key === it.key ? { ...x, count: "" } : x));
                               return;
@@ -539,11 +536,7 @@ export default function ConsumablesPage() {
                             const num = Math.max(0, parseInt(v, 10));
                             saveItemCount(it.key, Number.isFinite(num) ? num : 0);
                           }}
-                          onBlur={(e) => {
-                            if (e.target.value === "") {
-                              saveItemCount(it.key, 0);
-                            }
-                          }}
+                          onBlur={(e) => { if (e.target.value === "") saveItemCount(it.key, 0); }}
                         />
                       </td>
                       <td className="align-middle py-1">
@@ -561,8 +554,12 @@ export default function ConsumablesPage() {
                         })()}
                       </td>
                       <td className="align-middle py-1">
-                        <div className="flex gap-2 flex-wrap">
-                          <button className="btn btn-sm text-xs" onClick={() => addToPurchaseRequest(it.key)}>Order More</button>
+                        <div className="flex gap-2 flex-wrap items-center">
+                          <button
+                            className="btn btn-xs md:btn-sm text-[10px] md:text-xs bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 border-0 shadow-sm"
+                            onClick={() => addToPurchaseRequest(it.key)}
+                          >Order More</button>
+                          {/* Edit via clicking item name now; button removed */}
                         </div>
                       </td>
                       {isAdmin && (
