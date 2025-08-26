@@ -19,6 +19,9 @@ export default function ConsumablesPage() {
   // Inventory
   const [items, setItems] = useState([]); // list of {id,key,label,count,include_in_report,reorder_value}
   const [loadingItems, setLoadingItems] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [savingItem, setSavingItem] = useState(false);
+  const [editDraft, setEditDraft] = useState({ label: '', reorder_value: 0, cost_per_unit: 0, unit_size: 1 });
   // No order number captured at inventory level anymore
 
   // Purchase requests
@@ -66,7 +69,7 @@ export default function ConsumablesPage() {
       // Try load existing
       const { data: existing } = await supabase
         .from("consumable_items")
-        .select("id, key, label, count, include_in_report, reorder_value")
+        .select("id, key, label, count, include_in_report, reorder_value, cost_per_unit, unit_size")
         .eq("organization_id", org);
       if ((existing || []).length > 0) {
         setItems(existing);
@@ -74,22 +77,22 @@ export default function ConsumablesPage() {
       }
       // If admin, seed defaults automatically (initial bootstrap)
       if (opts.allowSeed !== false && memberships.some((m)=> m.organization_id===org && m.role==='admin')) {
-        const seedRows = DEFAULT_CONSUMABLE_ITEMS.map((d) => ({
+    const seedRows = DEFAULT_CONSUMABLE_ITEMS.map((d) => ({
           organization_id: org,
           key: d.key,
           label: d.label,
           count: 0,
         }));
-  const { data: inserted, error: seedErr } = await supabase.from("consumable_items").insert(seedRows).select("id, key, label, count, include_in_report, reorder_value");
+  const { data: inserted, error: seedErr } = await supabase.from("consumable_items").insert(seedRows).select("id, key, label, count, include_in_report, reorder_value, cost_per_unit, unit_size");
         if (seedErr) throw seedErr;
         setItems(inserted || seedRows.map(({ organization_id, ...rest }) => rest));
         return;
       }
       // Non-admin and no items: show empty list until admin configures
-      setItems([]);
+    setItems([]);
     } catch (e) {
       // Fallback: if table not ready; show defaults client-side (read-only)
-  setItems(DEFAULT_CONSUMABLE_ITEMS.map((d) => ({ id: `temp-${d.key}`, key: d.key, label: d.label, count: 0, include_in_report: false, reorder_value: 0 })));
+  setItems(DEFAULT_CONSUMABLE_ITEMS.map((d) => ({ id: `temp-${d.key}`, key: d.key, label: d.label, count: 0, include_in_report: false, reorder_value: 0, cost_per_unit:0, unit_size:1 })));
     } finally {
       setLoadingItems(false);
     }
@@ -171,11 +174,50 @@ export default function ConsumablesPage() {
       key = `${baseKey}_${i++}`;
     }
     try {
-  const { data, error } = await supabase.from('consumable_items').insert({ organization_id: orgId, key, label, count: 0, reorder_value: 0 }).select('id, key, label, count, include_in_report, reorder_value').single();
+  const { data, error } = await supabase.from('consumable_items').insert({ organization_id: orgId, key, label, count: 0, reorder_value: 0 }).select('id, key, label, count, include_in_report, reorder_value, cost_per_unit, unit_size').single();
       if (error) throw error;
       setItems(arr => [...arr, data]);
     } catch (e) {
       toast.error('Failed to add item');
+    }
+  };
+
+  const startEditItem = (item) => {
+    if (!isAdmin) return;
+    if (!item || (item.id || '').startsWith('temp-')) return; // can't edit placeholder
+    setEditItem(item);
+    setEditDraft({
+      label: item.label || '',
+      reorder_value: item.reorder_value ?? 0,
+      cost_per_unit: item.cost_per_unit ?? 0,
+      unit_size: item.unit_size ?? 1,
+    });
+  };
+
+  const saveEditItem = async () => {
+    if (!editItem || !orgId) return;
+    setSavingItem(true);
+    try {
+      const payload = {
+        label: editDraft.label.trim() || editItem.label,
+        reorder_value: Math.max(0, parseInt(editDraft.reorder_value, 10) || 0),
+        cost_per_unit: Math.max(0, parseFloat(editDraft.cost_per_unit) || 0),
+        unit_size: Math.max(1, parseInt(editDraft.unit_size, 10) || 1),
+      };
+      const { error } = await supabase
+        .from('consumable_items')
+        .update(payload)
+        .eq('id', editItem.id)
+        .eq('organization_id', orgId);
+      if (error) throw error;
+      setItems(arr => arr.map(i => i.id === editItem.id ? { ...i, ...payload } : i));
+      toast.success('Item updated');
+      setEditItem(null);
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to save');
+    } finally {
+      setSavingItem(false);
     }
   };
 
@@ -451,14 +493,26 @@ export default function ConsumablesPage() {
                     <th className="w-24 text-center text-[10px] md:text-xs hidden md:table-cell">Reorder @</th>
                     <th className="w-28 text-xs md:text-sm">Count</th>
                     <th className="w-24 text-xs md:text-sm">Status</th>
-                    <th className="w-32 text-xs md:text-sm">Actions</th>
+                    <th className="w-40 text-xs md:text-sm">Actions</th>
                     {isAdmin && <th className="w-10 hidden md:table-cell" />}
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((it) => (
                     <tr key={it.id || it.key}>
-                      <td className="align-middle py-1">{it.label}</td>
+                      <td className="align-middle py-1">
+                        <div className="flex items-center gap-2">
+                          {isAdmin && !(it.id || '').startsWith('temp-') && (
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-xs hidden md:inline-flex px-2 py-0"
+                              title="Edit item"
+                              onClick={() => startEditItem(it)}
+                            >Edit</button>
+                          )}
+                          <span>{it.label}</span>
+                        </div>
+                      </td>
                       <td className="align-middle py-1 hidden md:table-cell text-center">
                         <input
                           type="checkbox"
@@ -525,7 +579,9 @@ export default function ConsumablesPage() {
                         })()}
                       </td>
                       <td className="align-middle py-1">
-                        <button className="btn btn-sm text-xs" onClick={() => addToPurchaseRequest(it.key)}>Order More</button>
+                        <div className="flex gap-2 flex-wrap">
+                          <button className="btn btn-sm text-xs" onClick={() => addToPurchaseRequest(it.key)}>Order More</button>
+                        </div>
                       </td>
                       {isAdmin && (
                         <td className="hidden md:table-cell">
@@ -934,6 +990,35 @@ export default function ConsumablesPage() {
               <button className="btn btn-primary text-xs" onClick={confirmReceive} disabled={receiveSubmitting || !receiveModal.date}>
                 {receiveSubmitting ? 'Saving…' : 'Mark received'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {editItem && (
+        <div className="modal-overlay hidden md:flex" role="dialog" aria-modal="true" aria-labelledby="edit-item-title">
+          <div className="card p-4 w-full max-w-md mx-auto">
+            <h3 id="edit-item-title" className="font-medium mb-4">Edit Item</h3>
+            <div className="space-y-3 text-sm">
+              <div className="flex flex-col gap-1">
+                <label className="text-gray-600">Label</label>
+                <input className="input input-sm" value={editDraft.label} onChange={e => setEditDraft(d => ({ ...d, label: e.target.value }))} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-gray-600">Reorder threshold</label>
+                <input type="number" min={0} className="input input-sm" value={editDraft.reorder_value} onChange={e => setEditDraft(d => ({ ...d, reorder_value: e.target.value }))} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-gray-600">Unit size (physical items per unit)</label>
+                <input type="number" min={1} className="input input-sm" value={editDraft.unit_size} onChange={e => setEditDraft(d => ({ ...d, unit_size: e.target.value }))} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-gray-600">Cost per unit</label>
+                <input type="number" min={0} step="0.01" className="input input-sm" value={editDraft.cost_per_unit} onChange={e => setEditDraft(d => ({ ...d, cost_per_unit: e.target.value }))} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button className="btn text-xs" disabled={savingItem} onClick={() => setEditItem(null)}>Cancel</button>
+              <button className="btn btn-primary text-xs" disabled={savingItem} onClick={saveEditItem}>{savingItem ? 'Saving…' : 'Save'}</button>
             </div>
           </div>
         </div>

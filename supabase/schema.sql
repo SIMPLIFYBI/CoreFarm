@@ -468,6 +468,10 @@ create table if not exists public.consumable_items (
   count integer not null default 0 check (count >= 0),
   -- Reorder threshold (when inventory at or below this value, highlight for reorder). 0 disables threshold.
   reorder_value integer not null default 0 check (reorder_value >= 0),
+  -- Cost tracking: cost per logical unit (see unit_size) for future cost integration
+  cost_per_unit numeric not null default 0 check (cost_per_unit >= 0),
+  -- Unit size represents how many physical items one unit encompasses (e.g. 1 unit = 1000 sample bags)
+  unit_size integer not null default 1 check (unit_size > 0),
   -- Whether this item should appear in the consumables report dashboard
   include_in_report boolean not null default false,
   updated_at timestamptz default now()
@@ -494,6 +498,9 @@ create policy "write consumable items (org)" on public.consumable_items for all 
 
 -- Ensure reorder_value column exists for environments created before this field was added
 alter table public.consumable_items add column if not exists reorder_value integer not null default 0 check (reorder_value >= 0);
+-- Backfill new cost & unit size columns if deploying to existing environments
+alter table public.consumable_items add column if not exists cost_per_unit numeric not null default 0 check (cost_per_unit >= 0);
+alter table public.consumable_items add column if not exists unit_size integer not null default 1 check (unit_size > 0);
 
 -- Purchase Orders per organization
 -- status: not_ordered (draft / request bucket), ordered, received

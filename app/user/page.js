@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { TASK_TYPES } from "@/lib/taskTypes";
-import { BarChart, DonutChart, LineChart } from "@/app/components/Charts";
+import { BarChart, DonutChart, LineChart, StackedColumnChart } from "@/app/components/Charts";
 
 const COLORS = [
   "#4f46e5",
@@ -24,6 +24,7 @@ export default function UserDashboardPage() {
   const [consumableItems, setConsumableItems] = useState([]); // included items with counts
   const [consumableTrend, setConsumableTrend] = useState([]); // ordered over time
   const [consumableLoading, setConsumableLoading] = useState(false);
+  // (Edit moved to dedicated Consumables Inventory page)
 
   // Filters (dashboard)
   const [fromDate, setFromDate] = useState(() => {
@@ -37,7 +38,9 @@ export default function UserDashboardPage() {
 
   // Data (dashboard)
   const [byType, setByType] = useState([]); // [{label, value, color}]
-  const [trend, setTrend] = useState([]); // [{label: yyyy-mm-dd, value}]
+  const [trend, setTrend] = useState([]); // [{label: yyyy-mm-dd, value}] total only (legacy)
+  const [stacked14, setStacked14] = useState([]); // 14-day stacked production
+  const [orientationAvg, setOrientationAvg] = useState(0); // avg metres orientated per active day
 
   // Data (logging activity)
   const [activityRows, setActivityRows] = useState([]);
@@ -88,7 +91,7 @@ export default function UserDashboardPage() {
         // Current included inventory
         const { data: inv } = await supabase
           .from('consumable_items')
-          .select('key,label,count,reorder_value')
+          .select('id,key,label,count,reorder_value,cost_per_unit,unit_size')
           .eq('organization_id', orgId)
           .eq('include_in_report', true)
           .order('label');
@@ -171,7 +174,7 @@ export default function UserDashboardPage() {
           if (!Number.isFinite(m) || m <= 0) continue;
           metersByType[r.task_type] = (metersByType[r.task_type] || 0) + m;
         }
-        const pie = TASK_TYPES.map((t, i) => ({
+  const pie = TASK_TYPES.map((t, i) => ({
           key: t,
           label: labelForTask(t),
           value: metersByType[t] || 0,
@@ -179,21 +182,46 @@ export default function UserDashboardPage() {
         })).filter((d) => types.includes(d.key));
         setByType(pie);
 
-        // Build per-day trend for total meters
-        const byDate = {};
+        // Build per-day trend totals (legacy KPI) and stacked 14-day window by task
+        const byDateTotal = {};
+        const byDateTask = {}; // day -> task_type -> meters
         for (const r of rows || []) {
           const m = Number(r.to_m) - Number(r.from_m);
           if (!Number.isFinite(m) || m <= 0) continue;
           const day = String(r.logged_on);
-          byDate[day] = (byDate[day] || 0) + m;
+          byDateTotal[day] = (byDateTotal[day] || 0) + m;
+          byDateTask[day] = byDateTask[day] || {};
+          byDateTask[day][r.task_type] = (byDateTask[day][r.task_type] || 0) + m;
         }
         const days = eachDay(fromDate, toDate);
-        const points = days.map((d) => ({ label: d, value: byDate[d] || 0 }));
-        setTrend(points);
+        const points = days.map((d) => ({ label: d, value: byDateTotal[d] || 0 }));
+  setTrend(points);
+  // Orientation average per active orientation day
+  const orientationTotal = metersByType['orientation'] || 0;
+  const orientationDays = Object.values(byDateTask).filter(m => (m.orientation || 0) > 0).length;
+  setOrientationAvg(orientationDays ? orientationTotal / orientationDays : 0);
+        // Last 14 days (inclusive up to toDate)
+        const to = new Date(toDate + 'T00:00:00');
+        const last14 = [];
+        for (let i=13;i>=0;i--) {
+          const d = new Date(to);
+            d.setDate(d.getDate()-i);
+            const key = d.toISOString().slice(0,10);
+            const taskMap = byDateTask[key] || {};
+            const segments = TASK_TYPES.filter(t => types.includes(t)).map((t, idx) => ({
+              key: t,
+              label: labelForTask(t),
+              color: COLORS[idx % COLORS.length],
+              value: taskMap[t] || 0,
+            })).filter(s => s.value > 0);
+            const total = segments.reduce((a,b)=>a+b.value,0);
+            last14.push({ date: key, segments, total });
+        }
+        setStacked14(last14);
       } catch (e) {
         console.error(e);
         setByType([]);
-        setTrend([]);
+  setTrend([]); setStacked14([]); setOrientationAvg(0);
       } finally {
         setLoading(false);
       }
@@ -219,6 +247,7 @@ export default function UserDashboardPage() {
     : selectedLabels.slice(0,3).join(', ') + (selectedLabels.length > 3 ? ` +${selectedLabels.length-3}` : '');
 
   return (
+    <>
     <div className="max-w-6xl mx-auto p-4 md:p-6">
       <h1 className="text-2xl font-semibold mb-4">Report</h1>
       <div className="mb-6 flex gap-2 border-b">
@@ -328,7 +357,7 @@ export default function UserDashboardPage() {
           {/* KPI tiles */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <Kpi title="Total meters" value={sum(byType.map((d) => d.value))} suffix=" m" />
-            <Kpi title="Active task types" value={byType.filter((d) => d.value > 0).length} />
+            <Kpi title="Avg Orientated / day" value={orientationAvg} suffix=" m" />
             <Kpi title="Days logged" value={trend.filter((p) => p.value > 0).length} />
             <Kpi title="Avg m/day" value={avg(trend.map((p) => p.value))} suffix=" m" />
           </div>
@@ -344,8 +373,8 @@ export default function UserDashboardPage() {
               <DonutChart data={byType} />
             </div>
             <div className="card p-4 md:col-span-2">
-              <div className="text-sm font-medium mb-2">Meters over time</div>
-              <LineChart points={trend} height="160px" fullBleed />
+              <div className="text-sm font-medium mb-2">Daily production (last 14 days)</div>
+              <StackedColumnChart data={stacked14} height={160} fullBleed />
             </div>
           </div>
 
@@ -484,6 +513,7 @@ export default function UserDashboardPage() {
                         <th className="p-2">Item</th>
                         <th className="p-2 text-right">Count</th>
                         <th className="p-2 text-right">Status</th>
+                        {/* Edit columns removed on dashboard */}
                       </tr>
                     </thead>
                     <tbody>
@@ -505,6 +535,7 @@ export default function UserDashboardPage() {
                               return <span className={`badge ${cls} text-[10px]`}>{txt}</span>;
                             })()}
                           </td>
+                          {/* Removed edit actions */}
                         </tr>
                       ))}
                     </tbody>
@@ -523,7 +554,9 @@ export default function UserDashboardPage() {
           </div>
         </div>
       )}
-    </div>
+  </div>
+  {/* Edit modal removed from dashboard */}
+    </>
   );
 }
 
