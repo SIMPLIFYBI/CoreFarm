@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
+import { useOrg } from "@/lib/OrgContext";
 import { IconCore, IconAdmin, IconTeam, IconUser, IconLogout, IconLogin, IconReport } from "../components/icons";
 
 export default function Header() {
@@ -12,7 +13,7 @@ export default function Header() {
   const [email, setEmail] = useState(null);
   const [displayName, setDisplayName] = useState(null);
   const [userId, setUserId] = useState(null);
-  const [orgNames, setOrgNames] = useState([]);
+  const { orgId, memberships } = useOrg();
 
   useEffect(() => {
     let mounted = true;
@@ -34,32 +35,12 @@ export default function Header() {
     };
   }, [supabase]);
 
-  useEffect(() => {
-    let aborted = false;
-    async function loadOrgs() {
-      if (!userId) {
-        setOrgNames([]);
-        return;
-      }
-      const { data, error } = await supabase
-        .from('organization_members')
-        .select('organization_id, organizations(name)')
-        .eq('user_id', userId);
-      if (aborted) return;
-      if (error) {
-        setOrgNames([]);
-        return;
-      }
-      const names = (data || [])
-        .map((m) => m.organizations?.name)
-        .filter(Boolean);
-      setOrgNames(names);
-    }
-    loadOrgs();
-    return () => {
-      aborted = true;
-    };
-  }, [supabase, userId]);
+  // Derive current org name from context
+  const currentOrgName = (() => {
+    if (!orgId) return null;
+    const m = memberships.find(m => m.organization_id === orgId);
+    return m?.organizations?.name || null;
+  })();
 
   const onSignOut = async () => {
     await supabase.auth.signOut();
@@ -103,9 +84,9 @@ export default function Header() {
           </nav>
         </div>
         <div className="text-sm flex items-center gap-3">
-          {orgNames.length > 0 && (
-            <span className="hidden sm:inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full border bg-white shadow-sm">
-              Org: {orgNames.length === 1 ? orgNames[0] : `${orgNames[0]} +${orgNames.length - 1}`}
+          {currentOrgName && (
+            <span className="inline-flex items-center gap-1 text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm border border-white/20 truncate max-w-[140px]" title={currentOrgName}>
+              {currentOrgName}
             </span>
           )}
           {email ? (

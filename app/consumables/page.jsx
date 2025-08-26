@@ -451,16 +451,7 @@ export default function ConsumablesPage() {
         <button className={`btn ${tab === "orders" ? "btn-primary" : ""}`} onClick={() => setTab("orders")}>
           Purchase Orders
         </button>
-        {memberships.length > 1 && (
-          <>
-            <span className="ml-4 text-sm text-gray-600">Organization</span>
-            <select className="select input-sm text-sm w-auto" value={orgId} onChange={(e) => setOrgId(e.target.value)}>
-              {memberships.map((m) => (
-                <option key={m.organization_id} value={m.organization_id}>{m.organizations?.name || m.organization_id}</option>
-              ))}
-            </select>
-          </>
-        )}
+  {/* Organization selection removed; global org context controls current org */}
       </div>
 
       {tab === "inventory" && (
@@ -493,6 +484,7 @@ export default function ConsumablesPage() {
                       <td className="align-middle py-1">
                         <div className="flex items-center gap-2">
                           {isAdmin && !(it.id || '').startsWith('temp-') && (
+                            // Hidden on mobile (md breakpoint) per requirement
                             <button
                               type="button"
                               className="btn btn-primary btn-xs hidden md:inline-flex px-2 py-0"

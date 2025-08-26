@@ -297,16 +297,7 @@ export default function AdminPage() {
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-8">
   <h1 className="text-2xl font-semibold">Add Holes / Tasks</h1>
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-gray-700">Organization</span>
-        {memberships && memberships.length > 0 ? (
-          <span className="text-xs px-2 py-0.5 border rounded bg-gray-50">
-            {memberships[0]?.organizations?.name || memberships[0]?.organization_id}
-          </span>
-        ) : (
-          <span className="text-xs text-gray-600">Join or create an organization on the Team page to add holes.</span>
-        )}
-      </div>
+  {/* Organization pill removed (header now shows active organization) */}
       {!user && (
         <div className="p-3 border rounded bg-yellow-50 text-sm">
           You’re not signed in. Sign in on the Auth page to create or edit holes (RLS requires authentication).
