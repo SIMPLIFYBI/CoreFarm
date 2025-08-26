@@ -631,7 +631,7 @@ export default function ConsumablesPage() {
           <div className="card p-4">
             <div className="flex flex-wrap items-center gap-3">
               <label className="text-sm text-gray-700">Filter by PO</label>
-              <select className="select input-sm text-sm w-auto" value={poFilter} onChange={(e) => setPoFilter(e.target.value)}>
+              <select className="select-gradient-sm w-auto" value={poFilter} onChange={(e) => setPoFilter(e.target.value)}>
                 <option value="">All</option>
                 {poList
                   .filter((p) => p.po_number)
@@ -640,7 +640,7 @@ export default function ConsumablesPage() {
                   ))}
               </select>
               <label className="text-sm text-gray-700 ml-4">Items status</label>
-              <select className="select input-sm text-sm w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <select className="select-gradient-sm w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                 <option value="all">All</option>
                 <option value="outstanding">Outstanding</option>
                 <option value="ordered">Ordered</option>
@@ -689,7 +689,7 @@ export default function ConsumablesPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-600">Status</span>
                       <select
-                        className="select input-sm text-sm w-auto"
+                        className="select-gradient-sm w-auto"
                         value={po.status || "not_ordered"}
                         onChange={(e) => updatePoMeta(pid, { status: e.target.value })}
                       >
@@ -1011,7 +1011,7 @@ function AssignToPoRow({ item, poList, onAssign, assigning }) {
   const active = useMemo(() => poList.filter((p) => p.status === 'not_ordered'), [poList]);
   return (
     <div className="flex items-center gap-2">
-      <select className="select input-sm text-sm w-56" value={sel} onChange={(e) => setSel(e.target.value)}>
+  <select className="select-gradient-sm w-56" value={sel} onChange={(e) => setSel(e.target.value)}>
         <option value="">Select a PO…</option>
         {active.map((p) => (
           <option key={p.id} value={p.id}>{p.name || '(unnamed PO)'}{p.po_number ? ` — ${p.po_number}` : ''}</option>

@@ -242,7 +242,7 @@ export default function TeamPage() {
           <div className="flex items-center gap-2">
             <label className="text-sm text-gray-700">Organization</label>
             <select
-              className="select input-sm text-sm w-auto bg-gradient-to-r from-sky-500/10 via-cyan-500/10 to-teal-500/10 border border-sky-500/40 hover:border-sky-400 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/40 rounded-md transition-colors"
+              className="select-gradient-sm w-auto"
               value={selectedOrgId}
               onChange={(e) => {
                 const val = e.target.value;
@@ -299,7 +299,7 @@ export default function TeamPage() {
                     value={emailToInvite}
                     onChange={(e) => setEmailToInvite(e.target.value)}
                   />
-                  <select className="select" value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
+                  <select className="select-gradient-sm" value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
                     <option value="member">General user</option>
                     <option value="admin">Admin</option>
                   </select>
@@ -315,7 +315,7 @@ export default function TeamPage() {
                     <label className="flex items-center gap-1">
                       <span className="text-gray-600">Filter</span>
                       <select
-                        className="select input-sm text-sm w-auto"
+                        className="select-gradient-sm w-auto"
                         value={inviteStatusFilter}
                         onChange={(e) => setInviteStatusFilter(e.target.value)}
                       >
@@ -388,7 +388,7 @@ export default function TeamPage() {
                         <td>{m.user_id === user.id ? `${m.name || m.email} (you)` : (m.name || m.email)}</td>
                         <td>
                           <select
-                            className="select"
+                            className="select-gradient-sm"
                             value={m.role}
                             onChange={(e) => changeRole(m.user_id, e.target.value)}
                           >

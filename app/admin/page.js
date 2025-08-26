@@ -564,7 +564,7 @@ export default function AdminPage() {
                 <input type="number" step="any" name="depth" value={single.depth} onChange={onChangeSingle} className="input" placeholder="e.g. 220" />
               </label>
               <label className="block text-sm">Drilling Diameter
-                <select name="drilling_diameter" value={single.drilling_diameter} onChange={onChangeSingle} className="select">
+                <select name="drilling_diameter" value={single.drilling_diameter} onChange={onChangeSingle} className="select-gradient-sm">
                   <option value="">Select…</option>
                   <option value="NQ">NQ</option>
                   <option value="HQ">HQ</option>
