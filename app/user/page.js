@@ -41,6 +41,7 @@ export default function UserDashboardPage() {
   const [trend, setTrend] = useState([]); // [{label: yyyy-mm-dd, value}] total only (legacy)
   const [stacked14, setStacked14] = useState([]); // 14-day stacked production
   const [orientationAvg, setOrientationAvg] = useState(0); // avg metres orientated per active day
+  const [unloggedMeters, setUnloggedMeters] = useState(0); // total remaining planned metres not yet logged
 
   // Data (logging activity)
   const [activityRows, setActivityRows] = useState([]);
@@ -150,8 +151,28 @@ export default function UserDashboardPage() {
         if (holeIds.length === 0) {
           setByType([]);
           setTrend([]);
+          setUnloggedMeters(0);
           setLoading(false);
           return;
+        }
+
+        // Compute un-logged metres from completion summary view (planned - done)
+        try {
+          const { data: completionRows } = await supabase
+            .from('hole_completion_summary')
+            .select('hole_id, planned_total_m, done_total_m')
+            .in('hole_id', holeIds);
+          let remaining = 0;
+            for (const r of completionRows || []) {
+              const planned = Number(r.planned_total_m) || 0;
+              const done = Number(r.done_total_m) || 0;
+              const rem = planned - done;
+              if (rem > 0) remaining += rem;
+            }
+            setUnloggedMeters(remaining);
+        } catch (e) {
+          // Fallback if view not available yet
+          setUnloggedMeters(0);
         }
 
         // Fetch progress rows for selected types and date range
@@ -217,11 +238,11 @@ export default function UserDashboardPage() {
             const total = segments.reduce((a,b)=>a+b.value,0);
             last14.push({ date: key, segments, total });
         }
-        setStacked14(last14);
+    setStacked14(last14);
       } catch (e) {
         console.error(e);
         setByType([]);
-  setTrend([]); setStacked14([]); setOrientationAvg(0);
+  setTrend([]); setStacked14([]); setOrientationAvg(0); setUnloggedMeters(0);
       } finally {
         setLoading(false);
       }
@@ -358,7 +379,7 @@ export default function UserDashboardPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <Kpi title="Total meters" value={sum(byType.map((d) => d.value))} suffix=" m" />
             <Kpi title="Avg Orientated / day" value={orientationAvg} suffix=" m" />
-            <Kpi title="Days logged" value={trend.filter((p) => p.value > 0).length} />
+            <Kpi title="Un-logged metres" value={unloggedMeters} suffix=" m" />
             <Kpi title="Avg m/day" value={avg(trend.map((p) => p.value))} suffix=" m" />
           </div>
 
