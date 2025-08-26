@@ -1,19 +1,20 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
+import { useOrg } from "@/lib/OrgContext";
 import { redirectTo } from "@/lib/siteUrl";
 import toast from "react-hot-toast";
 
 export default function TeamPage() {
   const supabase = supabaseBrowser();
   const [user, setUser] = useState(null);
-  const [memberships, setMemberships] = useState([]); // [{organization_id, role, organizations: {name}}]
-  const [selectedOrgId, setSelectedOrgId] = useState("");
+  const { orgId: selectedOrgId, setOrgId: setSelectedOrgId, memberships, refreshMemberships } = useOrg();
   const [members, setMembers] = useState([]); // [{user_id, email, name, role, created_at}]
   const [invites, setInvites] = useState([]); // [{id,email,role,status,created_at}]
   const [emailToInvite, setEmailToInvite] = useState("");
   const [inviteRole, setInviteRole] = useState("member");
   const [orgName, setOrgName] = useState("");
+  const [showCreateOrgModal, setShowCreateOrgModal] = useState(false);
   const [myInvites, setMyInvites] = useState([]); // invites addressed to current user email
   // Invites UX controls
   const [inviteStatusFilter, setInviteStatusFilter] = useState("pending"); // 'pending' | 'accepted' | 'revoked' | 'all'
@@ -35,18 +36,6 @@ export default function TeamPage() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      // Load memberships with org names
-      const { data: ms, error } = await supabase
-        .from("organization_members")
-        .select("organization_id, role, organizations(name)")
-        .eq("user_id", user.id);
-      if (error) {
-        toast.error("Could not load memberships");
-      }
-      setMemberships(ms || []);
-      if ((ms || []).length > 0) setSelectedOrgId(ms[0].organization_id);
-
-      // Load invites to me
       const { data: invMine } = await supabase
         .from("organization_invites")
         .select("id, organization_id, email, role, status, created_at, organizations(name)")
@@ -89,13 +78,10 @@ export default function TeamPage() {
     // Membership is auto-created via trigger
     toast.success("Organization created");
     setOrgName("");
+  setShowCreateOrgModal(false);
     // refresh memberships
-    const { data: ms } = await supabase
-      .from("organization_members")
-      .select("organization_id, role, organizations(name)")
-      .eq("user_id", user.id);
-    setMemberships(ms || []);
-    setSelectedOrgId(org.id);
+  await refreshMemberships();
+  setSelectedOrgId(org.id);
   };
 
   const sendInvite = async (e) => {
@@ -256,15 +242,24 @@ export default function TeamPage() {
           <div className="flex items-center gap-2">
             <label className="text-sm text-gray-700">Organization</label>
             <select
-              className="select input-sm text-sm w-auto"
+              className="select input-sm text-sm w-auto bg-gradient-to-r from-sky-500/10 via-cyan-500/10 to-teal-500/10 border border-sky-500/40 hover:border-sky-400 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/40 rounded-md transition-colors"
               value={selectedOrgId}
-              onChange={(e) => setSelectedOrgId(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === "__create__") {
+                  // open modal; keep current selection
+                  setShowCreateOrgModal(true);
+                  return;
+                }
+                setSelectedOrgId(val);
+              }}
             >
               {memberships.map((m) => (
                 <option key={m.organization_id} value={m.organization_id}>
                   {m.organizations?.name || m.organization_id}
                 </option>
               ))}
+              {myRole === 'admin' && <option value="__create__">+ Create New...</option>}
             </select>
             <span className="ml-2 text-xs text-gray-600">Your role: {myRole}</span>
           </div>
@@ -454,6 +449,47 @@ export default function TeamPage() {
               </div>
             )
           )}
+        </div>
+      )}
+      {showCreateOrgModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="card p-6 w-full max-w-md relative">
+            <button
+              type="button"
+              className="absolute top-2 right-2 text-xs text-gray-500 hover:text-gray-700"
+              onClick={() => setShowCreateOrgModal(false)}
+            >
+              ✕
+            </button>
+            <h2 className="text-lg font-medium mb-2">Create new organization</h2>
+            <p className="text-xs text-amber-600 mb-4">
+              Only users invited to your organization will be able to view your data.
+            </p>
+            <form onSubmit={createOrg} className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium mb-1">Organization name</label>
+                <input
+                  type="text"
+                  className="input w-full"
+                  placeholder="e.g., Goldfields"
+                  value={orgName}
+                  onChange={(e) => setOrgName(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button type="button" className="btn text-xs" onClick={() => setShowCreateOrgModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary text-xs">
+                  Create
+                </button>
+              </div>
+              <p className="text-[11px] text-gray-500">
+                You will become the admin and can switch between organizations from the selector.
+              </p>
+            </form>
+          </div>
         </div>
       )}
     </div>

@@ -2,6 +2,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { DEFAULT_CONSUMABLE_ITEMS } from "@/lib/consumablesDefaults";
+import { useOrg } from "@/lib/OrgContext";
 import toast from "react-hot-toast";
 
 // Data model (Supabase suggested tables):
@@ -12,8 +13,7 @@ import toast from "react-hot-toast";
 export default function ConsumablesPage() {
   const supabase = supabaseBrowser();
   const [user, setUser] = useState(null);
-  const [memberships, setMemberships] = useState([]); // {organization_id, organizations:{name}, role}
-  const [orgId, setOrgId] = useState("");
+  const { orgId, setOrgId, memberships } = useOrg();
   const [tab, setTab] = useState("inventory"); // 'inventory' | 'requests' | 'orders'
 
   // Inventory
@@ -48,17 +48,7 @@ export default function ConsumablesPage() {
     })();
   }, [supabase]);
 
-  useEffect(() => {
-    if (!user) return;
-    (async () => {
-      const { data: ms } = await supabase
-        .from("organization_members")
-        .select("organization_id, role, organizations(name)")
-        .eq("user_id", user.id);
-      setMemberships(ms || []);
-      if ((ms || []).length > 0) setOrgId(ms[0].organization_id);
-    })();
-  }, [user, supabase]);
+  // Memberships and org selection provided by OrgContext
 
   // Seed inventory if empty and then load
   const isAdmin = useMemo(() => memberships.some((m) => m.organization_id === orgId && m.role === 'admin'), [memberships, orgId]);

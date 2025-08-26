@@ -4,6 +4,7 @@ import "./globals.css";
 import Header from "./components/Header";
 import AuthGuard from "./components/AuthGuard";
 import MobileNav from "./components/MobileNav";
+import { OrgProvider } from "@/lib/OrgContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -36,14 +37,16 @@ export default function RootLayout({ children }) {
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-  <Header />
-  <AuthGuard>
-    <main className="min-h-screen md:pt-[72px] md:pb-0 pb-[calc(env(safe-area-inset-bottom)+64px)]">
-      {children}
-    </main>
-  </AuthGuard>
-  <MobileNav />
-  <Toaster position="top-right" />
+  <OrgProvider>
+    <Header />
+    <AuthGuard>
+      <main className="min-h-screen md:pt-[72px] md:pb-0 pb-[calc(env(safe-area-inset-bottom)+64px)]">
+        {children}
+      </main>
+    </AuthGuard>
+    <MobileNav />
+    <Toaster position="top-right" />
+  </OrgProvider>
       </body>
     </html>
   );

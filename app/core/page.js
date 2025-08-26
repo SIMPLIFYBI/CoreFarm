@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState, Fragment, useRef } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
+import { useOrg } from "@/lib/OrgContext";
 import toast from "react-hot-toast";
 
 // Compute whether a set of planned intervals is fully covered by progress intervals
@@ -27,6 +28,7 @@ function overlapLen(a1, a2, b1, b2) {
 
 export default function CorePage() {
   const supabase = supabaseBrowser();
+  const { orgId } = useOrg();
   const [holes, setHoles] = useState([]); // {id, hole_id}
   const [loading, setLoading] = useState(true);
   const [holeStatus, setHoleStatus] = useState({}); // { [holeId]: { hasPlanned: boolean, complete: boolean } }
@@ -101,10 +103,12 @@ export default function CorePage() {
     .join(', ');
 
   useEffect(() => {
+    if (!orgId) return;
     (async () => {
       const { data: holesData } = await supabase
         .from("holes")
-        .select("id, hole_id, depth, project_name");
+        .select("id, hole_id, depth, project_name")
+        .eq('organization_id', orgId);
       setHoles(holesData || []);
       const ids = (holesData || []).map((h) => h.id);
       if (ids.length > 0) {
@@ -143,7 +147,7 @@ export default function CorePage() {
       }
       setLoading(false);
     })();
-  }, [supabase]);
+  }, [supabase, orgId]);
 
   // current user id for labeling progress entries
   useEffect(() => {

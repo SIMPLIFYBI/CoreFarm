@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
+import { useOrg } from "@/lib/OrgContext";
 import { TASK_TYPES } from "@/lib/taskTypes";
 import { BarChart, DonutChart, LineChart, StackedColumnChart } from "@/app/components/Charts";
 
@@ -17,8 +18,7 @@ export default function UserDashboardPage() {
   const supabase = supabaseBrowser();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [orgId, setOrgId] = useState("");
-  const [memberships, setMemberships] = useState([]);
+  const { orgId } = useOrg();
   const [tab, setTab] = useState("dashboard"); // 'dashboard' | 'activity' | 'consumables'
   // Consumables report state
   const [consumableItems, setConsumableItems] = useState([]); // included items with counts
@@ -56,13 +56,6 @@ export default function UserDashboardPage() {
       setUser(userData?.user || null);
       const { data: s } = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user || null));
       sub = s?.subscription;
-      // Load org memberships to scope queries
-      const { data: ms } = await supabase
-        .from("organization_members")
-        .select("organization_id, role, organizations(name)")
-        .eq("user_id", userData?.user?.id);
-      setMemberships(ms || []);
-      if ((ms || []).length > 0) setOrgId(ms[0].organization_id);
       setLoading(false);
     })();
     return () => sub?.unsubscribe?.();
