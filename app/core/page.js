@@ -614,13 +614,18 @@ export default function CorePage() {
                         {details[h.id].order.map((task) => (
                           <div key={task} className="border rounded">
                             <button
-                              className="w-full text-left p-2 text-xs"
+                              className="w-full p-2 text-xs flex items-center justify-between"
                               onClick={() => toggleTask(h.id, task)}
+                              aria-expanded={!!expandedTask[holeKey(h.id, task)]}
+                              aria-controls={`task-${h.id}-${task}`}
                             >
-                              {task.replace(/_/g, " ")}
+                              <span>{task.replace(/_/g, " ")}</span>
+                              <span className="ml-2 inline-flex items-center justify-center w-4 h-4 rounded bg-gray-100 text-gray-600 text-[11px]">
+                                {expandedTask[holeKey(h.id, task)] ? '−' : '+'}
+                              </span>
                             </button>
                             {expandedTask[holeKey(h.id, task)] && (
-                              <div className="p-2 border-t space-y-2">
+                              <div id={`task-${h.id}-${task}`} className="p-2 border-t space-y-2">
                                 {details[h.id].tasks[task].intervals.map((pi) => {
                                   const key = rowKey(h.id, task, pi.from_m, pi.to_m);
                                   const state = inputs[key] || { from_m: pi.from_m, to_m: "", disabled: false };
