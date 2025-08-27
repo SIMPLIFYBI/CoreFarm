@@ -114,43 +114,7 @@ export default function ConsumablesPage() {
     }
   };
 
-  const toggleIncludeInReport = async (key) => {
-    const current = items.find(i => i.key === key);
-    if (!current || !orgId) return;
-    const prevVal = current.include_in_report;
-    const nextVal = !prevVal;
-    // optimistic UI
-    setItems(arr => arr.map(it => it.key === key ? { ...it, include_in_report: nextVal } : it));
-    try {
-      // Try plain update first (most common)
-      let { error, data } = await supabase
-        .from('consumable_items')
-        .update({ include_in_report: nextVal })
-        .eq('organization_id', orgId)
-        .eq('key', key)
-        .select('id');
-      // If no row updated (data empty) attempt insert (rare edge if seed skipped)
-      if (!error && (!data || data.length === 0)) {
-        const ins = await supabase
-          .from('consumable_items')
-          .insert({ organization_id: orgId, key, label: current.label, count: current.count || 0, include_in_report: nextVal })
-          .select('id');
-        error = ins.error;
-      }
-      if (error) {
-        // Column missing? code 42703
-        if (error.code === '42703') {
-          throw new Error('Column include_in_report missing. Run migration: ALTER TABLE public.consumable_items ADD COLUMN IF NOT EXISTS include_in_report boolean NOT NULL DEFAULT false;');
-        }
-        throw error;
-      }
-    } catch (e) {
-      console.error('toggleIncludeInReport failed', e);
-      // revert
-      setItems(arr => arr.map(it => it.key === key ? { ...it, include_in_report: prevVal } : it));
-      toast.error(e.message || 'Failed to update');
-    }
-  };
+  // include_in_report toggle removed; dashboard derives low/reorder automatically.
 
   const addConsumableItem = async () => {
     if (!isAdmin) return;
@@ -478,11 +442,11 @@ export default function ConsumablesPage() {
                 <thead>
                   <tr>
                     <th className="text-xs md:text-sm">Item</th>
-                    <th className="w-20 text-center text-[10px] md:text-xs hidden md:table-cell">Include</th>
                     <th className="w-24 text-center text-[10px] md:text-xs hidden md:table-cell">Reorder @</th>
                     <th className="md:w-28 text-xs md:text-sm">Count</th>
-                    <th className="md:w-24 text-xs md:text-sm">Status</th>
-                    <th className="md:w-40 text-xs md:text-sm">Actions</th>
+                      <th className="md:w-20 text-xs md:text-sm hidden md:table-cell">Unit Size</th>
+                      <th className="md:w-24 text-xs md:text-sm">Status</th>
+                      <th className="md:w-40 text-xs md:text-sm">Actions</th>
                     {isAdmin && <th className="w-10 hidden md:table-cell" />}
                   </tr>
                 </thead>
@@ -501,14 +465,11 @@ export default function ConsumablesPage() {
                           <span className="block truncate max-w-[140px] md:max-w-none leading-snug">{it.label}</span>
                         )}
                       </td>
+                      {/* Include checkbox removed */}
                       <td className="align-middle py-1 hidden md:table-cell text-center">
-                        <input
-                          type="checkbox"
-                          checked={!!it.include_in_report}
-                          onChange={() => toggleIncludeInReport(it.key)}
-                        />
-                      </td>
-                      <td className="align-middle py-1 hidden md:table-cell text-center">
+                        <td className="align-middle py-1 hidden md:table-cell">
+                          <span className="text-xs">{it.unit_size || 1}</span>
+                        </td>
                         {isAdmin ? (
                           <input
                             type="number"

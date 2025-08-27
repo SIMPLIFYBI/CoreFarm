@@ -82,27 +82,36 @@ export default function UserDashboardPage() {
     (async () => {
       setConsumableLoading(true);
       try {
-        // Current included inventory
+        // Load full inventory to derive low/reorder subset
         const { data: inv } = await supabase
           .from('consumable_items')
-          .select('id,key,label,count,reorder_value,cost_per_unit,unit_size')
+          .select('id,key,label,count,reorder_value,cost_per_unit,unit_size,include_in_report')
           .eq('organization_id', orgId)
-          .eq('include_in_report', true)
           .order('label');
-        setConsumableItems(inv || []);
-        // Ordered trend: count quantity of items that have been ordered (po.status in ordered/received OR item.status in ordered/received)
+        const allItems = inv || [];
+        const lowReorder = allItems.filter(it => {
+          const rv = it.reorder_value || 0;
+          if (rv <= 0) return false;
+          const c = it.count || 0;
+          if (c <= rv) return true; // Reorder
+          if (c <= rv * 1.5) return true; // Low
+          return false; // OK
+        });
+        setConsumableItems(lowReorder);
+        // Ordered trend remains based on explicitly included items (include_in_report) to preserve intentional reporting selection
+        const includedForTrend = allItems.filter(i => i.include_in_report);
+        const includedKeys = new Set(includedForTrend.map(i => i.key));
         const { data: orderedItems } = await supabase
           .from('purchase_order_items')
           .select('created_at, quantity, status, item_key, label, po:purchase_orders(status, ordered_date)')
           .eq('organization_id', orgId);
-        // Group by month for included items only where item has transitioned to ordered or received
         const monthMap = {};
         for (const row of orderedItems || []) {
-          if (!inv?.some(i => i.key === row.item_key)) continue; // only included items
+          if (!includedKeys.has(row.item_key)) continue; // only report-included items contribute to trend
           const isOrdered = row.status === 'ordered' || row.status === 'received' || (row.po && (row.po.status === 'ordered' || row.po.status === 'received'));
           if (!isOrdered) continue;
           const dt = row.po?.ordered_date || row.created_at || new Date().toISOString();
-          const month = (dt || '').slice(0,7); // YYYY-MM
+          const month = (dt || '').slice(0,7);
           if (!month) continue;
           monthMap[month] = (monthMap[month] || 0) + (row.quantity || 0);
         }
@@ -508,17 +517,11 @@ export default function UserDashboardPage() {
 
       {tab === "consumables" && (
         <div className="space-y-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Kpi title="Tracked items" value={consumableItems.length} />
-            <Kpi title="Total on hand" value={consumableItems.reduce((a,b)=>a+(b.count||0),0)} />
-            <Kpi title="Avg / item" value={consumableItems.length ? consumableItems.reduce((a,b)=>a+(b.count||0),0)/consumableItems.length : 0} />
-            <Kpi title="Months shown" value={consumableTrend.length} />
-          </div>
           <div className="grid grid-cols-1 gap-6">
             <div className="card p-4">
-              <div className="text-sm font-medium mb-2">Current Inventory (Included)</div>
+              <div className="text-sm font-medium mb-2">Low / Reorder Inventory</div>
               {consumableLoading ? <div className="text-xs text-gray-500">Loading…</div> : consumableItems.length === 0 ? (
-                <div className="text-xs text-gray-500">No consumable items selected for report. Use the checkbox on the Inventory page.</div>
+                <div className="text-xs text-gray-500">No items currently Low or at Reorder threshold.</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs md:text-sm">
@@ -557,6 +560,7 @@ export default function UserDashboardPage() {
                 </div>
               )}
             </div>
+            {/* Gauges */}
           </div>
         </div>
       )}
