@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import { TASK_TYPES } from "@/lib/taskTypes";
-import { BarChart, DonutChart, LineChart, StackedColumnChart } from "@/app/components/Charts";
+import { BarChart, DonutChart, StackedColumnChart } from "@/app/components/Charts";
 
 const COLORS = [
   "#4f46e5",
@@ -514,7 +514,7 @@ export default function UserDashboardPage() {
             <Kpi title="Avg / item" value={consumableItems.length ? consumableItems.reduce((a,b)=>a+(b.count||0),0)/consumableItems.length : 0} />
             <Kpi title="Months shown" value={consumableTrend.length} />
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6">
             <div className="card p-4">
               <div className="text-sm font-medium mb-2">Current Inventory (Included)</div>
               {consumableLoading ? <div className="text-xs text-gray-500">Loading…</div> : consumableItems.length === 0 ? (
@@ -555,14 +555,6 @@ export default function UserDashboardPage() {
                     </tbody>
                   </table>
                 </div>
-              )}
-            </div>
-            <div className="card p-4">
-              <div className="text-sm font-medium mb-2">Ordered Quantity (last 6 months)</div>
-              {consumableTrend.length === 0 ? (
-                <div className="text-xs text-gray-500">No ordered items yet.</div>
-              ) : (
-                <LineChart points={consumableTrend.map(p => ({ label: p.label, value: p.value }))} height="160px" fullBleed />
               )}
             </div>
           </div>

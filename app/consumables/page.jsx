@@ -440,18 +440,26 @@ export default function ConsumablesPage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-6 space-y-6">
-      <div className="flex items-center gap-2">
-        <button className={`btn ${tab === "inventory" ? "btn-primary" : ""}`} onClick={() => setTab("inventory")}>
-          Current inventory
+  <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-6">
+      <div className="flex gap-2 border-b mb-2">
+        <button
+          className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm ${tab === 'inventory' ? 'border-indigo-500 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          onClick={() => setTab('inventory')}
+        >
+          Inventory
         </button>
-        <button className={`btn ${tab === "requests" ? "btn-primary" : ""}`} onClick={() => setTab("requests")}>
-          Purchase requests
+        <button
+          className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm ${tab === 'requests' ? 'border-indigo-500 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          onClick={() => setTab('requests')}
+        >
+          Purchase Requests
         </button>
-        <button className={`btn ${tab === "orders" ? "btn-primary" : ""}`} onClick={() => setTab("orders")}>
+        <button
+          className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm ${tab === 'orders' ? 'border-indigo-500 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          onClick={() => setTab('orders')}
+        >
           Purchase Orders
         </button>
-  {/* Organization selection removed; global org context controls current org */}
       </div>
 
       {tab === "inventory" && (
@@ -604,7 +612,30 @@ export default function ConsumablesPage() {
                     {unassignedItems.map((it) => (
                       <tr key={it.id}>
                         <td>{it.label}</td>
-                        <td className="text-right">{it.quantity}</td>
+                        <td className="text-right">
+                          <input
+                            type="number"
+                            min={1}
+                            className="input input-sm w-20 text-right"
+                            value={it.quantity}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              let num = parseInt(v, 10);
+                              if (!Number.isFinite(num) || num < 1) num = 1;
+                              // Optimistic local update
+                              setUnassignedItems(arr => arr.map(x => x.id === it.id ? { ...x, quantity: num } : x));
+                            }}
+                            onBlur={async (e) => {
+                              let num = parseInt(e.target.value, 10);
+                              if (!Number.isFinite(num) || num < 1) num = 1;
+                              try {
+                                await supabase.from('purchase_order_items').update({ quantity: num }).eq('id', it.id);
+                              } catch (err) {
+                                toast.error('Failed to update quantity');
+                              }
+                            }}
+                          />
+                        </td>
                         <td>
                           {poList.filter((p) => (p.status === 'not_ordered')).length === 0 ? (
                             <span className="text-xs text-gray-500">Create a PO on the Purchase Orders tab before assigning items.</span>

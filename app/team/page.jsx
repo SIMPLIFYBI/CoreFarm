@@ -196,12 +196,12 @@ export default function TeamPage() {
     setMembers((arr) => arr.filter((m) => m.user_id !== userId));
   };
 
-  if (!user) return <div className="max-w-4xl mx-auto p-6">Sign in required.</div>;
+  if (!user) return <div className="max-w-6xl mx-auto p-4 md:p-6">Sign in required.</div>;
 
   const currentOrg = memberships.find((m) => m.organization_id === selectedOrgId);
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
+  <div className="max-w-6xl mx-auto p-4 md:p-6">
       <h1 className="text-2xl font-semibold mb-4">Team Management</h1>
 
       {memberships.length === 0 ? (

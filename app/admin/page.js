@@ -295,7 +295,7 @@ export default function AdminPage() {
   ), []);
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-8">
+  <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-8">
   <h1 className="text-2xl font-semibold">Add Holes / Tasks</h1>
   {/* Organization pill removed (header now shows active organization) */}
       {!user && (
