@@ -196,6 +196,16 @@ export default function TeamPage() {
     setMembers((arr) => arr.filter((m) => m.user_id !== userId));
   };
 
+  const signOut = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) return toast.error(error.message || "Sign out failed");
+    toast.success("Signed out");
+    // Clear local state
+    setUser(null);
+    // Best-effort redirect via location (avoids needing next/navigation here)
+    if (typeof window !== 'undefined') window.location.href = '/';
+  };
+
   if (!user) return <div className="max-w-6xl mx-auto p-4 md:p-6">Sign in required.</div>;
 
   const currentOrg = memberships.find((m) => m.organization_id === selectedOrgId);
@@ -490,6 +500,14 @@ export default function TeamPage() {
               </p>
             </form>
           </div>
+        </div>
+      )}
+      {/* Sign out button at bottom */}
+      {user && (
+        <div className="mt-10 pt-6 border-t">
+          <button onClick={signOut} className="btn btn-primary text-xs" aria-label="Sign out" title="Sign out">
+            Sign out
+          </button>
         </div>
       )}
     </div>

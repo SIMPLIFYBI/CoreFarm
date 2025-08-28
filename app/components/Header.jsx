@@ -83,8 +83,18 @@ export default function Header() {
         </div>
         <div className="text-sm flex items-center gap-3">
           {currentOrgName && (
-            <span className="inline-flex items-center gap-1 text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm border border-white/20 truncate max-w-[140px]" title={currentOrgName}>
-              {currentOrgName}
+            <span
+              className="inline-flex flex-col justify-center h-8 px-2 rounded-md bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm border border-white/20 max-w-[160px] overflow-hidden"
+              title={`${currentOrgName}${email ? ' — ' + email : ''}`}
+            >
+              <span className="text-[10px] leading-tight font-medium truncate">
+                {currentOrgName}
+              </span>
+              {email && (
+                <span className="text-[9px] leading-tight opacity-90 truncate -mt-0.5">
+                  {email}
+                </span>
+              )}
             </span>
           )}
           {!email && (
