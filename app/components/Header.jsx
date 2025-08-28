@@ -4,7 +4,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
-import { IconCore, IconAdmin, IconTeam, IconUser, IconLogout, IconLogin, IconReport } from "../components/icons";
+import { IconCore, IconAdmin, IconTeam, IconUser, IconLogout, IconLogin, IconReport, IconClipboard } from "../components/icons";
 
 export default function Header() {
   const supabase = supabaseBrowser();
@@ -56,8 +56,9 @@ export default function Header() {
             <span className="hidden sm:block">CoreFarm</span>
           </Link>
           <nav className="hidden md:flex gap-2 text-sm">
-            {[
+            {[ 
               { href: "/user", label: "Dashboard", icon: IconReport },
+              { href: "/projects", label: "Projects", icon: IconClipboard },
               { href: "/core", label: "Logging", icon: IconAdmin },
               { href: "/addcore", label: "Add Core", icon: IconCore },
               { href: "/team", label: "Team", icon: IconTeam },

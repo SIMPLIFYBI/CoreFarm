@@ -26,7 +26,7 @@ export default function AdminPage() {
     hole_id: "",
     depth: "",
     drilling_diameter: "",
-    project_name: "",
+    project_id: "",
     drilling_contractor: "",
   });
   const [showHoleModal, setShowHoleModal] = useState(false);
@@ -37,7 +37,7 @@ export default function AdminPage() {
   const [parsed, setParsed] = useState([]);
   const [importing, setImporting] = useState(false);
   const [intervals, setIntervals] = useState({});
-  const emptyIntervals = useMemo(() => TASK_TYPES.reduce((acc, t) => ({ ...acc, [t]: [] }), {}), []);
+  const emptyIntervals = useMemo(() => TASK_TYPES.reduce((acc, t) => ({ ...acc, [t]: [] }), []), []);
 
   const selectHole = (h) => {
     setSelectedId(h.id);
@@ -45,10 +45,9 @@ export default function AdminPage() {
       hole_id: h.hole_id || "",
       depth: h.depth ?? "",
       drilling_diameter: h.drilling_diameter || "",
-      project_name: h.project_name || "",
+      project_id: h.project_id || "",
       drilling_contractor: h.drilling_contractor || "",
     });
-    // Clear intervals immediately so UI reflects the new selection
     setIntervals(emptyIntervals);
   };
 
@@ -97,7 +96,7 @@ export default function AdminPage() {
       setLoading(true);
       const { data, error } = await supabase
         .from("holes")
-        .select("id, hole_id, depth, drilling_diameter, project_name, drilling_contractor, created_at, organization_id")
+        .select("id, hole_id, depth, drilling_diameter, project_id, drilling_contractor, created_at, organization_id, projects(name)")
         .eq("organization_id", selectedOrgId)
         .order("created_at", { ascending: false });
       if (error) {
@@ -155,9 +154,9 @@ export default function AdminPage() {
         hole_id: idTrim,
         depth: Number.isFinite(depthNum) ? depthNum : null,
         drilling_diameter: single.drilling_diameter || null,
-        project_name: single.project_name || null,
+        project_id: single.project_id || null,
         drilling_contractor: single.drilling_contractor || null,
-  organization_id: selectedOrgId || null,
+        organization_id: selectedOrgId || null,
       };
       setSavingHole(true);
       let res;
@@ -176,7 +175,7 @@ export default function AdminPage() {
       // refresh list
       const { data, error } = await supabase
         .from("holes")
-        .select("id, hole_id, depth, drilling_diameter, project_name, drilling_contractor, created_at, organization_id")
+        .select("id, hole_id, depth, drilling_diameter, project_id, drilling_contractor, created_at, organization_id, projects(name)")
         .eq("organization_id", selectedOrgId)
         .order("created_at", { ascending: false });
       if (error) {
@@ -202,14 +201,14 @@ export default function AdminPage() {
     const rows = parsed.length ? parsed : parseTable(bulkText);
     if (!rows.length) return toast.error("No rows found");
     // Expect headers matching keys
-    const allowed = ["hole_id", "depth", "drilling_diameter", "project_name", "drilling_contractor"];
+    const allowed = ["hole_id", "depth", "drilling_diameter", "project_id", "drilling_contractor"]; // project_id instead of project_name
     const invalid = Object.keys(rows[0]).filter((k) => !allowed.includes(k));
     if (invalid.length) return toast.error(`Unexpected headers: ${invalid.join(", ")}`);
     const payloads = rows.map((r) => ({
       hole_id: String(r.hole_id || "").trim(),
       depth: (() => { const n = Number(r.depth); return r.depth === "" || r.depth == null || !Number.isFinite(n) ? null : n; })(),
       drilling_diameter: r.drilling_diameter || null,
-      project_name: r.project_name || null,
+      project_id: r.project_id || null,
       drilling_contractor: r.drilling_contractor || null,
       organization_id: selectedOrgId || null,
     })).filter((p) => p.hole_id);
@@ -224,7 +223,7 @@ export default function AdminPage() {
     setShowBulk(false);
     const { data } = await supabase
       .from("holes")
-      .select("id, hole_id, depth, drilling_diameter, project_name, drilling_contractor, created_at, organization_id")
+      .select("id, hole_id, depth, drilling_diameter, project_id, drilling_contractor, created_at, organization_id, projects(name)")
       .eq("organization_id", selectedOrgId)
       .order("created_at", { ascending: false });
     setHoles(data || []);
@@ -283,15 +282,15 @@ export default function AdminPage() {
     setHoles((prev) => prev.filter((h) => h.id !== id));
     if (selectedId === id) {
       setSelectedId(null);
-      setSingle({ hole_id: "", depth: "", drilling_diameter: "", project_name: "", drilling_contractor: "" });
+      setSingle({ hole_id: "", depth: "", drilling_diameter: "", project_id: "", drilling_contractor: "" });
       setIntervals({});
     }
   };
 
   const sampleHeaders = useMemo(() => (
-    "hole_id,depth,drilling_diameter,project_name,drilling_contractor\n" +
-    "HOLE-001,150,NQ,Project A,Contractor X\n" +
-    "HOLE-002,220,HQ,Project A,Contractor Y\n"
+    "hole_id,depth,drilling_diameter,project_id,drilling_contractor\n" +
+    "HOLE-001,150,NQ,<project uuid>,Contractor X\n" +
+    "HOLE-002,220,HQ,<project uuid>,Contractor Y\n"
   ), []);
 
   return (
@@ -309,7 +308,7 @@ export default function AdminPage() {
       {/* Bulk upload: hidden on mobile, available on desktop */}
       <section className="space-y-3 hidden md:block">
         <h2 className="text-xl font-medium">Bulk upload</h2>
-        <p className="text-sm text-gray-600">Paste CSV/TSV from Excel with headers: hole_id, depth, drilling_diameter, project_name, drilling_contractor</p>
+        <p className="text-sm text-gray-600">Paste CSV/TSV from Excel with headers: hole_id, depth, drilling_diameter, project_id, drilling_contractor</p>
         <div>
           <button type="button" onClick={() => { setShowBulk(true); setParsed([]); }} className="btn btn-primary">Open bulk uploader</button>
         </div>
@@ -327,7 +326,7 @@ export default function AdminPage() {
             className="btn btn-primary"
             onClick={() => {
               setEditingId(null);
-              setSingle({ hole_id: "", depth: "", drilling_diameter: "", project_name: "", drilling_contractor: "" });
+              setSingle({ hole_id: "", depth: "", drilling_diameter: "", project_id: "", drilling_contractor: "" });
               setShowHoleModal(true);
             }}
           >Add New Core</button>
@@ -365,7 +364,7 @@ export default function AdminPage() {
                       <td className="font-medium">{h.hole_id}</td>
                       <td>{h.depth}</td>
                       <td className="hidden md:table-cell">{h.drilling_diameter}</td>
-                      <td className="hidden md:table-cell">{h.project_name}</td>
+                      <td className="hidden md:table-cell">{h.projects?.name || ''}</td>
                       <td className="hidden md:table-cell">{h.drilling_contractor}</td>
                       <td className="hidden md:table-cell">
                         <div className="flex gap-2">
@@ -378,7 +377,7 @@ export default function AdminPage() {
                                 hole_id: h.hole_id || "",
                                 depth: h.depth ?? "",
                                 drilling_diameter: h.drilling_diameter || "",
-                                project_name: h.project_name || "",
+                                project_id: h.project_id || "",
                                 drilling_contractor: h.drilling_contractor || "",
                               });
                               setShowHoleModal(true);
@@ -508,7 +507,7 @@ export default function AdminPage() {
                         <th>hole_id</th>
                         <th>depth</th>
                         <th>drilling_diameter</th>
-                        <th>project_name</th>
+                        <th>project_id</th>
                         <th>drilling_contractor</th>
                       </tr>
                     </thead>
@@ -518,7 +517,7 @@ export default function AdminPage() {
                           <td>{r.hole_id}</td>
                           <td>{r.depth}</td>
                           <td>{r.drilling_diameter}</td>
-                          <td>{r.project_name}</td>
+                          <td>{r.project_id}</td>
                           <td>{r.drilling_contractor}</td>
                         </tr>
                       ))}
@@ -540,7 +539,7 @@ export default function AdminPage() {
                 {importing ? "Importing…" : "Import"}
               </button>
               <button type="button" className="btn" onClick={() => { setBulkText(""); setParsed([]); }}>Clear</button>
-              <div className="text-xs text-gray-600 ml-auto">Required column: hole_id. Optional: depth, drilling_diameter, project_name, drilling_contractor.</div>
+              <div className="text-xs text-gray-600 ml-auto">Required column: hole_id. Optional: depth, drilling_diameter, project_id, drilling_contractor.</div>
             </div>
           </div>
         </div>
@@ -572,8 +571,8 @@ export default function AdminPage() {
                   <option value="Other">Other</option>
                 </select>
               </label>
-              <label className="block text-sm">Project Name
-                <input type="text" name="project_name" value={single.project_name} onChange={onChangeSingle} className="input" />
+              <label className="block text-sm">Project
+                <ProjectSelect supabase={supabase} organizationId={selectedOrgId} value={single.project_id} onChange={(v) => setSingle(s => ({...s, project_id: v}))} />
               </label>
               <label className="block text-sm">Drilling Contractor
                 <input type="text" name="drilling_contractor" value={single.drilling_contractor} onChange={onChangeSingle} className="input" />
@@ -594,7 +593,7 @@ export default function AdminPage() {
                   className="btn"
                   onClick={() => {
                     setEditingId(null);
-                    setSingle({ hole_id: '', depth: '', drilling_diameter: '', project_name: '', drilling_contractor: '' });
+                    setSingle({ hole_id: '', depth: '', drilling_diameter: '', project_id: '', drilling_contractor: '' });
                   }}
                 >New</button>
               )}
@@ -604,5 +603,27 @@ export default function AdminPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// Helper component for selecting project
+function ProjectSelect({ supabase, organizationId, value, onChange }) {
+  const [projects, setProjects] = useState([]);
+  useEffect(() => {
+    if (!organizationId) { setProjects([]); return; }
+    (async () => {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('id,name')
+        .eq('organization_id', organizationId)
+        .order('name');
+      if (!error) setProjects(data || []);
+    })();
+  }, [organizationId, supabase]);
+  return (
+    <select className="select-gradient-sm" value={value || ''} onChange={e => onChange(e.target.value || null)}>
+      <option value="">Select…</option>
+      {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+    </select>
   );
 }

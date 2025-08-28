@@ -465,11 +465,8 @@ export default function ConsumablesPage() {
                           <span className="block truncate max-w-[140px] md:max-w-none leading-snug">{it.label}</span>
                         )}
                       </td>
-                      {/* Include checkbox removed */}
+                      {/* Reorder threshold (desktop only) */}
                       <td className="align-middle py-1 hidden md:table-cell text-center">
-                        <td className="align-middle py-1 hidden md:table-cell">
-                          <span className="text-xs">{it.unit_size || 1}</span>
-                        </td>
                         {isAdmin ? (
                           <input
                             type="number"
@@ -487,6 +484,10 @@ export default function ConsumablesPage() {
                         ) : (
                           <span>{it.reorder_value ?? 0}</span>
                         )}
+                      </td>
+                      {/* Unit size (desktop only) */}
+                      <td className="align-middle py-1 hidden md:table-cell">
+                        <span className="text-xs">{it.unit_size || 1}</span>
                       </td>
                       <td className="align-middle py-1">
                         <input

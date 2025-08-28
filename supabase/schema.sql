@@ -162,13 +162,62 @@ create trigger trg_on_org_created
 after insert on public.organizations
 for each row execute function public.on_org_created();
 
+-- ============================================================
+-- Projects (per-organization) managed by org members
+-- ============================================================
+create table if not exists public.projects (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null,
+  start_date date,
+  finish_date date,
+  cost_code text,
+  wbs_code text,
+  created_by uuid not null default auth.uid() references auth.users(id) on delete set null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- Avoid duplicate project names within the same organization
+create unique index if not exists uniq_projects_org_name on public.projects(organization_id, lower(name));
+create index if not exists idx_projects_org on public.projects(organization_id);
+
+alter table public.projects enable row level security;
+
+drop policy if exists "read projects (org)" on public.projects;
+drop policy if exists "write projects (org)" on public.projects;
+create policy "read projects (org)" on public.projects for select using (
+  public.is_current_org_member(organization_id)
+);
+create policy "write projects (org)" on public.projects for all using (
+  public.is_current_org_member(organization_id)
+) with check (
+  public.is_current_org_member(organization_id)
+);
+
+-- Touch updated_at on change
+create or replace function public.touch_projects_updated_at()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  new.updated_at := now();
+  return new;
+end; $$;
+
+drop trigger if exists trg_touch_projects on public.projects;
+create trigger trg_touch_projects
+before update on public.projects
+for each row execute function public.touch_projects_updated_at();
+
+-- Backfill / add project_id reference on holes (nullable for legacy)
+alter table public.holes add column if not exists project_id uuid references public.projects(id) on delete set null;
+create index if not exists idx_holes_project on public.holes(project_id);
+
 -- Holes
 create table if not exists public.holes (
   id uuid primary key default gen_random_uuid(),
   hole_id text not null,
   depth numeric,
   drilling_diameter text,
-  project_name text,
   drilling_contractor text,
   created_at timestamptz default now(),
   created_by uuid not null default auth.uid() references auth.users(id)
@@ -177,6 +226,42 @@ create table if not exists public.holes (
 -- Associate holes to an organization (nullable for legacy rows)
 alter table public.holes add column if not exists organization_id uuid references public.organizations(id) on delete cascade;
 create index if not exists idx_holes_org on public.holes(organization_id);
+
+-- ============================================================
+-- MIGRATION: Backfill legacy project_name values into projects & set project_id
+-- Then drop deprecated project_name column.
+-- Safe to run multiple times (idempotent via ON CONFLICT / IF EXISTS checks).
+-- ============================================================
+do $$
+begin
+  -- 1. Insert distinct legacy project names into projects per organization
+  with legacy as (
+    select distinct organization_id, trim(project_name) as name
+    from public.holes
+    where project_name is not null and project_name <> '' and organization_id is not null
+  )
+  insert into public.projects(organization_id, name, created_by)
+  select l.organization_id, l.name,
+         coalesce((select owner_id from public.organizations o where o.id = l.organization_id), auth.uid())
+  from legacy l
+  on conflict do nothing;
+
+  -- 2. Update holes.project_id where missing
+  update public.holes h
+  set project_id = p.id
+  from public.projects p
+  where h.project_id is null
+    and h.organization_id = p.organization_id
+    and h.project_name is not null
+    and h.project_name <> ''
+    and lower(p.name) = lower(h.project_name);
+exception when others then
+  -- Swallow errors so migration doesn't block (e.g., lack of perms in some contexts)
+  perform 1;
+end$$;
+
+-- 3. Drop deprecated column (after backfill). Keep conditional so re-runs succeed.
+alter table public.holes drop column if exists project_name;
 
 -- Constrain drilling_diameter to common sizes (allow null)
 do $$ begin
