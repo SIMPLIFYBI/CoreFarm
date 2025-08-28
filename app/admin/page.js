@@ -201,15 +201,15 @@ export default function AdminPage() {
     const rows = parsed.length ? parsed : parseTable(bulkText);
     if (!rows.length) return toast.error("No rows found");
     // Expect headers matching keys
-    const allowed = ["hole_id", "depth", "drilling_diameter", "project_id", "drilling_contractor"]; // project_id instead of project_name
+    const allowed = ["hole_id", "depth", "drilling_diameter"]; // simplified: no project_id or contractor via bulk upload
     const invalid = Object.keys(rows[0]).filter((k) => !allowed.includes(k));
     if (invalid.length) return toast.error(`Unexpected headers: ${invalid.join(", ")}`);
     const payloads = rows.map((r) => ({
       hole_id: String(r.hole_id || "").trim(),
       depth: (() => { const n = Number(r.depth); return r.depth === "" || r.depth == null || !Number.isFinite(n) ? null : n; })(),
       drilling_diameter: r.drilling_diameter || null,
-      project_id: r.project_id || null,
-      drilling_contractor: r.drilling_contractor || null,
+      project_id: null,
+      drilling_contractor: null,
       organization_id: selectedOrgId || null,
     })).filter((p) => p.hole_id);
     if (!payloads.length) return toast.error("No valid rows (missing hole_id)");
@@ -288,9 +288,9 @@ export default function AdminPage() {
   };
 
   const sampleHeaders = useMemo(() => (
-    "hole_id,depth,drilling_diameter,project_id,drilling_contractor\n" +
-    "HOLE-001,150,NQ,<project uuid>,Contractor X\n" +
-    "HOLE-002,220,HQ,<project uuid>,Contractor Y\n"
+    "hole_id,depth,drilling_diameter\n" +
+    "HOLE-001,150,NQ\n" +
+    "HOLE-002,220,HQ\n"
   ), []);
 
   return (
@@ -308,7 +308,7 @@ export default function AdminPage() {
       {/* Bulk upload: hidden on mobile, available on desktop */}
       <section className="space-y-3 hidden md:block">
         <h2 className="text-xl font-medium">Bulk upload</h2>
-        <p className="text-sm text-gray-600">Paste CSV/TSV from Excel with headers: hole_id, depth, drilling_diameter, project_id, drilling_contractor</p>
+        <p className="text-sm text-gray-600">Paste CSV/TSV from Excel with headers: hole_id, depth, drilling_diameter</p>
         <div>
           <button type="button" onClick={() => { setShowBulk(true); setParsed([]); }} className="btn btn-primary">Open bulk uploader</button>
         </div>
@@ -507,8 +507,6 @@ export default function AdminPage() {
                         <th>hole_id</th>
                         <th>depth</th>
                         <th>drilling_diameter</th>
-                        <th>project_id</th>
-                        <th>drilling_contractor</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -517,12 +515,10 @@ export default function AdminPage() {
                           <td>{r.hole_id}</td>
                           <td>{r.depth}</td>
                           <td>{r.drilling_diameter}</td>
-                          <td>{r.project_id}</td>
-                          <td>{r.drilling_contractor}</td>
                         </tr>
                       ))}
                       {parsed.length === 0 && (
-                        <tr><td colSpan={5} className="text-center text-sm text-gray-500">Paste data to preview</td></tr>
+                        <tr><td colSpan={3} className="text-center text-sm text-gray-500">Paste data to preview</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -539,7 +535,7 @@ export default function AdminPage() {
                 {importing ? "Importing…" : "Import"}
               </button>
               <button type="button" className="btn" onClick={() => { setBulkText(""); setParsed([]); }}>Clear</button>
-              <div className="text-xs text-gray-600 ml-auto">Required column: hole_id. Optional: depth, drilling_diameter, project_id, drilling_contractor.</div>
+              <div className="text-xs text-gray-600 ml-auto">Required column: hole_id. Optional: depth, drilling_diameter.</div>
             </div>
           </div>
         </div>

@@ -4,7 +4,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
-import { IconCore, IconAdmin, IconTeam, IconUser, IconLogout, IconLogin, IconReport, IconClipboard } from "../components/icons";
+import { IconCore, IconAdmin, IconTeam, IconUser, IconLogin, IconReport, IconClipboard } from "../components/icons";
 
 export default function Header() {
   const supabase = supabaseBrowser();
@@ -42,10 +42,7 @@ export default function Header() {
     return m?.organizations?.name || null;
   })();
 
-  const onSignOut = async () => {
-    await supabase.auth.signOut();
-  router.push("/");
-  };
+  // Sign out now handled at bottom of Team page
 
   return (
     <header className="border-b bg-gradient-to-r from-indigo-50 via-indigo-100 to-purple-50 md:sticky md:top-0 md:z-40 backdrop-blur supports-[backdrop-filter]:bg-white/70">
@@ -58,11 +55,11 @@ export default function Header() {
           <nav className="hidden md:flex gap-2 text-sm">
             {[ 
               { href: "/user", label: "Dashboard", icon: IconReport },
-              { href: "/projects", label: "Projects", icon: IconClipboard },
               { href: "/core", label: "Logging", icon: IconAdmin },
               { href: "/addcore", label: "Add Core", icon: IconCore },
-              { href: "/team", label: "Team", icon: IconTeam },
               { href: "/consumables", label: "Consumables", icon: IconCore },
+              { href: "/projects", label: "Projects", icon: IconClipboard },
+              { href: "/team", label: "Team", icon: IconTeam },
             ].map((t) => {
               const active = pathname?.startsWith(t.href);
               const Icon = t.icon;
@@ -90,11 +87,7 @@ export default function Header() {
               {currentOrgName}
             </span>
           )}
-          {email ? (
-            <button onClick={onSignOut} className="btn" aria-label="Sign out" title="Sign out">
-              <IconLogout />
-            </button>
-          ) : (
+          {!email && (
             <Link href="/" className="btn">
               <IconLogin /> Sign in
             </Link>

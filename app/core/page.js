@@ -50,7 +50,7 @@ export default function CorePage() {
   const projects = useMemo(() => {
     const set = new Set();
     (holes || []).forEach((h) => {
-      if (h.project_name) set.add(h.project_name);
+      if (h.projects?.name) set.add(h.projects.name);
     });
     return Array.from(set).sort();
   }, [holes]);
@@ -66,7 +66,7 @@ export default function CorePage() {
   };
 
   const filteredHoles = useMemo(() => {
-    const byProject = !selectedProject ? holes : (holes || []).filter(h => h.project_name === selectedProject);
+    const byProject = !selectedProject ? holes : (holes || []).filter(h => h.projects?.name === selectedProject);
     const active = holeFilters || [];
     if (active.length === 0 || active.length === 3) return byProject; // all
     return byProject.filter(h => active.includes(classifyHole(h)));
@@ -107,7 +107,7 @@ export default function CorePage() {
     (async () => {
       const { data: holesData } = await supabase
         .from("holes")
-        .select("id, hole_id, depth, project_name")
+        .select("id, hole_id, depth, project_id, projects(name)")
         .eq('organization_id', orgId);
       setHoles(holesData || []);
       const ids = (holesData || []).map((h) => h.id);

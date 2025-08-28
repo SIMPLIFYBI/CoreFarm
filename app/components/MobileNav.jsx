@@ -3,14 +3,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { IconCore, IconAdmin, IconTeam, IconUser, IconReport, IconClipboard } from "./icons";
 
-const tabs = [
-  { href: "/user", label: "Dashboard", icon: IconReport },
-  { href: "/projects", label: "Projects", icon: IconClipboard },
-  { href: "/core", label: "Logging", icon: IconAdmin },
-  { href: "/addcore", label: "Add Core", icon: IconCore },
-  { href: "/team", label: "Team", icon: IconTeam },
-  { href: "/consumables", label: "Consumables", icon: IconCore },
-];
+  const tabs = [
+    { href: "/user", label: "Dashboard", icon: IconReport },
+    { href: "/core", label: "Logging", icon: IconAdmin },
+    { href: "/addcore", label: "Add Core", icon: IconCore },
+    { href: "/consumables", label: "Consumables", icon: IconCore },
+    { href: "/projects", label: "Projects", icon: IconClipboard },
+    { href: "/team", label: "Team", icon: IconTeam },
+  ];
 
 export default function MobileNav() {
   const pathname = usePathname();

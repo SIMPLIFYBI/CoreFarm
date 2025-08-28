@@ -208,11 +208,7 @@ create trigger trg_touch_projects
 before update on public.projects
 for each row execute function public.touch_projects_updated_at();
 
--- Backfill / add project_id reference on holes (nullable for legacy)
-alter table public.holes add column if not exists project_id uuid references public.projects(id) on delete set null;
-create index if not exists idx_holes_project on public.holes(project_id);
-
--- Holes
+-- Holes (base table first to avoid ordering issues for subsequent ALTERs)
 create table if not exists public.holes (
   id uuid primary key default gen_random_uuid(),
   hole_id text not null,
@@ -223,9 +219,16 @@ create table if not exists public.holes (
   created_by uuid not null default auth.uid() references auth.users(id)
 );
 
--- Associate holes to an organization (nullable for legacy rows)
+-- Add missing columns / FKs idempotently
 alter table public.holes add column if not exists organization_id uuid references public.organizations(id) on delete cascade;
+alter table public.holes add column if not exists project_id uuid references public.projects(id) on delete set null;
+
+-- Indexes (idempotent)
 create index if not exists idx_holes_org on public.holes(organization_id);
+create index if not exists idx_holes_project on public.holes(project_id);
+
+-- Enforce uniqueness of hole identifier per organization (case-insensitive)
+create unique index if not exists uniq_holes_org_hole_id on public.holes(organization_id, lower(hole_id));
 
 -- ============================================================
 -- MIGRATION: Backfill legacy project_name values into projects & set project_id
