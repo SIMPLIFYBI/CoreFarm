@@ -43,7 +43,7 @@ export default function HomePage() {
       const email = (session.user.email || "").toLowerCase();
       const { data: invs, error } = await supabase
         .from("organization_invites")
-        .select("id, organization_id, role, email, status, organizations(name)")
+        .select("id, organization_id, role, email, status, invited_by, organizations(name), inviter:invited_by(email)")
         .eq("email", email)
         .eq("status", "pending");
       if (error) {
@@ -185,23 +185,30 @@ export default function HomePage() {
           </div>
         )}
         {session?.user && invites.length > 0 && (
-          <div className="mb-5 bg-amber-50 border border-amber-200 rounded p-3 text-sm">
-            <div className="font-medium mb-2">You have pending invites</div>
+          <div className="mb-5 rounded p-4 text-sm bg-gradient-to-r from-indigo-50 via-white to-purple-50 border border-indigo-100 shadow-sm">
+            <div className="font-medium mb-3 flex items-center gap-2">
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 text-white text-[10px] font-semibold">INV</span>
+              <span>You have pending invites</span>
+            </div>
             <ul className="space-y-2">
-              {invites.map((inv) => (
-                <li key={inv.id} className="flex items-center justify-between">
-                  <span>
-                    {inv.organizations?.name || inv.organization_id} — role: {inv.role}
-                  </span>
-                  <button className="btn text-xs" onClick={() => acceptInvite(inv)}>
-                    Accept
-                  </button>
-                </li>
-              ))}
+              {invites.map((inv) => {
+                const inviterEmail = inv.inviter?.email || inv.invited_by || '';
+                return (
+                  <li key={inv.id} className="flex items-center justify-between gap-3 bg-white/60 rounded px-3 py-2 border border-indigo-100">
+                    <div className="flex flex-col truncate">
+                      <span className="font-medium truncate">{inv.organizations?.name || inv.organization_id}</span>
+                      <span className="text-[11px] text-gray-600 truncate">Role: {inv.role}{inviterEmail && ` • Invited by ${inviterEmail}`}</span>
+                    </div>
+                    <button className="btn btn-primary btn-gradient text-xs" onClick={() => acceptInvite(inv)}>
+                      Accept
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
-            <div className="mt-3 flex gap-2">
+            <div className="mt-4 flex gap-2">
               <button className="btn text-xs" onClick={goTeam}>Manage in Team</button>
-              <button className="btn text-xs" onClick={() => router.replace("/user")}>Skip for now</button>
+              <button className="btn text-xs" onClick={() => router.replace('/user')}>Skip for now</button>
             </div>
           </div>
         )}

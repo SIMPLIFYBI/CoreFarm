@@ -19,20 +19,31 @@ export function OrgProvider({ children }) {
   const [orgId, _setOrgId] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // Load user and any persisted org selection
+  // Load user (initial) and listen for auth state changes; restore persisted org selection
   useEffect(() => {
+    let active = true;
     (async () => {
       const { data } = await supabase.auth.getUser();
+      if (!active) return;
       setUser(data?.user || null);
       try {
         const stored = typeof window !== 'undefined' ? window.localStorage.getItem('cf_org_id') : null;
         if (stored) _setOrgId(stored);
       } catch (_) { /* ignore storage errors */ }
     })();
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      setUser(session?.user || null);
+    });
+    return () => { active = false; sub?.subscription?.unsubscribe?.(); };
   }, [supabase]);
 
   const loadMemberships = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      // No signed-in user: clear memberships and stop loading so UI can react (e.g., show sign-in prompt)
+      setMemberships([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const { data: ms, error } = await supabase
@@ -54,7 +65,16 @@ export function OrgProvider({ children }) {
     }
   }, [user, supabase, orgId]);
 
+  // Reload memberships whenever the derived callback (and thus its user dep) changes
   useEffect(() => { loadMemberships(); }, [loadMemberships]);
+
+  // When user logs out, clear org selection to avoid stale orgId blocking future membership auto-select
+  useEffect(() => {
+    if (!user) {
+      _setOrgId('');
+      try { window.localStorage.removeItem('cf_org_id'); } catch(_) {}
+    }
+  }, [user]);
 
   // Wrapped setter persists to localStorage
   const setOrgId = (val) => {
