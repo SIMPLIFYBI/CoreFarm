@@ -444,7 +444,6 @@ export default function ConsumablesPage() {
                     <th className="text-xs md:text-sm">Item</th>
                     <th className="w-24 text-center text-[10px] md:text-xs hidden md:table-cell">Reorder @</th>
                     <th className="md:w-28 text-xs md:text-sm">Count</th>
-                      <th className="md:w-20 text-xs md:text-sm hidden md:table-cell">Unit Size</th>
                       <th className="md:w-24 text-xs md:text-sm">Status</th>
                       <th className="md:w-40 text-xs md:text-sm">Actions</th>
                     {isAdmin && <th className="w-10 hidden md:table-cell" />}
@@ -484,10 +483,6 @@ export default function ConsumablesPage() {
                         ) : (
                           <span>{it.reorder_value ?? 0}</span>
                         )}
-                      </td>
-                      {/* Unit size (desktop only) */}
-                      <td className="align-middle py-1 hidden md:table-cell">
-                        <span className="text-xs">{it.unit_size || 1}</span>
                       </td>
                       <td className="align-middle py-1">
                         <input
