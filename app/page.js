@@ -265,10 +265,7 @@ export default function HomePage() {
           <p>
             After creating an account and verifying your email, you’ll be able to join your existing company or start a new one.
           </p>
-          <div className="flex gap-2">
-            <button className="btn" onClick={goTeam}>Go to Team</button>
-            <a className="btn" href="/auth">Use magic link</a>
-          </div>
+          {/* Removed legacy quick navigation buttons (Go to Team / Use magic link) to streamline onboarding */}
         </div>
       </div>
     </div>
