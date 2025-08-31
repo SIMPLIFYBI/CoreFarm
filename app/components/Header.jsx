@@ -4,7 +4,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
-import { IconCore, IconAdmin, IconTeam, IconUser, IconLogin, IconReport, IconClipboard } from "../components/icons";
+import { IconCore, IconAdmin, IconTeam, IconUser, IconLogin, IconReport, IconClipboard, IconCoreTasks } from "../components/icons";
 
 export default function Header() {
   const supabase = supabaseBrowser();
@@ -53,10 +53,9 @@ export default function Header() {
             <span className="hidden sm:block">CoreFarm</span>
           </Link>
           <nav className="hidden md:flex gap-2 text-sm">
-            {[ 
+            {[
               { href: "/user", label: "Dashboard", icon: IconReport },
-              { href: "/core", label: "Logging", icon: IconAdmin },
-              { href: "/addcore", label: "Add Core", icon: IconCore },
+              { href: "/coretasks", label: "Core Tasks", icon: IconCoreTasks },
               { href: "/consumables", label: "Consumables", icon: IconCore },
               { href: "/projects", label: "Projects", icon: IconClipboard },
               { href: "/team", label: "Team", icon: IconTeam },
@@ -83,8 +82,10 @@ export default function Header() {
         </div>
         <div className="text-sm flex items-center gap-3">
           {currentOrgName && (
-            <span
-              className="inline-flex flex-col justify-center h-8 px-2 rounded-md bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm border border-white/20 max-w-[160px] overflow-hidden"
+            <button
+              type="button"
+              onClick={() => router.push("/team")}
+              className="inline-flex flex-col justify-center h-8 px-2 rounded-md bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm border border-white/20 max-w-[160px] overflow-hidden focus:outline-none focus:ring-2 focus:ring-indigo-400"
               title={`${currentOrgName}${email ? ' — ' + email : ''}`}
             >
               <span className="text-[10px] leading-tight font-medium truncate">
@@ -95,7 +96,7 @@ export default function Header() {
                   {email}
                 </span>
               )}
-            </span>
+            </button>
           )}
           {!email && (
             <Link href="/" className="btn">

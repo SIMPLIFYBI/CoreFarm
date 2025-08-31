@@ -1,8 +1,11 @@
 "use client";
 import { useEffect, useMemo, useState, Fragment } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
+import { useOrg } from "@/lib/OrgContext";
 import toast from "react-hot-toast";
 import { parseTable } from "@/lib/parseTable";
+
+export default function AdminPage() {
 
 const TASK_TYPES = [
   "orientation",
@@ -13,14 +16,12 @@ const TASK_TYPES = [
   "specific_gravity",
 ];
 
-export default function AdminPage() {
   const supabase = supabaseBrowser();
+  const { orgId } = useOrg();
   const [holes, setHoles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState(null);
   const [user, setUser] = useState(null);
-  const [memberships, setMemberships] = useState([]); // {organization_id, organizations: {name}, role}
-  const [selectedOrgId, setSelectedOrgId] = useState("");
   const [savingHole, setSavingHole] = useState(false);
   const [single, setSingle] = useState({
     hole_id: "",
@@ -61,7 +62,7 @@ export default function AdminPage() {
     selectHole(h);
   };
 
-  // Load user and memberships; holes are loaded when org is selected
+  // Load user
   useEffect(() => {
     let sub;
     (async () => {
@@ -69,16 +70,6 @@ export default function AdminPage() {
       setUser(userData?.user || null);
       const { data: s } = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user || null));
       sub = s?.subscription;
-      // Load memberships to pick an org context
-      const { data: ms, error: mErr } = await supabase
-        .from("organization_members")
-        .select("organization_id, role, organizations(name)")
-        .eq("user_id", userData?.user?.id);
-      if (mErr) {
-        toast.error("Could not load organizations");
-      }
-      setMemberships(ms || []);
-      if ((ms || []).length > 0) setSelectedOrgId(ms[0].organization_id);
       setLoading(false); // initial UI ready; holes load on org change
     })();
     return () => {
@@ -86,18 +77,18 @@ export default function AdminPage() {
     };
   }, [supabase]);
 
-  // Load holes for selected org
+  // Load holes for current org from context
   useEffect(() => {
-    if (!selectedOrgId) {
+    if (!orgId) {
       setHoles([]);
       return;
     }
+    setLoading(true);
     (async () => {
-      setLoading(true);
       const { data, error } = await supabase
         .from("holes")
         .select("id, hole_id, depth, drilling_diameter, project_id, drilling_contractor, created_at, organization_id, projects(name)")
-        .eq("organization_id", selectedOrgId)
+        .eq("organization_id", orgId)
         .order("created_at", { ascending: false });
       if (error) {
         toast.error(error.message);
@@ -107,7 +98,7 @@ export default function AdminPage() {
       }
       setLoading(false);
     })();
-  }, [selectedOrgId, supabase]);
+  }, [orgId, supabase]);
 
   // When selecting a hole, load its intervals only (don't override form while editing)
   useEffect(() => {
@@ -156,7 +147,7 @@ export default function AdminPage() {
         drilling_diameter: single.drilling_diameter || null,
         project_id: single.project_id || null,
         drilling_contractor: single.drilling_contractor || null,
-        organization_id: selectedOrgId || null,
+        organization_id: orgId || null,
       };
       setSavingHole(true);
       let res;
@@ -176,7 +167,7 @@ export default function AdminPage() {
       const { data, error } = await supabase
         .from("holes")
         .select("id, hole_id, depth, drilling_diameter, project_id, drilling_contractor, created_at, organization_id, projects(name)")
-        .eq("organization_id", selectedOrgId)
+        .eq("organization_id", orgId)
         .order("created_at", { ascending: false });
       if (error) {
         // Fallback optimistic update
@@ -210,7 +201,7 @@ export default function AdminPage() {
       drilling_diameter: r.drilling_diameter || null,
       project_id: null,
       drilling_contractor: null,
-      organization_id: selectedOrgId || null,
+      organization_id: orgId || null,
     })).filter((p) => p.hole_id);
     if (!payloads.length) return toast.error("No valid rows (missing hole_id)");
     setImporting(true);
@@ -224,7 +215,7 @@ export default function AdminPage() {
     const { data } = await supabase
       .from("holes")
       .select("id, hole_id, depth, drilling_diameter, project_id, drilling_contractor, created_at, organization_id, projects(name)")
-      .eq("organization_id", selectedOrgId)
+      .eq("organization_id", orgId)
       .order("created_at", { ascending: false });
     setHoles(data || []);
   };
@@ -293,8 +284,9 @@ export default function AdminPage() {
     "HOLE-002,220,HQ\n"
   ), []);
 
+  // ...existing code...
   return (
-  <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-8">
+    <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-8">
   <h1 className="text-2xl font-semibold">Add Holes / Tasks</h1>
   {/* Organization pill removed (header now shows active organization) */}
       {!user && (
@@ -568,7 +560,7 @@ export default function AdminPage() {
                 </select>
               </label>
               <label className="block text-sm">Project
-                <ProjectSelect supabase={supabase} organizationId={selectedOrgId} value={single.project_id} onChange={(v) => setSingle(s => ({...s, project_id: v}))} />
+                <ProjectSelect supabase={supabase} organizationId={orgId} value={single.project_id} onChange={(v) => setSingle(s => ({...s, project_id: v}))} />
               </label>
               <label className="block text-sm">Drilling Contractor
                 <input type="text" name="drilling_contractor" value={single.drilling_contractor} onChange={onChangeSingle} className="input" />
@@ -601,6 +593,7 @@ export default function AdminPage() {
     </div>
   );
 }
+
 
 // Helper component for selecting project
 function ProjectSelect({ supabase, organizationId, value, onChange }) {

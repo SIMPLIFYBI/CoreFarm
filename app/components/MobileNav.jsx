@@ -1,12 +1,11 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { IconCore, IconAdmin, IconTeam, IconUser, IconReport, IconClipboard } from "./icons";
+import { IconCore, IconAdmin, IconTeam, IconUser, IconReport, IconClipboard, IconCoreTasks } from "./icons";
 
   const tabs = [
     { href: "/user", label: "Dashboard", icon: IconReport },
-    { href: "/core", label: "Logging", icon: IconAdmin },
-    { href: "/addcore", label: "Add Core", icon: IconCore },
+    { href: "/coretasks", label: "Core Tasks", icon: IconCoreTasks },
     { href: "/consumables", label: "Consumables", icon: IconCore },
     { href: "/projects", label: "Projects", icon: IconClipboard },
     { href: "/team", label: "Team", icon: IconTeam },

@@ -74,3 +74,15 @@ export function IconClipboard(props) {
     </svg>
   );
 }
+
+export function IconCoreTasks(props) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="4" stroke="currentColor" strokeWidth="1.8"/>
+      <path d="M7 12h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+      <path d="M12 7v10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+      <circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="1.2" fill="none"/>
+      <path d="M9 15l6-6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+    </svg>
+  );
+}
