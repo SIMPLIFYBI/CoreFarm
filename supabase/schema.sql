@@ -166,6 +166,91 @@ for each row execute function public.on_org_created();
 -- Projects (per-organization) managed by org members
 -- ============================================================
 create table if not exists public.projects (
+);
+
+-- ============================================================
+-- Asset Tracking: Locations, Assets, Asset History
+-- ============================================================
+
+-- Locations (organization-specific)
+create table if not exists public.locations (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null,
+  description text,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_locations_org on public.locations(organization_id);
+
+alter table public.locations enable row level security;
+drop policy if exists "read locations (org)" on public.locations;
+drop policy if exists "write locations (org)" on public.locations;
+create policy "read locations (org)" on public.locations for select using (
+  public.is_current_org_member(organization_id)
+);
+create policy "write locations (org)" on public.locations for all using (
+  public.is_current_org_member(organization_id)
+) with check (
+  public.is_current_org_member(organization_id)
+);
+
+-- Assets
+create table if not exists public.assets (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null,
+  asset_type text not null, -- e.g. 'Vehicle', 'Laptop', etc.
+  value numeric,
+  location_id uuid references public.locations(id) on delete set null,
+  next_service_date date,
+  service_interval_months integer,
+  status text, -- e.g. 'active', 'needs service', 'overdue'
+  updated_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz default now()
+);
+
+create index if not exists idx_assets_org on public.assets(organization_id);
+create index if not exists idx_assets_location on public.assets(location_id);
+
+alter table public.assets enable row level security;
+drop policy if exists "read assets (org)" on public.assets;
+drop policy if exists "write assets (org)" on public.assets;
+create policy "read assets (org)" on public.assets for select using (
+  public.is_current_org_member(organization_id)
+);
+create policy "write assets (org)" on public.assets for all using (
+  public.is_current_org_member(organization_id)
+) with check (
+  public.is_current_org_member(organization_id)
+);
+
+-- Asset History
+create table if not exists public.asset_history (
+  id uuid primary key default gen_random_uuid(),
+  asset_id uuid not null references public.assets(id) on delete cascade,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  changed_by uuid references auth.users(id) on delete set null,
+  change_type text, -- e.g. 'created', 'updated', 'deleted'
+  change_details jsonb,
+  changed_at timestamptz default now()
+);
+
+create index if not exists idx_asset_history_org on public.asset_history(organization_id);
+create index if not exists idx_asset_history_asset on public.asset_history(asset_id);
+
+alter table public.asset_history enable row level security;
+drop policy if exists "read asset history (org)" on public.asset_history;
+drop policy if exists "write asset history (org)" on public.asset_history;
+create policy "read asset history (org)" on public.asset_history for select using (
+  public.is_current_org_member(organization_id)
+);
+create policy "write asset history (org)" on public.asset_history for all using (
+  public.is_current_org_member(organization_id)
+) with check (
+  public.is_current_org_member(organization_id)
+);
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   name text not null,
