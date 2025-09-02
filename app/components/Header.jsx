@@ -4,7 +4,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
-import { IconCore, IconAdmin, IconTeam, IconUser, IconLogin, IconReport, IconClipboard, IconCoreTasks } from "../components/icons";
+import { IconCore, IconAdmin, IconTeam, IconUser, IconLogin, IconReport, IconClipboard, IconCoreTasks, AssetIcon } from "../components/icons";
 
 export default function Header() {
   const supabase = supabaseBrowser();
@@ -44,6 +44,14 @@ export default function Header() {
 
   // Sign out now handled at bottom of Team page
 
+  const navTabs = [
+  { href: "/user", label: "Dashboard", icon: IconReport },
+  { href: "/coretasks", label: "Core Tasks", icon: IconCoreTasks },
+  { href: "/consumables", label: "Consumables", icon: IconCore },
+  { href: "/projects", label: "Projects", icon: IconClipboard },
+  { href: "/assets", label: "Assets", icon: AssetIcon },
+  { href: "/team", label: "Team", icon: IconTeam },
+  ];
   return (
     <header className="border-b bg-gradient-to-r from-indigo-50 via-indigo-100 to-purple-50 md:sticky md:top-0 md:z-40 backdrop-blur supports-[backdrop-filter]:bg-white/70">
       <div className="mx-auto max-w-6xl flex items-center justify-between p-4">
@@ -53,13 +61,7 @@ export default function Header() {
             <span className="hidden sm:block">CoreFarm</span>
           </Link>
           <nav className="hidden md:flex gap-2 text-sm">
-            {[
-              { href: "/user", label: "Dashboard", icon: IconReport },
-              { href: "/coretasks", label: "Core Tasks", icon: IconCoreTasks },
-              { href: "/consumables", label: "Consumables", icon: IconCore },
-              { href: "/projects", label: "Projects", icon: IconClipboard },
-              { href: "/team", label: "Team", icon: IconTeam },
-            ].map((t) => {
+            {navTabs.map((t) => {
               const active = pathname?.startsWith(t.href);
               const Icon = t.icon;
               return (

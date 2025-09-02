@@ -1,14 +1,15 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { IconCore, IconAdmin, IconTeam, IconUser, IconReport, IconClipboard, IconCoreTasks } from "./icons";
+import { IconCore, IconAdmin, IconTeam, IconUser, IconReport, IconClipboard, IconCoreTasks, AssetIcon } from "./icons";
 
   const tabs = [
-    { href: "/user", label: "Dashboard", icon: IconReport },
-    { href: "/coretasks", label: "Core Tasks", icon: IconCoreTasks },
-    { href: "/consumables", label: "Consumables", icon: IconCore },
-    { href: "/projects", label: "Projects", icon: IconClipboard },
-    { href: "/team", label: "Team", icon: IconTeam },
+  { href: "/user", label: "Dashboard", icon: IconReport },
+  { href: "/coretasks", label: "Core Tasks", icon: IconCoreTasks },
+  { href: "/consumables", label: "Consumables", icon: IconCore },
+  { href: "/projects", label: "Projects", icon: IconClipboard },
+  { href: "/assets", label: "Assets", icon: AssetIcon },
+  { href: "/team", label: "Team", icon: IconTeam },
   ];
 
 export default function MobileNav() {

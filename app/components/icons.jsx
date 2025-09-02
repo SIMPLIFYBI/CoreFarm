@@ -1,3 +1,17 @@
+export const AssetIcon = (props) => (
+  <svg
+    viewBox="0 0 24 24"
+    xmlns="http://www.w3.org/2000/svg"
+    fill="currentColor"
+    stroke="currentColor"
+    width={props.size || 24}
+    height={props.size || 24}
+    {...props}
+  >
+    <path d="M16,6H10.5v4H1v5H3a3,3,0,0,0,6,0h6a3,3,0,0,0,6,0h2V12a2,2,0,0,0-2-2H19L16,6M12,7.5h3.5l2,2.5H12V7.5m-6,6A1.5,1.5,0,1,1,4.5,15,1.5,1.5,0,0,1,6,13.5m12,0A1.5,1.5,0,1,1,16.5,15,1.5,1.5,0,0,1,18,13.5Z"></path>
+    <rect width="24" height="24" fill="none"></rect>
+  </svg>
+);
 export function IconCore(props) {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -86,3 +100,19 @@ export function IconCoreTasks(props) {
     </svg>
   );
 }
+  export const VehicleIcon = (props) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      width={props.size || 24}
+      height={props.size || 24}
+      {...props}
+    >
+      <rect x="2" y="7" width="17" height="7" rx="2" />
+      <rect x="19" y="10" width="3" height="4" rx="1" />
+      <circle cx="7" cy="18" r="2" />
+      <circle cx="17" cy="18" r="2" />
+      <rect x="4" y="9" width="6" height="3" rx="1" />
+    </svg>
+  );
