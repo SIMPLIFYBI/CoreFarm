@@ -9,17 +9,18 @@ export const metadata = {
 export default function PreviewPage() {
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="bg-gradient-to-r from-indigo-600 to-indigo-400 text-white py-12">
+      <header className="bg-gradient-to-r from-indigo-600 to-indigo-400 text-white py-4 md:py-12">
         <div className="max-w-5xl mx-auto px-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold">CoreFarm — App preview</h1>
-            <p className="mt-2 text-indigo-100 max-w-xl">A quick visual tour — click Sign in to try the full app.</p>
+          <div className="flex-1">
+            <h1 className="hidden md:block text-3xl font-semibold">CoreFarm — App preview</h1>
+            <p className="hidden md:block mt-2 text-indigo-100 max-w-xl">A quick visual tour — click Sign in to try the full experience.</p>
+            <p className="mt-0 md:mt-4 text-lg md:text-3xl font-extrabold text-white drop-shadow-md">Take control of your field operations</p>
           </div>
           <div className="flex gap-3">
-            <Link href="/auth" className="inline-flex items-center px-4 py-2 bg-white/10 hover:bg-white/20 rounded-md text-sm font-medium">
+            <Link href="/auth" className="inline-flex items-center px-5 md:px-4 py-2 bg-white/10 hover:bg-white/20 rounded-md text-sm font-medium whitespace-nowrap">
               Sign in
             </Link>
-            <Link href="/auth?mode=signup" className="inline-flex items-center px-4 py-2 bg-white text-indigo-700 rounded-md text-sm font-medium">
+            <Link href="/auth?mode=signup" className="inline-flex items-center px-5 md:px-4 py-2 bg-white text-indigo-700 rounded-md text-sm font-medium whitespace-nowrap">
               Sign up
             </Link>
           </div>
