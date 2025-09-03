@@ -56,7 +56,7 @@ export default function Header() {
     <header className="border-b bg-gradient-to-r from-indigo-50 via-indigo-100 to-purple-50 md:sticky md:top-0 md:z-40 backdrop-blur supports-[backdrop-filter]:bg-white/70">
       <div className="mx-auto max-w-6xl flex items-center justify-between p-4">
         <div className="flex items-center gap-3">
-          <Link href="/user" className="flex items-center gap-2 text-sm font-semibold">
+          <Link href="/preview" className="flex items-center gap-2 text-sm font-semibold">
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-sm">CF</span>
             <span className="hidden sm:block">CoreFarm</span>
           </Link>

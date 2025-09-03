@@ -47,17 +47,20 @@ function AssetsTable() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editAsset, setEditAsset] = useState(null);
-  const [form, setForm] = useState({ name: "", type: "", location_id: "", status: "Active" });
+  const [form, setForm] = useState({ name: "", asset_type_id: "", location_id: "", status: "Active" });
   const [locations, setLocations] = useState([]);
+  const [assetTypes, setAssetTypes] = useState([]);
   useEffect(() => {
     const supabase = supabaseBrowser();
     setLoading(true);
     Promise.all([
-      supabase.from("assets").select("id, name, type, location_id, status, asset_locations(name)"),
-      supabase.from("asset_locations").select("id, name")
-    ]).then(([assetsRes, locRes]) => {
+      supabase.from("assets").select("id, name, asset_type_id, location_id, status, asset_types(name), asset_locations(name)"),
+      supabase.from("asset_locations").select("id, name"),
+      supabase.from("asset_types").select("id, name")
+    ]).then(([assetsRes, locRes, typesRes]) => {
       setAssets(assetsRes.data || []);
       setLocations(locRes.data || []);
+      setAssetTypes(typesRes.data || []);
       setLoading(false);
     });
   }, [showModal]);
@@ -66,10 +69,10 @@ function AssetsTable() {
     setEditAsset(asset);
     setForm(asset ? {
       name: asset.name,
-      type: asset.type,
+      asset_type_id: asset.asset_type_id || "",
       location_id: asset.location_id,
       status: asset.status
-    } : { name: "", type: "", location_id: "", status: "Active" });
+    } : { name: "", asset_type_id: "", location_id: "", status: "Active" });
     setShowModal(true);
   };
 
@@ -115,7 +118,7 @@ function AssetsTable() {
               assets.map(asset => (
                 <tr key={asset.id}>
                   <td className="px-3 py-2">{asset.name}</td>
-                  <td className="px-3 py-2">{asset.type}</td>
+                  <td className="px-3 py-2">{asset.asset_types?.name || "-"}</td>
                   <td className="px-3 py-2">{asset.asset_locations?.name || "-"}</td>
                   <td className="px-3 py-2">{asset.status}</td>
                   <td className="px-3 py-2">
@@ -134,7 +137,12 @@ function AssetsTable() {
             <h3 className="text-lg font-bold mb-4">{editAsset ? "Edit Asset" : "Add Asset"}</h3>
             <form className="space-y-3" onSubmit={e => { e.preventDefault(); handleSave(); }}>
               <input className="w-full border rounded px-3 py-2" placeholder="Name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
-              <input className="w-full border rounded px-3 py-2" placeholder="Type" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} required />
+              <select className="w-full border rounded px-3 py-2" value={form.asset_type_id} onChange={e => setForm(f => ({ ...f, asset_type_id: e.target.value }))} required>
+                <option value="">Select Asset Type</option>
+                {assetTypes.map(type => (
+                  <option key={type.id} value={type.id}>{type.name}</option>
+                ))}
+              </select>
               <select className="w-full border rounded px-3 py-2" value={form.location_id} onChange={e => setForm(f => ({ ...f, location_id: e.target.value }))} required>
                 <option value="">Select Location</option>
                 {locations.map(loc => (
@@ -184,17 +192,36 @@ function LocationsTable() {
   const handleSave = async () => {
     const supabase = supabaseBrowser();
     if (editLoc) {
-      await supabase.from("asset_locations").update(form).eq("id", editLoc.id);
+      const res = await supabase.from("asset_locations").update(form).eq("id", editLoc.id).select().single();
+      if (res.error) {
+        console.error('Failed to update location', res.error);
+        alert('Error updating location: ' + res.error.message);
+        return;
+      }
+      setLocations((prev) => prev.map(l => (l.id === res.data.id ? res.data : l)));
+      setShowModal(false);
     } else {
-      await supabase.from("asset_locations").insert([form]);
+      const res = await supabase.from("asset_locations").insert([form]).select().single();
+      if (res.error) {
+        console.error('Failed to insert location', res.error);
+        alert('Error creating location: ' + res.error.message);
+        return;
+      }
+      // Prepend new location to the list for immediate feedback
+      setLocations((prev) => [res.data, ...prev]);
+      setShowModal(false);
     }
-    setShowModal(false);
   };
 
   const handleDelete = async (id) => {
     const supabase = supabaseBrowser();
-    await supabase.from("asset_locations").delete().eq("id", id);
-    setLocations(locations.filter(l => l.id !== id));
+    const res = await supabase.from("asset_locations").delete().eq("id", id).select();
+    if (res.error) {
+      console.error('Failed to delete location', res.error);
+      alert('Error deleting location: ' + res.error.message);
+      return;
+    }
+    setLocations((prev) => prev.filter(l => l.id !== id));
   };
 
   return (
@@ -238,7 +265,7 @@ function LocationsTable() {
             <h3 className="text-lg font-bold mb-4">{editLoc ? "Edit Location" : "Add Location"}</h3>
             <form className="space-y-3" onSubmit={e => { e.preventDefault(); handleSave(); }}>
               <input className="w-full border rounded px-3 py-2" placeholder="Name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
-              <input className="w-full border rounded px-3 py-2" placeholder="Description" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} required />
+              <input className="w-full border rounded px-3 py-2" placeholder="Description (optional)" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
               <div className="flex gap-2 justify-end pt-2">
                 <button type="button" className="btn" onClick={() => setShowModal(false)}>Cancel</button>
                 <button type="submit" className="btn btn-primary">Save</button>

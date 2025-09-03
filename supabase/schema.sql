@@ -9,7 +9,7 @@ create extension if not exists btree_gist;
 create table if not exists public.organizations (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  owner_id uuid not null references auth.users(id) on delete set null,
+  owner_id uuid references auth.users(id) on delete set null,
   created_at timestamptz default now()
 );
 
@@ -162,95 +162,20 @@ create trigger trg_on_org_created
 after insert on public.organizations
 for each row execute function public.on_org_created();
 
+-- Ensure owner_id is nullable in existing DBs (idempotent)
+do $$ begin
+  begin
+    alter table public.organizations alter column owner_id drop not null;
+  exception when undefined_column then
+    -- column missing or other issue; swallow so migration stays idempotent
+    perform 1;
+  end;
+end $$;
+
 -- ============================================================
 -- Projects (per-organization) managed by org members
 -- ============================================================
 create table if not exists public.projects (
-);
-
--- ============================================================
--- Asset Tracking: Locations, Assets, Asset History
--- ============================================================
-
--- Locations (organization-specific)
-create table if not exists public.locations (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations(id) on delete cascade,
-  name text not null,
-  description text,
-  created_by uuid references auth.users(id) on delete set null,
-  created_at timestamptz default now()
-);
-
-create index if not exists idx_locations_org on public.locations(organization_id);
-
-alter table public.locations enable row level security;
-drop policy if exists "read locations (org)" on public.locations;
-drop policy if exists "write locations (org)" on public.locations;
-create policy "read locations (org)" on public.locations for select using (
-  public.is_current_org_member(organization_id)
-);
-create policy "write locations (org)" on public.locations for all using (
-  public.is_current_org_member(organization_id)
-) with check (
-  public.is_current_org_member(organization_id)
-);
-
--- Assets
-create table if not exists public.assets (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations(id) on delete cascade,
-  name text not null,
-  asset_type text not null, -- e.g. 'Vehicle', 'Laptop', etc.
-  value numeric,
-  location_id uuid references public.locations(id) on delete set null,
-  next_service_date date,
-  service_interval_months integer,
-  status text, -- e.g. 'active', 'needs service', 'overdue'
-  updated_by uuid references auth.users(id) on delete set null,
-  updated_at timestamptz default now()
-);
-
-create index if not exists idx_assets_org on public.assets(organization_id);
-create index if not exists idx_assets_location on public.assets(location_id);
-
-alter table public.assets enable row level security;
-drop policy if exists "read assets (org)" on public.assets;
-drop policy if exists "write assets (org)" on public.assets;
-create policy "read assets (org)" on public.assets for select using (
-  public.is_current_org_member(organization_id)
-);
-create policy "write assets (org)" on public.assets for all using (
-  public.is_current_org_member(organization_id)
-) with check (
-  public.is_current_org_member(organization_id)
-);
-
--- Asset History
-create table if not exists public.asset_history (
-  id uuid primary key default gen_random_uuid(),
-  asset_id uuid not null references public.assets(id) on delete cascade,
-  organization_id uuid not null references public.organizations(id) on delete cascade,
-  changed_by uuid references auth.users(id) on delete set null,
-  change_type text, -- e.g. 'created', 'updated', 'deleted'
-  change_details jsonb,
-  changed_at timestamptz default now()
-);
-
-create index if not exists idx_asset_history_org on public.asset_history(organization_id);
-create index if not exists idx_asset_history_asset on public.asset_history(asset_id);
-
-alter table public.asset_history enable row level security;
-drop policy if exists "read asset history (org)" on public.asset_history;
-drop policy if exists "write asset history (org)" on public.asset_history;
-create policy "read asset history (org)" on public.asset_history for select using (
-  public.is_current_org_member(organization_id)
-);
-create policy "write asset history (org)" on public.asset_history for all using (
-  public.is_current_org_member(organization_id)
-) with check (
-  public.is_current_org_member(organization_id)
-);
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   name text not null,
@@ -749,7 +674,6 @@ create policy "write purchase order items (org)" on public.purchase_order_items 
   public.is_current_org_member(organization_id)
 );
 
--- Optional: maintain updated_at on consumable_items
 create or replace function public.touch_updated_at()
 returns trigger language plpgsql as $$
 begin
@@ -757,8 +681,109 @@ begin
   return new;
 end; $$;
 
-drop trigger if exists trg_touch_consumable_items on public.consumable_items;
-create trigger trg_touch_consumable_items
-before update on public.consumable_items
+
+-- ============================================================
+-- Asset Types and Assets
+-- ============================================================
+
+-- Asset locations per organization
+create table if not exists public.asset_locations (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null,
+  description text,
+  created_by uuid not null default auth.uid() references auth.users(id) on delete set null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create index if not exists idx_asset_locations_org on public.asset_locations(organization_id);
+
+alter table public.asset_locations enable row level security;
+
+drop policy if exists "read asset locations (org)" on public.asset_locations;
+drop policy if exists "write asset locations (org)" on public.asset_locations;
+create policy "read asset locations (org)" on public.asset_locations for select using (
+  public.is_current_org_member(organization_id)
+);
+create policy "write asset locations (org)" on public.asset_locations for all using (
+  public.is_current_org_member(organization_id)
+) with check (
+  public.is_current_org_member(organization_id)
+);
+
+-- Touch updated_at on change for asset_locations
+do $$ begin
+  if not exists (select 1 from pg_proc where proname = 'touch_updated_at') then
+    -- touch_updated_at may exist elsewhere; rely on existing function if present
+    perform 1;
+  end if;
+end $$;
+
+drop trigger if exists trg_touch_asset_locations on public.asset_locations;
+create trigger trg_touch_asset_locations
+before update on public.asset_locations
 for each row execute function public.touch_updated_at();
+
+
+-- Asset types (global list, can be extended)
+create table if not exists public.asset_types (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  description text,
+  created_at timestamptz default now()
+);
+
+-- Assets table (reference asset_type_id)
+create table if not exists public.assets (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  asset_type_id uuid not null references public.asset_types(id) on delete restrict,
+  name text not null,
+  serial_number text,
+  location_id uuid references public.asset_locations(id) on delete set null,
+  status text not null check (status in ('Active','Inactive')) default 'Active',
+  created_by uuid not null default auth.uid() references auth.users(id) on delete set null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create index if not exists idx_assets_org on public.assets(organization_id);
+create index if not exists idx_assets_type on public.assets(asset_type_id);
+
+alter table public.assets enable row level security;
+
+drop policy if exists "read assets (org)" on public.assets;
+drop policy if exists "write assets (org)" on public.assets;
+create policy "read assets (org)" on public.assets for select using (
+  public.is_current_org_member(organization_id)
+);
+create policy "write assets (org)" on public.assets for all using (
+  public.is_current_org_member(organization_id)
+) with check (
+  public.is_current_org_member(organization_id)
+);
+
+-- Touch updated_at on change
+create or replace function public.touch_assets_updated_at()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  new.updated_at := now();
+  return new;
+end; $$;
+
+drop trigger if exists trg_touch_assets on public.assets;
+create trigger trg_touch_assets
+before update on public.assets
+for each row execute function public.touch_assets_updated_at();
+
+-- Seed initial asset types
+insert into public.asset_types (name, description) values
+  ('Laptops', 'Portable computers'),
+  ('Vehicles', 'Cars, trucks, and other vehicles'),
+  ('Plant', 'Heavy machinery and plant equipment'),
+  ('Electrical Equipment', 'Electrical devices and equipment'),
+  ('Structures', 'Buildings and structures'),
+  ('GPS', 'GPS and location devices')
+on conflict (name) do nothing;
 
