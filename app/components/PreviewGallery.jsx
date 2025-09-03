@@ -5,7 +5,7 @@ const IMAGES = [
   { src: '/demo/Dashboard.png', title: 'Projects dashboard' },
   { src: '/demo/Consumables.png', title: 'Assets inventory' },
   { src: '/demo/Holes.png', title: 'Project details / holes' },
-  { src: '/demo/placeholder-4.svg', title: 'Profile & settings' }
+  { src: '/demo/Projects.png', title: 'Profile & settings' }
 ];
 
 export default function PreviewGallery() {
