@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useEffect } from "react";
 import { supabaseBrowser } from "../../lib/supabaseClient";
+import { useOrg } from "@/lib/OrgContext";
 import { Fragment } from "react";
 import { VehicleIcon } from "../components/icons";
 
@@ -43,6 +44,7 @@ export default function AssetsPage() {
 }
 
 function AssetsTable() {
+  const { orgId } = useOrg();
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -51,11 +53,12 @@ function AssetsTable() {
   const [locations, setLocations] = useState([]);
   const [assetTypes, setAssetTypes] = useState([]);
   useEffect(() => {
+    if (!orgId) return; // wait until org selected
     const supabase = supabaseBrowser();
     setLoading(true);
     Promise.all([
-      supabase.from("assets").select("id, name, asset_type_id, location_id, status, asset_types(name), asset_locations(name)"),
-      supabase.from("asset_locations").select("id, name"),
+      supabase.from("assets").select("id, name, asset_type_id, location_id, status, asset_types(name), asset_locations(name)").eq('organization_id', orgId),
+      supabase.from("asset_locations").select("id, name").eq('organization_id', orgId),
       supabase.from("asset_types").select("id, name")
     ]).then(([assetsRes, locRes, typesRes]) => {
       setAssets(assetsRes.data || []);
@@ -63,7 +66,7 @@ function AssetsTable() {
       setAssetTypes(typesRes.data || []);
       setLoading(false);
     });
-  }, [showModal]);
+  }, [showModal, orgId]);
 
   const openModal = (asset = null) => {
     setEditAsset(asset);
@@ -78,17 +81,23 @@ function AssetsTable() {
 
   const handleSave = async () => {
     const supabase = supabaseBrowser();
+    if (!orgId) {
+      alert('Select an organization before saving assets');
+      return;
+    }
     if (editAsset) {
-      await supabase.from("assets").update(form).eq("id", editAsset.id);
+      // do not allow moving between organizations via update
+      const { organization_id, ...updateFields } = form;
+      await supabase.from("assets").update(updateFields).eq("id", editAsset.id).eq('organization_id', orgId);
     } else {
-      await supabase.from("assets").insert([form]);
+      await supabase.from("assets").insert([{ ...form, organization_id: orgId }]);
     }
     setShowModal(false);
   };
 
   const handleDelete = async (id) => {
     const supabase = supabaseBrowser();
-    await supabase.from("assets").delete().eq("id", id);
+  await supabase.from("assets").delete().eq("id", id).eq('organization_id', orgId);
     setAssets(assets.filter(a => a.id !== id));
   };
 
@@ -166,22 +175,25 @@ function AssetsTable() {
 }
 
 function LocationsTable() {
+  const { orgId } = useOrg();
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editLoc, setEditLoc] = useState(null);
   const [form, setForm] = useState({ name: "", description: "" });
   useEffect(() => {
+    if (!orgId) return;
     const supabase = supabaseBrowser();
     setLoading(true);
     supabase
       .from("asset_locations")
       .select("id, name, description")
+      .eq('organization_id', orgId)
       .then(({ data }) => {
         setLocations(data || []);
         setLoading(false);
       });
-  }, [showModal]);
+  }, [showModal, orgId]);
 
   const openModal = (loc = null) => {
     setEditLoc(loc);
@@ -191,8 +203,13 @@ function LocationsTable() {
 
   const handleSave = async () => {
     const supabase = supabaseBrowser();
+    if (!orgId) {
+      alert('Select an organization before creating locations');
+      return;
+    }
     if (editLoc) {
-      const res = await supabase.from("asset_locations").update(form).eq("id", editLoc.id).select().single();
+      const { organization_id, ...updateFields } = form;
+      const res = await supabase.from("asset_locations").update(updateFields).eq("id", editLoc.id).eq('organization_id', orgId).select().single();
       if (res.error) {
         console.error('Failed to update location', res.error);
         alert('Error updating location: ' + res.error.message);
@@ -201,7 +218,7 @@ function LocationsTable() {
       setLocations((prev) => prev.map(l => (l.id === res.data.id ? res.data : l)));
       setShowModal(false);
     } else {
-      const res = await supabase.from("asset_locations").insert([form]).select().single();
+      const res = await supabase.from("asset_locations").insert([{ ...form, organization_id: orgId }]).select().single();
       if (res.error) {
         console.error('Failed to insert location', res.error);
         alert('Error creating location: ' + res.error.message);
@@ -215,7 +232,7 @@ function LocationsTable() {
 
   const handleDelete = async (id) => {
     const supabase = supabaseBrowser();
-    const res = await supabase.from("asset_locations").delete().eq("id", id).select();
+  const res = await supabase.from("asset_locations").delete().eq("id", id).eq('organization_id', orgId).select();
     if (res.error) {
       console.error('Failed to delete location', res.error);
       alert('Error deleting location: ' + res.error.message);

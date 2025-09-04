@@ -9,29 +9,12 @@ export const metadata = {
 export default function PreviewPage() {
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="bg-gradient-to-r from-indigo-600 to-indigo-400 text-white py-4 md:py-12">
-        <div className="max-w-5xl mx-auto px-6 flex items-center justify-between">
-          <div className="flex-1">
-            <h1 className="hidden md:block text-3xl font-semibold">CoreFarm — App preview</h1>
-            <p className="hidden md:block mt-2 text-indigo-100 max-w-xl">A quick visual tour — click Sign in to try the full experience.</p>
-            <p className="mt-0 md:mt-4 text-lg md:text-3xl font-extrabold text-white drop-shadow-md">Take control of your field operations</p>
-          </div>
-          <div className="flex gap-3">
-            <Link href="/auth" className="inline-flex items-center px-5 md:px-4 py-2 bg-white/10 hover:bg-white/20 rounded-md text-sm font-medium whitespace-nowrap">
-              Sign in
-            </Link>
-            <Link href="/auth?mode=signup" className="inline-flex items-center px-5 md:px-4 py-2 bg-white text-indigo-700 rounded-md text-sm font-medium whitespace-nowrap">
-              Sign up
-            </Link>
-          </div>
-        </div>
-      </header>
 
-      <section className="max-w-5xl mx-auto px-6 py-12">
+      <section className="max-w-5xl mx-auto px-6 py-6">
         <div className="flex flex-col md:flex-row md:items-start gap-8">
-          <div className="md:w-2/3">
-            <h2 className="text-2xl font-semibold mb-3">What you'll see</h2>
-            <p className="text-slate-600 mb-6">This preview shows static screenshots of typical workflows — Projects, Assets, Profile and Maps. To interact you'll need to sign up or sign in.</p>
+          <div className="md:w-2/3 text-center">
+            <h2 className="text-2xl md:text-4xl font-semibold mb-3">Organise your exploration project</h2>
+            <p className="text-slate-600 mb-6 md:text-xl">Track you Projects, Drill holes, Assets and consumables in a centralised app</p>
             <PreviewGallery />
           </div>
 

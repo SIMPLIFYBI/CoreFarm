@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -57,8 +58,10 @@ export default function Header() {
       <div className="mx-auto max-w-6xl flex items-center justify-between p-4">
         <div className="flex items-center gap-3">
           <Link href="/preview" className="flex items-center gap-2 text-sm font-semibold">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-sm">CF</span>
-            <span className="hidden sm:block">CoreFarm</span>
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg overflow-hidden bg-white/0">
+              <Image src="/demo/SimplifyBI.png" alt="SimplifyBI" width={32} height={32} className="object-contain" />
+            </span>
+            <span className="hidden sm:block">SimplifyBI</span>
           </Link>
           <nav className="hidden md:flex gap-2 text-sm">
             {navTabs.map((t) => {

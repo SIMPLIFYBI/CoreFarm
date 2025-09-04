@@ -241,6 +241,60 @@ create index if not exists idx_holes_project on public.holes(project_id);
 create unique index if not exists uniq_holes_org_hole_id on public.holes(organization_id, lower(hole_id));
 
 -- ============================================================
+-- Tenements: each organization can have many tenements; holes may belong to a tenement
+-- ============================================================
+create table if not exists public.tenements (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  tenement_number text not null,
+  tenement_type text,
+  application_number text,
+  status text,
+  date_applied date,
+  date_granted date,
+  renewal_date date,
+  expenditure_commitment numeric,
+  heritage_agreements text,
+  created_by uuid not null default auth.uid() references auth.users(id) on delete set null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create unique index if not exists uniq_tenements_org_number on public.tenements(organization_id, lower(tenement_number));
+create index if not exists idx_tenements_org on public.tenements(organization_id);
+
+alter table public.tenements enable row level security;
+
+drop policy if exists "read tenements (org)" on public.tenements;
+drop policy if exists "write tenements (org)" on public.tenements;
+create policy "read tenements (org)" on public.tenements for select using (
+  public.is_current_org_member(organization_id)
+);
+create policy "write tenements (org)" on public.tenements for all using (
+  public.is_current_org_member(organization_id)
+) with check (
+  public.is_current_org_member(organization_id)
+);
+
+-- Touch updated_at on change for tenements
+create or replace function public.touch_tenements_updated_at()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  new.updated_at := now();
+  return new;
+end; $$;
+
+drop trigger if exists trg_touch_tenements on public.tenements;
+create trigger trg_touch_tenements
+before update on public.tenements
+for each row execute function public.touch_tenements_updated_at();
+
+-- Add tenement_id FK on holes (nullable) so holes can be associated with a tenement
+alter table public.holes add column if not exists tenement_id uuid references public.tenements(id) on delete set null;
+create index if not exists idx_holes_tenement on public.holes(tenement_id);
+
+
+-- ============================================================
 -- MIGRATION: Backfill legacy project_name values into projects & set project_id
 -- Then drop deprecated project_name column.
 -- Safe to run multiple times (idempotent via ON CONFLICT / IF EXISTS checks).
