@@ -46,7 +46,7 @@ export default function Header() {
   // Sign out now handled at bottom of Team page
 
   const navTabs = [
-  { href: "/user", label: "Dashboard", icon: IconReport },
+  { href: "/dashboard", label: "Dashboard", icon: IconReport },
   { href: "/coretasks", label: "Core Tasks", icon: IconCoreTasks },
   { href: "/consumables", label: "Consumables", icon: IconCore },
   { href: "/projects", label: "Projects", icon: IconClipboard },
@@ -57,11 +57,11 @@ export default function Header() {
     <header className="border-b bg-gradient-to-r from-indigo-50 via-indigo-100 to-purple-50 md:sticky md:top-0 md:z-40 backdrop-blur supports-[backdrop-filter]:bg-white/70">
       <div className="mx-auto max-w-6xl flex items-center justify-between p-4">
         <div className="flex items-center gap-3">
-          <Link href="/preview" className="flex items-center gap-2 text-sm font-semibold">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg overflow-hidden bg-white/0">
-              <Image src="/demo/SimplifyBI.png" alt="SimplifyBI" width={32} height={32} className="object-contain" />
+          <Link href="/home" aria-label="GeoFarm" className="flex items-center gap-2 text-sm font-semibold">
+            <span className="inline-flex h-8 items-center justify-center rounded-lg overflow-hidden bg-white/0">
+              {/* Use user's demo logo */}
+              <img src="/demo/GeoFarm.png" alt="GeoFarm" width={140} height={32} className="object-contain" />
             </span>
-            <span className="hidden sm:block">SimplifyBI</span>
           </Link>
           <nav className="hidden md:flex gap-2 text-sm">
             {navTabs.map((t) => {

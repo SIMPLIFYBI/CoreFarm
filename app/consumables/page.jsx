@@ -4,6 +4,7 @@ import { supabaseBrowser } from "@/lib/supabaseClient";
 import { DEFAULT_CONSUMABLE_ITEMS } from "@/lib/consumablesDefaults";
 import { useOrg } from "@/lib/OrgContext";
 import toast from "react-hot-toast";
+import { IconCore } from "../components/icons";
 
 // Data model (Supabase suggested tables):
 // consumable_items: { id, organization_id, key, label, count, updated_at }
@@ -405,6 +406,12 @@ export default function ConsumablesPage() {
 
   return (
   <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-6">
+      <div className="flex items-center gap-3 mb-6">
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-sm">
+          <IconCore width={28} height={28} className="text-white" />
+        </span>
+        <h1 className="text-2xl font-bold text-gray-800">Consumables</h1>
+      </div>
       <div className="flex gap-2 border-b mb-2">
         <button
           className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm ${tab === 'inventory' ? 'border-indigo-500 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}

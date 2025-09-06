@@ -48,11 +48,11 @@ export default function HomePage() {
         .eq("status", "pending");
       if (error) {
         setCheckingInvites(false);
-  return router.replace("/user");
+  return router.replace("/dashboard");
       }
       if ((invs || []).length === 0) {
         setCheckingInvites(false);
-  return router.replace("/user");
+  return router.replace("/dashboard");
       }
       setInvites(invs || []);
       setCheckingInvites(false);
@@ -113,12 +113,12 @@ export default function HomePage() {
       }
       await supabase.from("organization_invites").update({ status: "accepted" }).eq("id", inv.id);
       toast.success("You’re already a member. Invite accepted");
-  router.replace("/user");
+  router.replace("/dashboard");
       return;
     }
     await supabase.from("organization_invites").update({ status: "accepted" }).eq("id", inv.id);
     toast.success("Joined organization");
-  router.replace("/user");
+  router.replace("/dashboard");
   };
 
   const sendReset = async () => {
@@ -147,7 +147,7 @@ export default function HomePage() {
     toast.success("Password updated");
     setRecoveryMode(false);
     setNewPassword("");
-  router.replace("/user");
+  router.replace("/dashboard");
   };
 
   return (
@@ -208,7 +208,7 @@ export default function HomePage() {
             </ul>
             <div className="mt-4 flex gap-2">
               <button className="btn text-xs" onClick={goTeam}>Manage in Team</button>
-              <button className="btn text-xs" onClick={() => router.replace('/user')}>Skip for now</button>
+              <button className="btn text-xs" onClick={() => router.replace('/dashboard')}>Skip for now</button>
             </div>
           </div>
         )}

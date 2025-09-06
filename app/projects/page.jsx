@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
+import { IconClipboard } from "../components/icons";
 
 export default function ProjectsPage() {
   const supabase = supabaseBrowser();
@@ -162,7 +163,12 @@ export default function ProjectsPage() {
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-6">
-      <h1 className="text-2xl font-semibold mb-4">Projects</h1>
+      <div className="flex items-center gap-3 mb-6">
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-sm">
+          <IconClipboard width={28} height={28} className="text-white" />
+        </span>
+        <h1 className="text-2xl font-bold text-gray-800">Projects</h1>
+      </div>
 
       <div className="mb-6 flex gap-2 border-b">
         <button

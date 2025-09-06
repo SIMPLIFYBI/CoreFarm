@@ -841,3 +841,54 @@ insert into public.asset_types (name, description) values
   ('GPS', 'GPS and location devices')
 on conflict (name) do nothing;
 
+-- ============================================================
+-- Auto-join new users to a shared demo organization
+-- Creates a demo organization if missing and adds every new auth user
+-- as a member so they can try the app without creating their own org.
+-- Idempotent and safe to run multiple times.
+-- ============================================================
+do $$
+begin
+  -- Create a shared demo org if it doesn't exist (case-insensitive match on name)
+  if not exists (select 1 from public.organizations where lower(name) = lower('Shared Demo')) then
+    insert into public.organizations (name, owner_id) values ('Shared Demo', null);
+  end if;
+exception when others then
+  -- Swallow errors to keep migration idempotent in restricted environments
+  perform 1;
+end $$;
+
+create or replace function public.on_auth_user_created()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  demo_org_id uuid;
+begin
+  -- Find the demo org
+  select id into demo_org_id from public.organizations where lower(name) = lower('Shared Demo') limit 1;
+  if demo_org_id is null then
+    -- create it if still missing (concurrent safety not critical here)
+    insert into public.organizations (name, owner_id) values ('Shared Demo', null) returning id into demo_org_id;
+  end if;
+
+  -- Add the new user as a member of the demo org. Use on conflict to avoid race issues.
+  insert into public.organization_members (organization_id, user_id, role, added_by)
+  values (demo_org_id, new.id, 'member', null)
+  on conflict do nothing;
+
+  return new;
+end;
+$$;
+
+-- Wire the trigger to auth.users so it's executed when a new user signs up.
+-- If your Supabase setup restricts triggers on auth.users, run this migration in the SQL editor
+-- or handle auto-joining via a server-side webhook instead.
+drop trigger if exists trg_on_auth_user_created on auth.users;
+create trigger trg_on_auth_user_created
+after insert on auth.users
+for each row execute function public.on_auth_user_created();
+
+

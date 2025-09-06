@@ -4,8 +4,7 @@ import { usePathname } from "next/navigation";
 import { IconCore, IconAdmin, IconTeam, IconUser, IconReport, IconClipboard, IconCoreTasks, AssetIcon } from "./icons";
 
   const tabs = [
-  { href: "/user", label: "Dashboard", icon: IconReport },
-  { href: "/preview", label: "Preview", icon: IconReport },
+  { href: "/dashboard", label: "Dashboard", icon: IconReport },
   { href: "/coretasks", label: "Core Tasks", icon: IconCoreTasks },
   { href: "/consumables", label: "Consumables", icon: IconCore },
   { href: "/projects", label: "Projects", icon: IconClipboard },

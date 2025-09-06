@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { supabaseBrowser } from "../../lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import { Fragment } from "react";
-import { VehicleIcon } from "../components/icons";
+import { AssetIcon } from "../components/icons";
 
 const TABS = [
   { key: "assets", label: "Assets" },
@@ -19,7 +19,7 @@ export default function AssetsPage() {
     <div className="max-w-6xl mx-auto p-6">
       <div className="flex items-center gap-3 mb-6">
         <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-sm">
-          <VehicleIcon size={28} />
+          <AssetIcon width={28} height={28} className="text-white" />
         </span>
         <h1 className="text-2xl font-bold text-gray-800">Assets</h1>
       </div>
@@ -27,7 +27,7 @@ export default function AssetsPage() {
         {TABS.map(tab => (
           <button
             key={tab.key}
-            className={`px-4 py-2 font-medium rounded-t-md transition-colors ${activeTab === tab.key ? "bg-white text-indigo-600 border-x border-t border-indigo-200" : "bg-indigo-50 text-gray-600 hover:text-indigo-700"}`}
+            className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm ${activeTab === tab.key ? 'border-indigo-500 text-indigo-700' : 'text-gray-600'}`}
             onClick={() => setActiveTab(tab.key)}
           >
             {tab.label}
@@ -85,12 +85,52 @@ function AssetsTable() {
       alert('Select an organization before saving assets');
       return;
     }
+    // derive asset type name to satisfy any DB columns expecting the name
+    const typeName = (assetTypes.find(t => t.id === form.asset_type_id) || {}).name || null;
     if (editAsset) {
       // do not allow moving between organizations via update
       const { organization_id, ...updateFields } = form;
-      await supabase.from("assets").update(updateFields).eq("id", editAsset.id).eq('organization_id', orgId);
+      if (typeName) updateFields.asset_type = typeName;
+      try {
+        const res = await supabase
+          .from("assets")
+          .update(updateFields)
+          .eq("id", editAsset.id)
+          .eq('organization_id', orgId)
+          .select('id,name,asset_type_id,location_id,status,asset_types(name),asset_locations(name)')
+          .single();
+        if (res.error) {
+          console.error('Failed to update asset', res.error);
+          alert('Error updating asset: ' + res.error.message);
+          return;
+        }
+        setAssets(prev => prev.map(a => (a.id === res.data.id ? res.data : a)));
+      } catch (e) {
+        console.error(e);
+        alert('Error updating asset: ' + e.message);
+        return;
+      }
     } else {
-      await supabase.from("assets").insert([{ ...form, organization_id: orgId }]);
+      try {
+        const payload = { ...form, organization_id: orgId };
+        if (typeName) payload.asset_type = typeName;
+        const res = await supabase
+          .from("assets")
+          .insert([payload])
+          .select('id,name,asset_type_id,location_id,status,asset_types(name),asset_locations(name)')
+          .single();
+        if (res.error) {
+          console.error('Failed to insert asset', res.error);
+          alert('Error creating asset: ' + res.error.message);
+          return;
+        }
+        // Prepend to local list so user sees immediate result
+        setAssets(prev => [res.data, ...prev]);
+      } catch (e) {
+        console.error(e);
+        alert('Error creating asset: ' + e.message);
+        return;
+      }
     }
     setShowModal(false);
   };

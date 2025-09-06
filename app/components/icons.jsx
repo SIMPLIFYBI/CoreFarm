@@ -2,19 +2,18 @@ export const AssetIcon = (props) => (
   <svg
     viewBox="0 0 24 24"
     xmlns="http://www.w3.org/2000/svg"
-    fill="none"
-    stroke="currentColor"
     width={props.size || 24}
     height={props.size || 24}
-    strokeWidth={1.6}
-    strokeLinecap="round"
-    strokeLinejoin="round"
+    fill="none"
     {...props}
   >
-    {/* Hammer icon: handle + head */}
-    <path d="M3 21l7-7" stroke="currentColor" fill="none" />
-    <path d="M10 14l8-8 2 2-8 8z" stroke="currentColor" fill="none" />
-    <path d="M12 6l4 4" stroke="currentColor" fill="none" />
+    <g stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+      <line x1="15.34" y1="16.77" x2="7.7" y2="16.77" />
+      <path d="M3.89,16.77H1.5V11.05h9.55V5.32h4.34a1.9,1.9,0,0,1,1.81,1.3l1.48,4.43,2.37.59a1.9,1.9,0,0,1,1.45,1.85v3.28H19.16" />
+      <circle cx="17.25" cy="16.77" r="1.91" />
+      <circle cx="5.8" cy="16.77" r="1.91" />
+      <line x1="13.91" y1="11.05" x2="18.68" y2="11.05" />
+    </g>
   </svg>
 );
 export function IconCore(props) {
