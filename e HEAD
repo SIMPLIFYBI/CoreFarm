@@ -1,0 +1,234 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { IconPlods } from "../components/icons";
+import { supabaseBrowser } from "../../lib/supabaseClient";
+import { useOrg } from "../../lib/OrgContext";
+
+export default function Page() {
+  const [vendors, setVendors] = useState([]);
+  const [activityTypes, setActivityTypes] = useState([]);
+  const [holes, setHoles] = useState([]);
+  const [activeTab, setActiveTab] = useState("plod");
+  const [orgs, setOrgs] = useState([]);
+  const [vendorForm, setVendorForm] = useState({ name: "", contact: "", organization_id: "" });
+  const [vendorLoading, setVendorLoading] = useState(false);
+  const [form, setForm] = useState({ 
+    vendor_id: "", 
+    shift_date: new Date().toISOString().split('T')[0],
+    notes: "",
+    entered_by: "" // New field to store user name
+  });
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState(null);
+  const { orgId } = useOrg();
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // New state for activity type management
+  const [activityTypeForm, setActivityTypeForm] = useState({ 
+    activityType: "", 
+    group: "", 
+    description: "", 
+    organization_id: "" 
+  });
+  const [activityTypeLoading, setActivityTypeLoading] = useState(false);
+
+  // History tab state
+  const [plods, setPlods] = useState([]);
+  const [plodsLoading, setPlodsLoading] = useState(false);
+  const [dateRange, setDateRange] = useState({
+    from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 7 days ago
+    to: new Date().toISOString().split('T')[0] // today
+  });
+
+  // New state for activities within a PLOD
+  const [activities, setActivities] = useState([]);
+  const [activityForm, setActivityForm] = useState({ 
+    activity_type_id: "", 
+    hole_id: "", 
+    started_at: "", 
+    finished_at: "", 
+    notes: "" 
+  });
+  const [editingActivityIndex, setEditingActivityIndex] = useState(null);
+
+  // Update: Vendor resources state
+  const [vendorResources, setVendorResources] = useState([]);
+  const [expandedVendor, setExpandedVendor] = useState(null);
+  const [resourceForm, setResourceForm] = useState({ 
+    vendor_id: "", 
+    name: "", 
+    resource_type: "", 
+    status: "Active",
+    notes: "" 
+  });
+  const [resourceLoading, setResourceLoading] = useState(false);
+  const [editingResourceId, setEditingResourceId] = useState(null);
+  const [resourceModalOpen, setResourceModalOpen] = useState(false);
+
+  useEffect(() => {
+    // Get current user info
+    const fetchCurrentUser = async () => {
+      const sb = supabaseBrowser();
+      const { data: { user } } = await sb.auth.getUser();
+      
+      if (user) {
+        // Get user profile info if available
+        const { data, error } = await sb
+          .from('profiles')
+          .select('full_name, email')
+          .eq('id', user.id)
+          .single();
+        
+        if (data) {
+          setCurrentUser(data);
+          // Set the entered_by field with user's name or email
+          setForm(prev => ({ 
+            ...prev, 
+            entered_by: data.full_name || data.email || user.email 
+          }));
+        } else {
+          // Fallback to auth email if profile not found
+          setCurrentUser({ email: user.email });
+          setForm(prev => ({ ...prev, entered_by: user.email }));
+        }
+      }
+    };
+
+    fetchCurrentUser();
+    
+    const sb = supabaseBrowser();
+    // load organizations first so we can default org selection
+    sb.from("organizations").select("id,name").limit(50).then((oRes) => {
+      if (oRes.error) setMessage({ type: "error", text: oRes.error.message });
+      else {
+        setOrgs(oRes.data || []);
+        if ((oRes.data || []).length > 0) {
+          setVendorForm((s) => ({ ...s, organization_id: s.organization_id || oRes.data[0].id }));
+          // Set the default org for the activity type form too
+          setActivityTypeForm((s) => ({ ...s, organization_id: s.organization_id || oRes.data[0].id }));
+        }
+      }
+    });
+
+    // load org-scoped data only when orgId is available
+    const vQuery = sb.from("vendors").select("id,name").limit(100);
+    const aQuery = sb.from("plod_activity_types").select("id,activity_type,\"group\",description").limit(100);
+    const hQuery = sb.from("holes").select("id,hole_id").limit(200);
+    if (orgId) {
+      vQuery.eq('organization_id', orgId);
+      aQuery.eq('organization_id', orgId);
+      hQuery.eq('organization_id', orgId);
+    }
+    Promise.all([vQuery, aQuery, hQuery]).then(([vRes, aRes, hRes]) => {
+      if (vRes?.error) setMessage({ type: "error", text: vRes.error.message });
+      else setVendors(vRes?.data || []);
+      if (aRes?.error) setMessage({ type: "error", text: aRes.error.message });
+      else setActivityTypes(aRes?.data || []);
+      if (hRes?.error) setMessage({ type: "error", text: hRes.error.message });
+      else setHoles(hRes?.data || []);
+    });
+
+    // Load plods history if history tab is active
+    if (activeTab === 'history' && orgId) {
+      loadPlods();
+    }
+  }, [orgId, activeTab, expandedVendor]);
+
+  // Load plods history with date filtering
+  const loadPlods = async () => {
+    if (!orgId) return;
+    
+    setPlodsLoading(true);
+    const sb = supabaseBrowser();
+    
+    try {
+      const { data, error } = await sb.from("plods")
+        .select(`
+          id, 
+          started_at, 
+          finished_at, 
+          notes,
+          vendors:vendor_id(name),
+          plod_activities(
+            id, 
+            activity_type_id,
+            hole_id,
+            started_at,
+            finished_at,
+            notes,
+            activity_types:activity_type_id(label, activity_type),
+            holes:hole_id(hole_id)
+          )
+        `)
+        .eq('organization_id', orgId)
+        .gte('started_at', dateRange.from ? `${dateRange.from}T00:00:00` : null)
+        .lte('started_at', dateRange.to ? `${dateRange.to}T23:59:59` : null)
+        .order('started_at', { ascending: false })
+        .limit(100);
+      
+      if (error) {
+        setMessage({ type: "error", text: error.message });
+      } else {
+        setPlods(data || []);
+      }
+    } catch (err) {
+      setMessage({ type: "error", text: "Failed to load plods history" });
+      console.error(err);
+    } finally {
+      setPlodsLoading(false);
+    }
+  };
+
+  const handleDateRangeChange = (field) => (e) => {
+    setDateRange(prev => ({ ...prev, [field]: e.target.value }));
+  };
+
+  // Calculate the duration between two timestamps in hours and minutes
+  const calculateDuration = (start, end) => {
+    const startTime = new Date(start);
+    const endTime = new Date(end);
+    const diffMs = endTime - startTime;
+    const hours = Math.floor(diffMs / (1000 * 60 * 60));
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    return `${hours}h ${minutes}m`;
+  };
+
+  // Format datetime for display
+  const formatDateTime = (datetime) => {
+    const date = new Date(datetime);
+    return new Intl.DateTimeFormat('default', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
+  };
+
+  const refreshVendors = async () => {
+    const sb = supabaseBrowser();
+    const { data, error } = await sb.from("vendors").select("id,name").limit(500);
+    if (error) setMessage({ type: "error", text: error.message });
+    else setVendors(data || []);
+  };
+
+  // New function to refresh activity types
+  const refreshActivityTypes = async () => {
+    const sb = supabaseBrowser();
+    const query = sb.from("plod_activity_types").select("id,activity_type,\"group\",description").limit(100);
+    if (orgId) {
+      query.eq('organization_id', orgId);
+    }
+    const { data, error } = await query;
+    if (error) setMessage({ type: "error", text: error.message });
+    else setActivityTypes(data || []);
+  };
+
+  const handleChange = (k) => (e) => setForm((s) => ({ ...s, [k]: e.target.value }));
+
+  // Update addActivity function to ensure dates match the shift date
+  const addActivity = () => {
+    // Validation
+    if (!activityForm.activity_type_id || !activityForm.started_at || !activityForm.finished_at) {
+   
