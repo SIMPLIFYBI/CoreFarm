@@ -27,8 +27,7 @@ const TASK_TYPES = [
     hole_id: "",
     depth: "",
     drilling_diameter: "",
-  project_id: "",
-  tenement_id: "",
+    project_id: "",
     drilling_contractor: "",
   });
   const [showHoleModal, setShowHoleModal] = useState(false);
@@ -47,8 +46,7 @@ const TASK_TYPES = [
       hole_id: h.hole_id || "",
       depth: h.depth ?? "",
       drilling_diameter: h.drilling_diameter || "",
-  project_id: h.project_id || "",
-  tenement_id: h.tenement_id || null,
+      project_id: h.project_id || "",
       drilling_contractor: h.drilling_contractor || "",
     });
     setIntervals(emptyIntervals);
@@ -89,7 +87,7 @@ const TASK_TYPES = [
     (async () => {
       const { data, error } = await supabase
         .from("holes")
-        .select("id, hole_id, depth, drilling_diameter, project_id, tenement_id, drilling_contractor, created_at, organization_id, projects(name), tenements(tenement_number)")
+        .select("id, hole_id, depth, drilling_diameter, project_id, drilling_contractor, created_at, organization_id, projects(name)")
         .eq("organization_id", orgId)
         .order("created_at", { ascending: false });
       if (error) {
@@ -148,7 +146,6 @@ const TASK_TYPES = [
         depth: Number.isFinite(depthNum) ? depthNum : null,
         drilling_diameter: single.drilling_diameter || null,
         project_id: single.project_id || null,
-        tenement_id: single.tenement_id || null,
         drilling_contractor: single.drilling_contractor || null,
         organization_id: orgId || null,
       };
@@ -169,7 +166,7 @@ const TASK_TYPES = [
       // refresh list
       const { data, error } = await supabase
         .from("holes")
-        .select("id, hole_id, depth, drilling_diameter, project_id, tenement_id, drilling_contractor, created_at, organization_id, projects(name), tenements(tenement_number)")
+        .select("id, hole_id, depth, drilling_diameter, project_id, drilling_contractor, created_at, organization_id, projects(name)")
         .eq("organization_id", orgId)
         .order("created_at", { ascending: false });
       if (error) {
@@ -565,9 +562,6 @@ const TASK_TYPES = [
               <label className="block text-sm">Project
                 <ProjectSelect supabase={supabase} organizationId={orgId} value={single.project_id} onChange={(v) => setSingle(s => ({...s, project_id: v}))} />
               </label>
-              <label className="block text-sm">Tenement
-                <TenementSelect supabase={supabase} organizationId={orgId} value={single.tenement_id} onChange={(v) => setSingle(s => ({...s, tenement_id: v}))} />
-              </label>
               <label className="block text-sm">Drilling Contractor
                 <input type="text" name="drilling_contractor" value={single.drilling_contractor} onChange={onChangeSingle} className="input" />
               </label>
@@ -619,28 +613,6 @@ function ProjectSelect({ supabase, organizationId, value, onChange }) {
     <select className="select-gradient-sm" value={value || ''} onChange={e => onChange(e.target.value || null)}>
       <option value="">Select…</option>
       {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-    </select>
-  );
-}
-
-// Helper component for selecting tenement
-function TenementSelect({ supabase, organizationId, value, onChange }) {
-  const [tenements, setTenements] = useState([]);
-  useEffect(() => {
-    if (!organizationId) { setTenements([]); return; }
-    (async () => {
-      const { data, error } = await supabase
-        .from('tenements')
-        .select('id,tenement_number')
-        .eq('organization_id', organizationId)
-        .order('tenement_number');
-      if (!error) setTenements(data || []);
-    })();
-  }, [organizationId, supabase]);
-  return (
-    <select className="select-gradient-sm" value={value || ''} onChange={e => onChange(e.target.value || null)}>
-      <option value="">Select…</option>
-      {tenements.map(t => <option key={t.id} value={t.id}>{t.tenement_number}</option>)}
     </select>
   );
 }

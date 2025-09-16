@@ -4,7 +4,6 @@ import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import { TASK_TYPES } from "@/lib/taskTypes";
 import { BarChart, DonutChart, StackedColumnChart } from "@/app/components/Charts";
-import { IconReport } from "../components/icons";
 
 const COLORS = [
 	"#4f46e5",
@@ -255,12 +254,7 @@ export default function UserDashboardPage() {
 	return (
 		<>
 		<div className="max-w-6xl mx-auto p-4 md:p-6">
-			<div className="flex items-center gap-3 mb-6">
-				<span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-sm">
-					<IconReport width={28} height={28} className="text-white" />
-				</span>
-				<h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
-			</div>
+			<h1 className="text-2xl font-semibold mb-4">Report</h1>
 			<div className="mb-6 flex gap-2 border-b">
 				<button
 					className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm ${tab === "dashboard" ? "border-indigo-500 text-indigo-700" : "border-transparent text-gray-500"}`}

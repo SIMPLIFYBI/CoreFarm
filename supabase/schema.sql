@@ -891,4 +891,96 @@ create trigger trg_on_auth_user_created
 after insert on auth.users
 for each row execute function public.on_auth_user_created();
 
+-- ============================================================
+-- Scheduler: resources and resource_assignments
+-- per-organization resources and day-granular assignments with a DB-level
+-- exclusion constraint to prevent overlapping assignments per resource.
+-- Idempotent: safe to run multiple times.
+-- ============================================================
+
+-- Resources (one row per schedulable resource, e.g. drill rig, crew, vehicle)
+create table if not exists public.resources (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null,
+  description text,
+  created_by uuid not null default auth.uid() references auth.users(id) on delete set null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create unique index if not exists uniq_resources_org_name on public.resources(organization_id, lower(name));
+create index if not exists idx_resources_org on public.resources(organization_id);
+
+alter table public.resources enable row level security;
+
+drop policy if exists "read resources (org)" on public.resources;
+drop policy if exists "write resources (org)" on public.resources;
+create policy "read resources (org)" on public.resources for select using (
+  public.is_current_org_member(organization_id)
+);
+create policy "write resources (org)" on public.resources for all using (
+  public.is_current_org_member(organization_id)
+) with check (
+  public.is_current_org_member(organization_id)
+);
+
+drop trigger if exists trg_touch_resources on public.resources;
+create trigger trg_touch_resources
+before update on public.resources
+for each row execute function public.touch_updated_at();
+
+-- Resource assignments (day-granular). start_date inclusive, end_date exclusive by
+-- convention; an automatically-generated daterange column is stored for the
+-- exclusion constraint.
+create table if not exists public.resource_assignments (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  resource_id uuid not null references public.resources(id) on delete cascade,
+  title text,
+  details text,
+  start_date date not null,
+  end_date date not null,
+  created_by uuid not null default auth.uid() references auth.users(id) on delete set null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  interval daterange generated always as (daterange(start_date, end_date, '[)')) stored
+);
+
+create index if not exists idx_resource_assignments_org on public.resource_assignments(organization_id);
+create index if not exists idx_resource_assignments_resource on public.resource_assignments(resource_id);
+-- gist index used by the exclusion constraint
+create index if not exists idx_resource_assignments_gist on public.resource_assignments using gist (resource_id, interval);
+
+do $$ begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'resource_assignments_no_overlap'
+  ) then
+    alter table public.resource_assignments
+      add constraint resource_assignments_no_overlap exclude using gist (
+        resource_id with =,
+        interval with &&
+      );
+  end if;
+end $$;
+
+alter table public.resource_assignments enable row level security;
+
+drop policy if exists "read resource assignments (org)" on public.resource_assignments;
+drop policy if exists "write resource assignments (org)" on public.resource_assignments;
+create policy "read resource assignments (org)" on public.resource_assignments for select using (
+  public.is_current_org_member(organization_id)
+);
+create policy "write resource assignments (org)" on public.resource_assignments for all using (
+  public.is_current_org_member(organization_id)
+) with check (
+  public.is_current_org_member(organization_id)
+);
+
+drop trigger if exists trg_touch_resource_assignments on public.resource_assignments;
+create trigger trg_touch_resource_assignments
+before update on public.resource_assignments
+for each row execute function public.touch_updated_at();
+
+
 

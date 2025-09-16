@@ -2,7 +2,6 @@
 import { useState } from "react";
 import CorePage from "../core/page";
 import AdminPage from "../admin/page";
-import { IconCoreTasks } from "../components/icons";
 
 const TABS = [
   { key: "logging", label: "Logging" },
@@ -14,12 +13,6 @@ export default function CoreTasksPage() {
   const [tab, setTab] = useState("logging");
   return (
     <div className="max-w-6xl mx-auto p-4">
-      <div className="flex items-center gap-3 mb-6">
-        <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-sm">
-          <IconCoreTasks width={28} height={28} className="text-white" />
-        </span>
-        <h1 className="text-2xl font-bold text-gray-800">Core Tasks</h1>
-      </div>
       <div className="mb-6 flex gap-2 border-b">
         <button
           className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm ${tab === "logging" ? "border-indigo-500 text-indigo-700" : "border-transparent text-gray-500"}`}

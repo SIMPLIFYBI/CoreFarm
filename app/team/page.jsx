@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { IconTeam } from "../components/icons";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import { redirectTo } from "@/lib/siteUrl";
@@ -215,12 +214,7 @@ export default function TeamPage() {
 
   return (
   <div className="max-w-6xl mx-auto p-4 md:p-6">
-      <div className="flex items-center gap-3 mb-6">
-        <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-sm">
-          <IconTeam width={28} height={28} className="text-white" />
-        </span>
-        <h1 className="text-2xl font-semibold mb-4">Team Management</h1>
-      </div>
+      <h1 className="text-2xl font-semibold mb-4">Team Management</h1>
       {/* Tabs */}
       <div className="mb-6 flex gap-2 border-b">
         {[{k:'members',label:'Team Members'},{k:'invites',label:'Invites'},{k:'org',label:'Organisation'}].map(t => (

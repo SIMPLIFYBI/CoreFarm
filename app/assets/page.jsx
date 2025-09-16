@@ -1,10 +1,9 @@
 "use client";
-import { useState } from "react";
-import { useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { supabaseBrowser } from "../../lib/supabaseClient";
-import { useOrg } from "@/lib/OrgContext";
 import { Fragment } from "react";
-import { AssetIcon } from "../components/icons";
+import { VehicleIcon } from "../components/icons";
+import ActivityTypesTab from "./ActivityTypesTab";
 
 const TABS = [
   { key: "assets", label: "Assets" },
@@ -19,7 +18,7 @@ export default function AssetsPage() {
     <div className="max-w-6xl mx-auto p-6">
       <div className="flex items-center gap-3 mb-6">
         <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-sm">
-          <AssetIcon width={28} height={28} className="text-white" />
+          <VehicleIcon size={28} />
         </span>
         <h1 className="text-2xl font-bold text-gray-800">Assets</h1>
       </div>
@@ -27,7 +26,7 @@ export default function AssetsPage() {
         {TABS.map(tab => (
           <button
             key={tab.key}
-            className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm ${activeTab === tab.key ? 'border-indigo-500 text-indigo-700' : 'text-gray-600'}`}
+            className={`px-4 py-2 font-medium rounded-t-md transition-colors ${activeTab === tab.key ? "bg-white text-indigo-600 border-x border-t border-indigo-200" : "bg-indigo-50 text-gray-600 hover:text-indigo-700"}`}
             onClick={() => setActiveTab(tab.key)}
           >
             {tab.label}
@@ -39,12 +38,31 @@ export default function AssetsPage() {
         {activeTab === "locations" && <LocationsTable />}
         {activeTab === "history" && <HistoryTable />}
       </div>
+      <div style={{ marginTop: 20 }}>
+        <button
+          onClick={() => setActiveTab("assets")}
+          className={`px-4 py-2 font-medium rounded-md transition-colors ${activeTab === "assets" ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-800 hover:bg-indigo-50"}`}
+        >
+          Submit Plod
+        </button>
+        <button
+          onClick={() => setActiveTab("activity-types")}
+          className={`ml-2 px-4 py-2 font-medium rounded-md transition-colors ${activeTab === "activity-types" ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-800 hover:bg-indigo-50"}`}
+        >
+          Activity Types
+        </button>
+      </div>
+      <div className="mt-4">
+        {activeTab === "assets" && <AssetsTable />}
+        {activeTab === "locations" && <LocationsTable />}
+        {activeTab === "history" && <HistoryTable />}
+        {activeTab === "activity-types" && <ActivityTypesTab />}
+      </div>
     </div>
   );
 }
 
 function AssetsTable() {
-  const { orgId } = useOrg();
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -53,12 +71,11 @@ function AssetsTable() {
   const [locations, setLocations] = useState([]);
   const [assetTypes, setAssetTypes] = useState([]);
   useEffect(() => {
-    if (!orgId) return; // wait until org selected
     const supabase = supabaseBrowser();
     setLoading(true);
     Promise.all([
-      supabase.from("assets").select("id, name, asset_type_id, location_id, status, asset_types(name), asset_locations(name)").eq('organization_id', orgId),
-      supabase.from("asset_locations").select("id, name").eq('organization_id', orgId),
+      supabase.from("assets").select("id, name, asset_type_id, location_id, status, asset_types(name), asset_locations(name)"),
+      supabase.from("asset_locations").select("id, name"),
       supabase.from("asset_types").select("id, name")
     ]).then(([assetsRes, locRes, typesRes]) => {
       setAssets(assetsRes.data || []);
@@ -66,7 +83,7 @@ function AssetsTable() {
       setAssetTypes(typesRes.data || []);
       setLoading(false);
     });
-  }, [showModal, orgId]);
+  }, [showModal]);
 
   const openModal = (asset = null) => {
     setEditAsset(asset);
@@ -81,63 +98,17 @@ function AssetsTable() {
 
   const handleSave = async () => {
     const supabase = supabaseBrowser();
-    if (!orgId) {
-      alert('Select an organization before saving assets');
-      return;
-    }
-    // derive asset type name to satisfy any DB columns expecting the name
-    const typeName = (assetTypes.find(t => t.id === form.asset_type_id) || {}).name || null;
     if (editAsset) {
-      // do not allow moving between organizations via update
-      const { organization_id, ...updateFields } = form;
-      if (typeName) updateFields.asset_type = typeName;
-      try {
-        const res = await supabase
-          .from("assets")
-          .update(updateFields)
-          .eq("id", editAsset.id)
-          .eq('organization_id', orgId)
-          .select('id,name,asset_type_id,location_id,status,asset_types(name),asset_locations(name)')
-          .single();
-        if (res.error) {
-          console.error('Failed to update asset', res.error);
-          alert('Error updating asset: ' + res.error.message);
-          return;
-        }
-        setAssets(prev => prev.map(a => (a.id === res.data.id ? res.data : a)));
-      } catch (e) {
-        console.error(e);
-        alert('Error updating asset: ' + e.message);
-        return;
-      }
+      await supabase.from("assets").update(form).eq("id", editAsset.id);
     } else {
-      try {
-        const payload = { ...form, organization_id: orgId };
-        if (typeName) payload.asset_type = typeName;
-        const res = await supabase
-          .from("assets")
-          .insert([payload])
-          .select('id,name,asset_type_id,location_id,status,asset_types(name),asset_locations(name)')
-          .single();
-        if (res.error) {
-          console.error('Failed to insert asset', res.error);
-          alert('Error creating asset: ' + res.error.message);
-          return;
-        }
-        // Prepend to local list so user sees immediate result
-        setAssets(prev => [res.data, ...prev]);
-      } catch (e) {
-        console.error(e);
-        alert('Error creating asset: ' + e.message);
-        return;
-      }
+      await supabase.from("assets").insert([form]);
     }
     setShowModal(false);
   };
 
   const handleDelete = async (id) => {
     const supabase = supabaseBrowser();
-  await supabase.from("assets").delete().eq("id", id).eq('organization_id', orgId);
+    await supabase.from("assets").delete().eq("id", id);
     setAssets(assets.filter(a => a.id !== id));
   };
 
@@ -215,25 +186,22 @@ function AssetsTable() {
 }
 
 function LocationsTable() {
-  const { orgId } = useOrg();
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editLoc, setEditLoc] = useState(null);
   const [form, setForm] = useState({ name: "", description: "" });
   useEffect(() => {
-    if (!orgId) return;
     const supabase = supabaseBrowser();
     setLoading(true);
     supabase
       .from("asset_locations")
       .select("id, name, description")
-      .eq('organization_id', orgId)
       .then(({ data }) => {
         setLocations(data || []);
         setLoading(false);
       });
-  }, [showModal, orgId]);
+  }, [showModal]);
 
   const openModal = (loc = null) => {
     setEditLoc(loc);
@@ -243,13 +211,8 @@ function LocationsTable() {
 
   const handleSave = async () => {
     const supabase = supabaseBrowser();
-    if (!orgId) {
-      alert('Select an organization before creating locations');
-      return;
-    }
     if (editLoc) {
-      const { organization_id, ...updateFields } = form;
-      const res = await supabase.from("asset_locations").update(updateFields).eq("id", editLoc.id).eq('organization_id', orgId).select().single();
+      const res = await supabase.from("asset_locations").update(form).eq("id", editLoc.id).select().single();
       if (res.error) {
         console.error('Failed to update location', res.error);
         alert('Error updating location: ' + res.error.message);
@@ -258,7 +221,7 @@ function LocationsTable() {
       setLocations((prev) => prev.map(l => (l.id === res.data.id ? res.data : l)));
       setShowModal(false);
     } else {
-      const res = await supabase.from("asset_locations").insert([{ ...form, organization_id: orgId }]).select().single();
+      const res = await supabase.from("asset_locations").insert([form]).select().single();
       if (res.error) {
         console.error('Failed to insert location', res.error);
         alert('Error creating location: ' + res.error.message);
@@ -272,7 +235,7 @@ function LocationsTable() {
 
   const handleDelete = async (id) => {
     const supabase = supabaseBrowser();
-  const res = await supabase.from("asset_locations").delete().eq("id", id).eq('organization_id', orgId).select();
+    const res = await supabase.from("asset_locations").delete().eq("id", id).select();
     if (res.error) {
       console.error('Failed to delete location', res.error);
       alert('Error deleting location: ' + res.error.message);
@@ -389,3 +352,95 @@ function HistoryTable() {
     </div>
   );
 }
+
+// Add this function to properly load vendors with org filtering
+const loadVendors = async () => {
+  if (!orgId) return;
+  
+  try {
+    const sb = supabaseBrowser();
+    // Explicitly filter by organization_id to prevent showing all vendors
+    const { data, error } = await sb
+      .from("vendors")
+      .select("*")
+      .eq("organization_id", orgId)  // Always filter by current org
+      .order("name");
+    
+    if (error) throw error;
+    setVendors(data || []);
+  } catch (error) {
+    console.error("Error loading vendors:", error);
+    setMessage({ type: "error", text: `Failed to load vendors: ${error.message}` });
+  }
+};
+
+// Update your vendor submission function to use the above function
+const submitVendor = async (e) => {
+  e.preventDefault();
+  setVendorLoading(true);
+  setMessage(null);
+  
+  // Validation
+  if (!vendorForm.name) {
+    setMessage({ type: "error", text: "Please provide a vendor name." });
+    setVendorLoading(false);
+    return;
+  }
+  
+  if (!orgId) {
+    setMessage({ type: "error", text: "Organization ID is missing." });
+    setVendorLoading(false);
+    return;
+  }
+  
+  try {
+    const sb = supabaseBrowser();
+    const payload = {
+      name: vendorForm.name,
+      contact: vendorForm.contact,
+      organization_id: orgId  // Make sure this is always set
+    };
+    
+    const { data, error } = await sb
+      .from("vendors")
+      .insert(payload)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    // IMPORTANT: Use the loadVendors function to reload with proper filtering
+    // instead of directly appending to the state
+    await loadVendors();
+    
+    setMessage({ type: "success", text: "Vendor added successfully." });
+    setVendorForm({ name: "", contact: "" });
+  } catch (error) {
+    console.error("Error saving vendor:", error);
+    setMessage({ type: "error", text: `Failed to add vendor: ${error.message}` });
+  } finally {
+    setVendorLoading(false);
+  }
+};
+
+// Make sure your useEffect is using the loadVendors function
+useEffect(() => {
+  const fetchData = async () => {
+    if (!orgId) return;
+    
+    try {
+      // Load vendors with proper filtering
+      if (activeTab === 'vendors' || activeTab === 'plod') {
+        await loadVendors();
+      }
+      
+      // Rest of your existing code for loading other data
+      // ...
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      setMessage({ type: "error", text: `Failed to load data: ${error.message}` });
+    }
+  };
+  
+  fetchData();
+}, [orgId, activeTab]);

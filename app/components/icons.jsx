@@ -1,21 +1,11 @@
-export const AssetIcon = (props) => (
-  <svg
-    viewBox="0 0 24 24"
-    xmlns="http://www.w3.org/2000/svg"
-    width={props.size || 24}
-    height={props.size || 24}
-    fill="none"
-    {...props}
-  >
-    <g stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
-      <line x1="15.34" y1="16.77" x2="7.7" y2="16.77" />
-      <path d="M3.89,16.77H1.5V11.05h9.55V5.32h4.34a1.9,1.9,0,0,1,1.81,1.3l1.48,4.43,2.37.59a1.9,1.9,0,0,1,1.45,1.85v3.28H19.16" />
-      <circle cx="17.25" cy="16.77" r="1.91" />
-      <circle cx="5.8" cy="16.77" r="1.91" />
-      <line x1="13.91" y1="11.05" x2="18.68" y2="11.05" />
-    </g>
-  </svg>
-);
+export function AssetIcon() {
+  return (
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" stroke="none" width="16" height="16">
+      <path d="M16,6H10.5v4H1v5H3a3,3,0,0,0,6,0h6a3,3,0,0,0,6,0h2V12a2,2,0,0,0-2-2H19L16,6M12,7.5h3.5l2,2.5H12V7.5m-6,6A1.5,1.5,0,1,1,4.5,15,1.5,1.5,0,0,1,6,13.5m12,0A1.5,1.5,0,1,1,16.5,15,1.5,1.5,0,0,1,18,13.5Z"></path>
+    </svg>
+  );
+}
+
 export function IconCore(props) {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -123,3 +113,10 @@ export function IconCoreTasks(props) {
       <path d="M12 6l4 4" stroke="currentColor" fill="none" />
     </svg>
   );
+export function IconPlods() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M7 2a1 1 0 0 0-1 1v1H4a1 1 0 0 0-1 1v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a1 1 0 0 0-1-1h-2V3a1 1 0 0 0-1-1H7zm0 2h10v1H7V4zm0 3h10v10H7V7zM9.5 9a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm5 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z" />
+    </svg>
+  );
+}

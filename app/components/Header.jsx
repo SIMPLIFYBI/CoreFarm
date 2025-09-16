@@ -1,11 +1,11 @@
 "use client";
-import Image from "next/image";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
-import { IconCore, IconAdmin, IconTeam, IconUser, IconLogin, IconReport, IconClipboard, IconCoreTasks, AssetIcon } from "../components/icons";
+import { IconCore, IconAdmin, IconTeam, IconUser, IconLogin, IconReport, IconClipboard, IconCoreTasks, AssetIcon, IconPlods } from "../components/icons";
 
 export default function Header() {
   const supabase = supabaseBrowser();
@@ -51,18 +51,25 @@ export default function Header() {
   { href: "/consumables", label: "Consumables", icon: IconCore },
   { href: "/projects", label: "Projects", icon: IconClipboard },
   { href: "/assets", label: "Assets", icon: AssetIcon },
+  { href: "/plods", label: "Plods", icon: IconPlods }, // <-- added Plods tab
   { href: "/team", label: "Team", icon: IconTeam },
   ];
   return (
     <header className="border-b bg-gradient-to-r from-indigo-50 via-indigo-100 to-purple-50 md:sticky md:top-0 md:z-40 backdrop-blur supports-[backdrop-filter]:bg-white/70">
       <div className="mx-auto max-w-6xl flex items-center justify-between p-4">
         <div className="flex items-center gap-3">
-          <Link href="/home" aria-label="GeoFarm" className="flex items-center gap-2 text-sm font-semibold">
-            <span className="inline-flex h-8 items-center justify-center rounded-lg overflow-hidden bg-white/0">
-              {/* Use user's demo logo */}
-              <img src="/demo/GeoFarm.png" alt="GeoFarm" width={140} height={32} className="object-contain" />
-            </span>
-          </Link>
+          {/* Logo */}
+          <div className="flex-shrink-0 flex items-center">
+            <Link href="/home" className="flex items-center">  {/* navigate to Preview (/home) */}
+              <Image
+                src="/demo/GeoFarm.png"
+                alt="GeoFarm Logo"
+                width={120}
+                height={40}
+                className="h-8 w-auto"
+              />
+            </Link>
+          </div>
           <nav className="hidden md:flex gap-2 text-sm">
             {navTabs.map((t) => {
               const active = pathname?.startsWith(t.href);
