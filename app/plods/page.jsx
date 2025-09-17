@@ -9,10 +9,13 @@ export default function Page() {
   const [vendors, setVendors] = useState([]);
   const [activityTypes, setActivityTypes] = useState([]);
   const [holes, setHoles] = useState([]);
-  const [activeTab, setActiveTab] = useState("plod");
+  // Open page to History by default
+  const [activeTab, setActiveTab] = useState("history");
   const [orgs, setOrgs] = useState([]);
   const [vendorForm, setVendorForm] = useState({ name: "", contact: "", organization_id: "" });
   const [vendorLoading, setVendorLoading] = useState(false);
+  // slide-up form state
+  const [showNewPlod, setShowNewPlod] = useState(false);
   const [form, setForm] = useState({ 
     vendor_id: "", 
     shift_date: new Date().toISOString().split('T')[0],
@@ -682,6 +685,267 @@ export default function Page() {
     }
   };
 
+  // Add a reusable AddPlodForm component (move your existing Add Plod tab form JSX here)
+  function AddPlodForm({ onClose } = {}) {
+    return (
+      <form onSubmit={submit} className="space-y-6">
+        <div className="border-b pb-4 mb-4">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Shift Details</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Vendor (optional)</label>
+              <select value={form.vendor_id} onChange={handleChange("vendor_id")} className="mt-1 block w-full rounded border p-2">
+                <option value="">— select vendor —</option>
+                {vendors.map((v) => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Shift Date</label>
+              <input 
+                required 
+                type="date" 
+                value={form.shift_date} 
+                onChange={handleChange("shift_date")} 
+                className="mt-1 block w-full rounded border p-2" 
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Plod entered by</label>
+              <input 
+                type="text" 
+                value={form.entered_by} 
+                readOnly
+                className="mt-1 block w-full rounded border bg-gray-50 p-2" 
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Shift Notes (optional)</label>
+              <textarea 
+                value={form.notes} 
+                onChange={handleChange("notes")} 
+                rows={2} 
+                className="mt-1 block w-full rounded border p-2" 
+                placeholder="Overall shift notes"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Shift Activities</h3>
+
+          <div className="bg-gray-50 p-4 rounded-lg mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Activity Type</label>
+                <select 
+                  value={activityForm.activity_type_id} 
+                  onChange={(e) => setActivityForm(prev => ({ ...prev, activity_type_id: e.target.value }))
+                  }
+                  className="mt-1 block w-full rounded border p-2"
+                >
+                  <option value="">— select activity —</option>
+                  {activityTypes.map((a) => (
+                    <option key={a.id} value={a.id}>{a.activity_type}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Hole (optional)</label>
+                <select 
+                  value={activityForm.hole_id} 
+                  onChange={(e) => setActivityForm(prev => ({ ...prev, hole_id: e.target.value }))
+                  }
+                  className="mt-1 block w-full rounded border p-2"
+                >
+                  <option value="">— select hole —</option>
+                  {holes.map((h) => (
+                    <option key={h.id} value={h.id}>{h.hole_id}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Started At</label>
+                <input 
+                  type="time" 
+                  value={activityForm.started_at ? new Date(activityForm.started_at).toTimeString().slice(0,5) : ""}
+                  onChange={(e) => {
+                    const timeStr = e.target.value;
+                    const dateStr = form.shift_date;
+                    const dateTimeStr = `${dateStr}T${timeStr}`;
+                    setActivityForm(prev => ({ ...prev, started_at: dateTimeStr }));
+                  }}
+                  className="mt-1 block w-full rounded border p-2" 
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Finished At</label>
+                <input 
+                  type="time" 
+                  value={activityForm.finished_at ? new Date(activityForm.finished_at).toTimeString().slice(0,5) : ""}
+                  onChange={(e) => {
+                    const timeStr = e.target.value;
+                    const dateStr = form.shift_date;
+                    const dateTimeStr = `${dateStr}T${timeStr}`;
+                    setActivityForm(prev => ({ ...prev, finished_at: dateTimeStr }));
+                  }}
+                  className="mt-1 block w-full rounded border p-2" 
+                />
+              </div>
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700">Notes</label>
+              <textarea 
+                value={activityForm.notes}
+                onChange={(e) => setActivityForm(prev => ({ ...prev, notes: e.target.value }))
+                }
+                rows={2} 
+                className="mt-1 block w-full rounded border p-2"
+                placeholder="Activity specific notes" 
+              />
+            </div>
+            
+            <div className="flex justify-end">
+              <button 
+                type="button"
+                onClick={addActivity}
+                className="inline-flex items-center rounded bg-indigo-600 text-white px-4 py-2"
+              >
+                {editingActivityIndex !== null ? 'Update Activity' : 'Add Activity'}
+              </button>
+            </div>
+          </div>
+
+          {/* List of added activities */}
+          <div className="space-y-3">
+            {activities.length === 0 ? (
+              <div className="text-center py-6 text-gray-500 bg-gray-50 rounded-lg">
+                No activities added yet. Add at least one activity above.
+              </div>
+            ) : (
+              activities.map((activity, idx) => {
+                const actType = activityTypes.find(a => a.id === activity.activity_type_id);
+                const hole = holes.find(h => h.id === activity.hole_id);
+
+                return (
+                  <div key={idx} className="border rounded-lg p-3 bg-gray-50 flex justify-between items-center">
+                    <div>
+                      <div className="font-medium">
+                        {actType?.activity_type || 'Unknown Activity'}
+                        {hole && <span className="ml-2 text-gray-500">- {hole.hole_id}</span>}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {new Date(activity.started_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} 
+                        to 
+                        {new Date(activity.finished_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        {activity.notes && <div className="mt-1 text-gray-700">{activity.notes}</div>}
+                      </div>
+                    </div>
+                    <div className="flex space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => editActivity(idx)}
+                        className="text-indigo-600 hover:text-indigo-800 p-1"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeActivity(idx)}
+                        className="text-red-600 hover:text-red-800 p-1"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div className="mt-6 flex items-center gap-3">
+            <button 
+              type="submit" 
+              className="inline-flex items-center rounded bg-indigo-600 text-white px-4 py-2" 
+              disabled={loading || activities.length === 0}
+            >
+              {loading ? "Saving…" : "Save Shift & Activities"}
+            </button>
+            <button 
+              type="button" 
+              className="text-sm text-gray-600" 
+              onClick={() => {
+                setForm({ vendor_id: "", started_at: "", finished_at: "", notes: "" });
+                setActivities([]);
+                setActivityForm({ activity_type_id: "", hole_id: "", started_at: "", finished_at: "", notes: "" });
+                setEditingActivityIndex(null);
+                if (onClose) onClose();
+              }}
+            >
+              Reset All
+            </button>
+          </div>
+        </div>
+      </form>
+    );
+  }
+
+  function HistoryTable(props) {
+    // ...existing code...
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium">History</h3>
+
+          {/* Enter New Plod button */}
+          <button
+            onClick={() => setShowNewPlod(true)}
+            className="inline-flex items-center gap-2 rounded bg-indigo-600 text-white px-3 py-1.5 text-sm"
+          >
+            Enter New Plod
+          </button>
+        </div>
+
+        {/* ...existing history listing ... */}
+
+        {/* Slide-up drawer (overlay + panel) */}
+        <div
+          aria-hidden={!showNewPlod}
+          className={`fixed inset-0 z-40 transition-opacity ${showNewPlod ? 'pointer-events-auto' : 'pointer-events-none'}`}
+        >
+          {/* overlay */}
+          <div
+            onClick={() => setShowNewPlod(false)}
+            className={`absolute inset-0 bg-black/40 transition-opacity ${showNewPlod ? 'opacity-100' : 'opacity-0'}`}
+          />
+          {/* panel */}
+          <div
+            className={`fixed left-0 right-0 bottom-0 z-50 mx-auto w-full max-w-3xl transform transition-transform duration-300 ${showNewPlod ? 'translate-y-0' : 'translate-y-full'}`}
+          >
+            <div className="rounded-t-xl bg-white p-4 shadow-lg">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-lg font-medium">New Plod</h4>
+                <button onClick={() => setShowNewPlod(false)} className="text-gray-600">Close</button>
+              </div>
+
+              {/* Render the same Add Plod form here */}
+              <AddPlodForm onClose={() => setShowNewPlod(false)} />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-6xl p-6">
       <header className="mb-6">
@@ -735,218 +999,9 @@ export default function Page() {
           )}
 
           {activeTab === 'plod' && (
-            <form onSubmit={submit} className="space-y-6">
-              <div className="border-b pb-4 mb-4">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Shift Details</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Vendor (optional)</label>
-                    <select value={form.vendor_id} onChange={handleChange("vendor_id")} className="mt-1 block w-full rounded border p-2">
-                      <option value="">— select vendor —</option>
-                      {vendors.map((v) => (
-                        <option key={v.id} value={v.id}>{v.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Shift Date</label>
-                    <input 
-                      required 
-                      type="date" 
-                      value={form.shift_date} 
-                      onChange={handleChange("shift_date")} 
-                      className="mt-1 block w-full rounded border p-2" 
-                    />
-                  </div>
-
-                  {/* New field for entered by - read-only */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Plod entered by</label>
-                    <input 
-                      type="text" 
-                      value={form.entered_by} 
-                      readOnly
-                      className="mt-1 block w-full rounded border bg-gray-50 p-2" 
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Shift Notes (optional)</label>
-                    <textarea 
-                      value={form.notes} 
-                      onChange={handleChange("notes")} 
-                      rows={2} 
-                      className="mt-1 block w-full rounded border p-2" 
-                      placeholder="Overall shift notes"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Shift Activities</h3>
-                
-                {/* Activity entry form */}
-                <div className="bg-gray-50 p-4 rounded-lg mb-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Activity Type</label>
-                      <select 
-                        value={activityForm.activity_type_id} 
-                        onChange={(e) => setActivityForm(prev => ({ ...prev, activity_type_id: e.target.value }))
-                        }
-                        className="mt-1 block w-full rounded border p-2"
-                      >
-                        <option value="">— select activity —</option>
-                        {activityTypes.map((a) => (
-                          <option key={a.id} value={a.id}>{a.activity_type}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Hole (optional)</label>
-                      <select 
-                        value={activityForm.hole_id} 
-                        onChange={(e) => setActivityForm(prev => ({ ...prev, hole_id: e.target.value }))
-                        }
-                        className="mt-1 block w-full rounded border p-2"
-                      >
-                        <option value="">— select hole —</option>
-                        {holes.map((h) => (
-                          <option key={h.id} value={h.id}>{h.hole_id}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Started At</label>
-                      <input 
-                        type="time" 
-                        value={activityForm.started_at ? new Date(activityForm.started_at).toTimeString().slice(0,5) : ""}
-                        onChange={(e) => {
-                          // Combine shift date with selected time
-                          const timeStr = e.target.value;
-                          const dateStr = form.shift_date;
-                          const dateTimeStr = `${dateStr}T${timeStr}`;
-                          setActivityForm(prev => ({ ...prev, started_at: dateTimeStr }));
-                        }}
-                        className="mt-1 block w-full rounded border p-2" 
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Finished At</label>
-                      <input 
-                        type="time" 
-                        value={activityForm.finished_at ? new Date(activityForm.finished_at).toTimeString().slice(0,5) : ""}
-                        onChange={(e) => {
-                          // Combine shift date with selected time
-                          const timeStr = e.target.value;
-                          const dateStr = form.shift_date;
-                          const dateTimeStr = `${dateStr}T${timeStr}`;
-                          setActivityForm(prev => ({ ...prev, finished_at: dateTimeStr }));
-                        }}
-                        className="mt-1 block w-full rounded border p-2" 
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700">Notes</label>
-                    <textarea 
-                      value={activityForm.notes}
-                      onChange={(e) => setActivityForm(prev => ({ ...prev, notes: e.target.value }))
-                      }
-                      rows={2} 
-                      className="mt-1 block w-full rounded border p-2"
-                      placeholder="Activity specific notes" 
-                    />
-                  </div>
-                  
-                  <div className="flex justify-end">
-                    <button 
-                      type="button"
-                      onClick={addActivity}
-                      className="inline-flex items-center rounded bg-indigo-600 text-white px-4 py-2"
-                    >
-                      {editingActivityIndex !== null ? 'Update Activity' : 'Add Activity'}
-                    </button>
-                  </div>
-                </div>
-                
-                {/* List of added activities */}
-                <div className="space-y-3">
-                  {activities.length === 0 ? (
-                    <div className="text-center py-6 text-gray-500 bg-gray-50 rounded-lg">
-                      No activities added yet. Add at least one activity above.
-                    </div>
-                  ) : (
-                    activities.map((activity, idx) => {
-                      // Find the activity type and hole details
-                      const actType = activityTypes.find(a => a.id === activity.activity_type_id);
-                      const hole = holes.find(h => h.id === activity.hole_id);
-                      
-                      return (
-                        <div key={idx} className="border rounded-lg p-3 bg-gray-50 flex justify-between items-center">
-                          <div>
-                            <div className="font-medium">
-                              {actType?.activity_type || 'Unknown Activity'}
-                              {hole && <span className="ml-2 text-gray-500">- {hole.hole_id}</span>}
-                            </div>
-                            <div className="text-sm text-gray-600">
-                              {new Date(activity.started_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} 
-                              to 
-                              {new Date(activity.finished_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                              {activity.notes && <div className="mt-1 text-gray-700">{activity.notes}</div>}
-                            </div>
-                          </div>
-                          <div className="flex space-x-2">
-                            <button
-                              type="button"
-                              onClick={() => editActivity(idx)}
-                              className="text-indigo-600 hover:text-indigo-800 p-1"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => removeActivity(idx)}
-                              className="text-red-600 hover:text-red-800 p-1"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-                
-                <div className="mt-6 flex items-center gap-3">
-                  <button 
-                    type="submit" 
-                    className="inline-flex items-center rounded bg-indigo-600 text-white px-4 py-2" 
-                    disabled={loading || activities.length === 0}
-                  >
-                    {loading ? "Saving…" : "Save Shift & Activities"}
-                  </button>
-                  <button 
-                    type="button" 
-                    className="text-sm text-gray-600" 
-                    onClick={() => {
-                      setForm({ vendor_id: "", started_at: "", finished_at: "", notes: "" });
-                      setActivities([]);
-                      setActivityForm({ activity_type_id: "", hole_id: "", started_at: "", finished_at: "", notes: "" });
-                      setEditingActivityIndex(null);
-                    }}
-                  >
-                    Reset All
-                  </button>
-                </div>
-              </div>
-            </form>
+            <div>
+              <AddPlodForm />
+            </div>
           )}
 
           {activeTab === 'vendors' && (
@@ -1158,143 +1213,23 @@ export default function Page() {
 
           {/* New History Tab Content */}
           {activeTab === 'history' && (
-            <div className="space-y-6">
-              {/* Date filter controls */}
-              <form className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end" onSubmit={(e) => {
-                e.preventDefault();
-                loadPlods();
-              }}>
-                <div className="md:col-span-1">
-                  <label className="block text-sm font-medium text-gray-700">From Date</label>
-                  <input
-                    type="date"
-                    value={dateRange.from}
-                    onChange={handleDateRangeChange('from')}
-                    className="mt-1 block w-full rounded border p-2"
-                  />
-                </div>
-                <div className="md:col-span-1">
-                  <label className="block text-sm font-medium text-gray-700">To Date</label>
-                  <input
-                    type="date"
-                    value={dateRange.to}
-                    onChange={handleDateRangeChange('to')}
-                    className="mt-1 block w-full rounded border p-2"
-                  />
-                </div>
-                <div className="md:col-span-1">
-                  <button
-                    type="submit"
-                    className="inline-flex items-center rounded bg-indigo-600 text-white px-4 py-2 w-full"
-                    disabled={plodsLoading}
-                  >
-                    {plodsLoading ? 'Loading...' : 'Filter'}
-                  </button>
-                </div>
-              </form>
-
-              {/* Plods listing */}
-              <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-2">Activity History</h3>
-                
-                {plodsLoading ? (
-                  <div className="text-center py-8">Loading history...</div>
-                ) : plods.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">No activities found for the selected period</div>
-                ) : (
-                  <div className="space-y-4">
-                    {plods.map((plod) => (
-                      <div key={plod.id} className="border rounded-lg p-4 bg-gray-50">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h4 className="font-medium">
-                              {plod.vendors?.name || 'No Vendor'}
-                            </h4>
-                            {/* Display who entered the plod */}
-                            {plod.entered_by && (
-                              <div className="text-xs text-gray-500">Entered by: {plod.entered_by}</div>
-                            )}
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm font-medium">{calculateDuration(plod.started_at, plod.finished_at)}</div>
-                            <div className="text-xs text-gray-500">Total Duration</div>
-                          </div>
-                        </div>
-                        
-                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-                          <div>
-                            <div className="text-gray-500">Started</div>
-                            <div>{formatDateTime(plod.started_at)}</div>
-                          </div>
-                          <div>
-                            <div className="text-gray-500">Finished</div>
-                            <div>{formatDateTime(plod.finished_at)}</div>
-                          </div>
-                        </div>
-                        
-                        {plod.notes && (
-                          <div className="mt-3 text-sm">
-                            <div className="text-gray-500">Shift Notes</div>
-                            <div className="mt-1 text-gray-800">{plod.notes}</div>
-                          </div>
-                        )}
-                        
-                        {/* Activities within this PLOD */}
-                        {plod.plod_activities && plod.plod_activities.length > 0 && (
-                          <div className="mt-4">
-                            <h5 className="text-sm font-medium mb-2">Activities</h5>
-                            <div className="space-y-3 pl-4 border-l-2 border-gray-200">
-                              {plod.plod_activities.map(activity => (
-                                <div key={activity.id} className="relative">
-                                  <div className="absolute -left-6 top-1/2 transform -translate-y-1/2 w-2 h-2 rounded-full bg-indigo-500"></div>
-                                  <div className="flex justify-between items-start">
-                                    <div>
-                                      <div className="font-medium">
-                                        {activity.activity_types?.activity_type || 'Unknown Activity'}
-                                      </div>
-                                      {activity.holes && (
-                                        <div className="text-xs text-gray-600">
-                                          Hole: {activity.holes.hole_id}
-                                        </div>
-                                      )}
-                                    </div>
-                                    <div className="text-right text-xs">
-                                      <div className="font-medium">{calculateDuration(activity.started_at, activity.finished_at)}</div>
-                                    </div>
-                                  </div>
-                                  <div className="text-xs text-gray-500 mt-1">
-                                    {new Date(activity.started_at).toLocaleTimeString()} - {new Date(activity.finished_at).toLocaleTimeString()}
-                                  </div>
-                                  {activity.notes && (
-                                    <div className="text-xs text-gray-600 mt-1">{activity.notes}</div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+            <HistoryTable />
           )}
         </section>
       </div>
 
       {/* Resource Modal */}
       {resourceModalOpen && (
-        <div className="fixed inset-0 z-10 overflow-y-auto">
+        <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center">
-            {/* Background overlay */}
-            <div 
-              className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+            {/* Background overlay (lower z) */}
+            <div
               onClick={() => !resourceLoading && setResourceModalOpen(false)}
-            ></div>
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity z-40"
+            />
             
-            {/* Modal panel */}
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            {/* Modal panel (above overlay) */}
+            <div className="relative inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full z-50">
               <form onSubmit={submitResource}>
                 <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <h3 className="text-lg font-medium text-gray-900 mb-4">
