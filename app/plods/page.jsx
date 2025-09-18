@@ -1109,39 +1109,45 @@ export default function Page() {
         {/* ...existing history listing ... */}
 
         {/* Slide-up drawer (overlay + panel) */}
-        <div
-          aria-hidden={!showNewPlod}
-          className={`fixed inset-0 z-40 transition-opacity ${showNewPlod ? 'pointer-events-auto' : 'pointer-events-none'}`}
-        >
+        <div aria-hidden={!showNewPlod} className={`fixed inset-0 z-40 ${showNewPlod ? 'pointer-events-auto' : 'pointer-events-none'}`}>
           {/* overlay */}
           <div
             onClick={() => setShowNewPlod(false)}
             className={`absolute inset-0 bg-black/40 transition-opacity ${showNewPlod ? 'opacity-100' : 'opacity-0'}`}
           />
-          {/* panel */}
-          <div
-            /* add mobile horizontal + vertical padding: px-4 py-4 on small screens, remove on sm+ */
-            className={`fixed left-0 right-0 bottom-0 z-50 mx-auto w-full max-w-3xl transform transition-transform duration-300 px-4 py-4 sm:px-0 sm:py-0 ${showNewPlod ? 'translate-y-0' : 'translate-y-full'}`}
-          >
-            <div className="rounded-t-xl bg-white p-4 shadow-lg relative">
-              {/* Top-right close button */}
-              <button
-                type="button"
-                onClick={() => setShowNewPlod(false)}
-                aria-label="Close new plod form"
-                className="absolute top-3 right-3 inline-flex items-center justify-center h-8 w-8 rounded-md text-gray-600 hover:bg-gray-100"
+
+          {/* flexible container ensures the panel is kept within viewport */}
+          <div className="fixed inset-0 flex items-end sm:items-center justify-center px-4 pb-4 sm:pb-8">
+            <div
+              className={`w-full max-w-3xl transform transition-transform duration-300 ${showNewPlod ? 'translate-y-0' : 'translate-y-full'}`}
+            >
+              <div
+                className="bg-white rounded-t-xl sm:rounded-xl shadow-lg relative overflow-auto"
+                style={{ maxHeight: 'calc(100vh - 5rem)', paddingBottom: 'env(safe-area-inset-bottom)', paddingTop: '1rem' }}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+                {/* Top-right close button */}
+                <button
+                  type="button"
+                  onClick={() => setShowNewPlod(false)}
+                  aria-label="Close new plod form"
+                  className="absolute top-3 right-3 inline-flex items-center justify-center h-8 w-8 rounded-md text-gray-600 hover:bg-gray-100"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
 
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-lg font-medium">New Plod</h4>
+                <div className="px-4 pt-3 pb-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-lg font-medium">New Plod</h4>
+                  </div>
+
+                  {/* Render the same Add Plod form here */}
+                  <div className="pb-6">
+                    <AddPlodForm onClose={() => setShowNewPlod(false)} />
+                  </div>
+                </div>
               </div>
-
-              {/* Render the same Add Plod form here */}
-              <AddPlodForm onClose={() => setShowNewPlod(false)} />
             </div>
           </div>
         </div>
