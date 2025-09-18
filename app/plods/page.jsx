@@ -9,8 +9,8 @@ export default function Page() {
   const [vendors, setVendors] = useState([]);
   const [activityTypes, setActivityTypes] = useState([]);
   const [holes, setHoles] = useState([]);
-  // Open page to History by default
-  const [activeTab, setActiveTab] = useState("history");
+  // Open page to Home by default
+  const [activeTab, setActiveTab] = useState("home");
   const [orgs, setOrgs] = useState([]);
   const [vendorForm, setVendorForm] = useState({ name: "", contact: "", organization_id: "" });
   const [vendorLoading, setVendorLoading] = useState(false);
@@ -132,8 +132,8 @@ export default function Page() {
       else setHoles(hRes?.data || []);
     });
 
-    // Load plods history if history tab is active
-    if (activeTab === 'history' && orgId) {
+    // Load plods history if Home tab is active
+    if (activeTab === 'home' && orgId) {
       loadPlods();
     }
   }, [orgId, activeTab, expandedVendor]);
@@ -899,12 +899,203 @@ export default function Page() {
     );
   }
 
+  // New Admin panel that contains Vendors + Activities sections (now with nested tabs)
+  function AdminPanel() {
+    const [adminTab, setAdminTab] = useState("vendors");
+
+    return (
+      <div className="space-y-6">
+        {/* Admin nested tab bar */}
+        <div className="flex border-b mb-4">
+          <button
+            className={`px-4 py-3 -mb-px ${adminTab === "vendors" ? "border-b-2 border-indigo-600 text-indigo-600" : "text-gray-600"}`}
+            onClick={() => setAdminTab("vendors")}
+          >
+            Vendors
+          </button>
+          <button
+            className={`px-4 py-3 -mb-px ${adminTab === "activities" ? "border-b-2 border-indigo-600 text-indigo-600" : "text-gray-600"}`}
+            onClick={() => setAdminTab("activities")}
+          >
+            Activities
+          </button>
+        </div>
+
+        {/* Vendors tab content */}
+        {adminTab === "vendors" && (
+          <div>
+            <form onSubmit={submitVendor} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <div className="md:col-span-1">
+                <label className="block text-sm font-medium text-gray-700">Name</label>
+                <input
+                  value={vendorForm.name}
+                  onChange={handleVendorChange("name")}
+                  className="mt-1 block w-full rounded border p-2"
+                />
+              </div>
+              <div className="md:col-span-1">
+                <label className="block text-sm font-medium text-gray-700">Contact</label>
+                <input
+                  value={vendorForm.contact}
+                  onChange={handleVendorChange("contact")}
+                  className="mt-1 block w-full rounded border p-2"
+                />
+              </div>
+              <div className="md:col-span-1">
+                <button
+                  type="submit"
+                  className="inline-flex items-center rounded bg-indigo-600 text-white px-4 py-2 w-full"
+                  disabled={vendorLoading}
+                >
+                  {vendorLoading ? "Saving…" : "Add Vendor"}
+                </button>
+              </div>
+            </form>
+
+            <div className="mt-8">
+              <h3 className="text-sm font-medium text-gray-700 mb-2">Vendors & Resources</h3>
+              <div className="space-y-2">
+                {vendors.length === 0 && <div className="text-sm text-gray-500">No vendors yet.</div>}
+                {vendors.map((vendor) => (
+                  <div key={vendor.id} className="border rounded overflow-hidden">
+                    <div
+                      className="flex items-center justify-between p-3 bg-gray-50 cursor-pointer"
+                      onClick={() => toggleVendorExpand(vendor.id)}
+                    >
+                      <div>
+                        <div className="font-medium">{vendor.name}</div>
+                        {vendor.contact && <div className="text-sm text-gray-500">{vendor.contact}</div>}
+                      </div>
+                      <div className="flex items-center">
+                        <span className="text-sm text-gray-500 mr-2">
+                          {expandedVendor === vendor.id ? "Hide resources" : "Show resources"}
+                        </span>
+                        <svg
+                          className={`w-5 h-5 transition-transform ${expandedVendor === vendor.id ? "transform rotate-180" : ""}`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </div>
+
+                    {expandedVendor === vendor.id && (
+                      <div className="p-3 border-t">
+                        <div className="mb-3">
+                          <button
+                            onClick={() => openAddResourceModal(vendor.id)}
+                            className="flex items-center text-sm text-indigo-600 hover:text-indigo-900 font-medium"
+                          >
+                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                            Add New Resource
+                          </button>
+                        </div>
+
+                        <div className="space-y-2">
+                          {vendorResources.length === 0 ? (
+                            <div className="text-sm text-gray-500 p-2">No resources added yet.</div>
+                          ) : (
+                            <table className="min-w-full divide-y divide-gray-200">
+                              <thead className="bg-gray-50">
+                                <tr>
+                                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                  <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody className="bg-white divide-y divide-gray-200">
+                                {vendorResources.map((resource) => (
+                                  <tr key={resource.id} className="hover:bg-gray-50">
+                                    <td className="px-3 py-2 whitespace-nowrap">
+                                      <div className="text-sm font-medium text-gray-900">{resource.name}</div>
+                                      {resource.notes && <div className="text-xs text-gray-500 truncate max-w-xs">{resource.notes}</div>}
+                                    </td>
+                                    <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">{resource.resource_type || "-"}</td>
+                                    <td className="px-3 py-2 whitespace-nowrap">
+                                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${resource.status === "Active" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+                                        {resource.status}
+                                      </span>
+                                    </td>
+                                    <td className="px-3 py-2 whitespace-nowrap text-right text-sm">
+                                      <button type="button" className="text-indigo-600 hover:text-indigo-900 mr-3" onClick={() => openEditResourceModal(resource)}>Edit</button>
+                                      <button type="button" className="text-red-600 hover:text-red-900" onClick={() => deleteResource(resource.id)}>Delete</button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Activities tab content */}
+        {adminTab === "activities" && (
+          <div>
+            <form onSubmit={submitActivityType} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700">Activity Type</label>
+                <input
+                  value={activityTypeForm.activityType}
+                  onChange={handleActivityTypeChange("activityType")}
+                  placeholder="Activity Type (e.g. drilling, maintenance)"
+                  className="mt-1 block w-full rounded border p-2"
+                />
+              </div>
+              <div className="md:col-span-1">
+                <label className="block text-sm font-medium text-gray-700">Group</label>
+                <input value={activityTypeForm.group} onChange={handleActivityTypeChange("group")} placeholder="Drilling" className="mt-1 block w-full rounded border p-2" />
+              </div>
+              <div className="md:col-span-1">
+                <button type="submit" className="inline-flex items-center rounded bg-indigo-600 text-white px-4 py-2 w-full" disabled={activityTypeLoading}>
+                  {activityTypeLoading ? "Saving…" : "Add Activity"}
+                </button>
+              </div>
+              <div className="md:col-span-4">
+                <label className="block text-sm font-medium text-gray-700">Description</label>
+                <input value={activityTypeForm.description} onChange={handleActivityTypeChange("description")} placeholder="Optional activity description" className="mt-1 block w-full rounded border p-2" />
+              </div>
+            </form>
+
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 mb-2">Existing Activity Types</h3>
+              <div className="space-y-2">
+                {activityTypes.length === 0 && <div className="text-sm text-gray-500">No activity types yet.</div>}
+                {activityTypes.map((a) => (
+                  <div key={a.id} className="flex items-center justify-between border rounded p-2">
+                    <div>
+                      <div className="font-medium">{a.activity_type}</div>
+                      <div className="text-sm text-gray-500">{a.group && <span className="mr-2">{a.group}</span>}</div>
+                      {a.description && <div className="text-sm text-gray-500 mt-1">{a.description}</div>}
+                    </div>
+                    <div className="text-sm text-gray-500">{/* actions could go here */}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   function HistoryTable(props) {
     // ...existing code...
     return (
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium">History</h3>
+          <h3 className="text-lg font-medium">Home</h3>
 
           {/* Enter New Plod button */}
           <button
@@ -929,12 +1120,24 @@ export default function Page() {
           />
           {/* panel */}
           <div
-            className={`fixed left-0 right-0 bottom-0 z-50 mx-auto w-full max-w-3xl transform transition-transform duration-300 ${showNewPlod ? 'translate-y-0' : 'translate-y-full'}`}
+            /* add mobile horizontal + vertical padding: px-4 py-4 on small screens, remove on sm+ */
+            className={`fixed left-0 right-0 bottom-0 z-50 mx-auto w-full max-w-3xl transform transition-transform duration-300 px-4 py-4 sm:px-0 sm:py-0 ${showNewPlod ? 'translate-y-0' : 'translate-y-full'}`}
           >
-            <div className="rounded-t-xl bg-white p-4 shadow-lg">
+            <div className="rounded-t-xl bg-white p-4 shadow-lg relative">
+              {/* Top-right close button */}
+              <button
+                type="button"
+                onClick={() => setShowNewPlod(false)}
+                aria-label="Close new plod form"
+                className="absolute top-3 right-3 inline-flex items-center justify-center h-8 w-8 rounded-md text-gray-600 hover:bg-gray-100"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+
               <div className="flex items-center justify-between mb-3">
                 <h4 className="text-lg font-medium">New Plod</h4>
-                <button onClick={() => setShowNewPlod(false)} className="text-gray-600">Close</button>
               </div>
 
               {/* Render the same Add Plod form here */}
@@ -962,32 +1165,19 @@ export default function Page() {
         {/* Tab bar */}
         <div className="flex border-b">
           <button
-            className={`px-4 py-3 -mb-px ${activeTab === 'plod' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-600'}`}
-            onClick={() => setActiveTab('plod')}
-          >
-            Add Plod
-          </button>
-          <button
-            className={`px-4 py-3 -mb-px ${activeTab === 'vendors' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-600'}`}
-            onClick={() => setActiveTab('vendors')}
-          >
-            Vendors
-          </button>
-          <button
-            className={`px-4 py-3 -mb-px ${activeTab === 'activities' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-600'}`}
-            onClick={() => setActiveTab('activities')}
-          >
-            Activities
-          </button>
-          {/* New History Tab */}
-          <button
-            className={`px-4 py-3 -mb-px ${activeTab === 'history' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-600'}`}
+            className={`px-4 py-3 -mb-px ${activeTab === 'home' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-600'}`}
             onClick={() => {
-              setActiveTab('history');
+              setActiveTab('home');
               if (orgId) loadPlods();
             }}
           >
-            History
+            Home
+          </button>
+          <button
+            className={`px-4 py-3 -mb-px ${activeTab === 'admin' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-600'}`}
+            onClick={() => setActiveTab('admin')}
+          >
+            Admin
           </button>
         </div>
 
@@ -998,221 +1188,12 @@ export default function Page() {
             </div>
           )}
 
-          {activeTab === 'plod' && (
-            <div>
-              <AddPlodForm />
-            </div>
+          {activeTab === 'admin' && (
+            <AdminPanel />
           )}
 
-          {activeTab === 'vendors' && (
-            <div className="space-y-6">
-              <form onSubmit={submitVendor} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                <div className="md:col-span-1">
-                  <label className="block text-sm font-medium text-gray-700">Name</label>
-                  <input 
-                    value={vendorForm.name} 
-                    onChange={handleVendorChange('name')} 
-                    className="mt-1 block w-full rounded border p-2" 
-                  />
-                </div>
-                <div className="md:col-span-1">
-                  <label className="block text-sm font-medium text-gray-700">Contact</label>
-                  <input 
-                    value={vendorForm.contact} 
-                    onChange={handleVendorChange('contact')} 
-                    className="mt-1 block w-full rounded border p-2" 
-                  />
-                </div>
-                <div className="md:col-span-1">
-                  <button 
-                    type="submit" 
-                    className="inline-flex items-center rounded bg-indigo-600 text-white px-4 py-2 w-full" 
-                    disabled={vendorLoading}
-                  >
-                    {vendorLoading ? 'Saving…' : 'Add Vendor'}
-                  </button>
-                </div>
-              </form>
-
-              {/* Vendors accordion */}
-              <div className="mt-8">
-                <h3 className="text-sm font-medium text-gray-700 mb-2">Vendors & Resources</h3>
-                <div className="space-y-2">
-                  {vendors.length === 0 && (
-                    <div className="text-sm text-gray-500">No vendors yet.</div>
-                  )}
-                  
-                  {vendors.map((vendor) => (
-                    <div key={vendor.id} className="border rounded overflow-hidden">
-                      {/* Vendor Header (always visible) */}
-                      <div 
-                        className="flex items-center justify-between p-3 bg-gray-50 cursor-pointer"
-                        onClick={() => toggleVendorExpand(vendor.id)}
-                      >
-                        <div>
-                          <div className="font-medium">{vendor.name}</div>
-                          {vendor.contact && <div className="text-sm text-gray-500">{vendor.contact}</div>}
-                        </div>
-                        <div className="flex items-center">
-                          <span className="text-sm text-gray-500 mr-2">
-                            {expandedVendor === vendor.id ? 'Hide resources' : 'Show resources'}
-                          </span>
-                          <svg 
-                            className={`w-5 h-5 transition-transform ${expandedVendor === vendor.id ? 'transform rotate-180' : ''}`} 
-                            fill="none" 
-                            stroke="currentColor" 
-                            viewBox="0 0 24 24"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </div>
-                      </div>
-                      
-                      {/* Vendor Resources (expandable) */}
-                      {expandedVendor === vendor.id && (
-                        <div className="p-3 border-t">
-                          {/* Add Resource Button */}
-                          <div className="mb-3">
-                            <button
-                              onClick={() => openAddResourceModal(vendor.id)}
-                              className="flex items-center text-sm text-indigo-600 hover:text-indigo-900 font-medium"
-                            >
-                              <svg 
-                                className="w-4 h-4 mr-1" 
-                                fill="none" 
-                                stroke="currentColor" 
-                                viewBox="0 0 24 24"
-                              >
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                              </svg>
-                              Add New Resource
-                            </button>
-                          </div>
-                          
-                          {/* Resources List */}
-                          <div className="space-y-2">
-                            {vendorResources.length === 0 ? (
-                              <div className="text-sm text-gray-500 p-2">No resources added yet.</div>
-                            ) : (
-                              <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
-                                  <tr>
-                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                  {vendorResources.map((resource) => (
-                                    <tr key={resource.id} className="hover:bg-gray-50">
-                                      <td className="px-3 py-2 whitespace-nowrap">
-                                        <div className="text-sm font-medium text-gray-900">{resource.name}</div>
-                                        {resource.notes && (
-                                          <div className="text-xs text-gray-500 truncate max-w-xs">{resource.notes}</div>
-                                        )}
-                                      </td>
-                                      <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
-                                        {resource.resource_type || '-'}
-                                      </td>
-                                      <td className="px-3 py-2 whitespace-nowrap">
-                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                          resource.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                                        }`}>
-                                          {resource.status}
-                                        </span>
-                                      </td>
-                                      <td className="px-3 py-2 whitespace-nowrap text-right text-sm">
-                                        <button
-                                          type="button"
-                                          className="text-indigo-600 hover:text-indigo-900 mr-3"
-                                          onClick={() => openEditResourceModal(resource)}
-                                        >
-                                          Edit
-                                        </button>
-                                        <button
-                                          type="button"
-                                          className="text-red-600 hover:text-red-900"
-                                          onClick={() => deleteResource(resource.id)}
-                                        >
-                                          Delete
-                                        </button>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Activities Tab Content */}
-          {activeTab === 'activities' && (
-            <div className="space-y-6">
-              <form onSubmit={submitActivityType} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">Activity Type</label>
-                  <input 
-                    value={activityTypeForm.activityType}
-                    onChange={handleActivityTypeChange('activityType')}
-                    placeholder="Activity Type (e.g. drilling, maintenance)" 
-                    className="mt-1 block w-full rounded border p-2" 
-                  />
-                </div>
-                <div className="md:col-span-1">
-                  <label className="block text-sm font-medium text-gray-700">Group</label>
-                  <input 
-                    value={activityTypeForm.group} 
-                    onChange={handleActivityTypeChange('group')} 
-                    placeholder="Drilling" 
-                    className="mt-1 block w-full rounded border p-2" 
-                  />
-                </div>
-                <div className="md:col-span-1">
-                  <button type="submit" className="inline-flex items-center rounded bg-indigo-600 text-white px-4 py-2 w-full" disabled={activityTypeLoading}>
-                    {activityTypeLoading ? 'Saving…' : 'Add Activity'}
-                  </button>
-                </div>
-                <div className="md:col-span-4">
-                  <label className="block text-sm font-medium text-gray-700">Description</label>
-                  <input 
-                    value={activityTypeForm.description} 
-                    onChange={handleActivityTypeChange('description')} 
-                    placeholder="Optional activity description" 
-                    className="mt-1 block w-full rounded border p-2" 
-                  />
-                </div>
-              </form>
-
-              <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-2">Existing Activity Types</h3>
-                <div className="space-y-2">
-                  {activityTypes.length === 0 && <div className="text-sm text-gray-500">No activity types yet.</div>}
-                  {activityTypes.map((a) => (
-                    <div key={a.id} className="flex items-center justify-between border rounded p-2">
-                      <div>
-                        <div className="font-medium">{a.activity_type}</div>
-                        <div className="text-sm text-gray-500">
-                          {a.group && <span className="mr-2">{a.group}</span>}
-                        </div>
-                        {a.description && <div className="text-sm text-gray-500 mt-1">{a.description}</div>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* New History Tab Content */}
-          {activeTab === 'history' && (
+          {/* Home Tab Content (formerly History) */}
+          {activeTab === 'home' && (
             <HistoryTable />
           )}
         </section>
