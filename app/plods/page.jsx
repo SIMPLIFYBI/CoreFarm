@@ -5,6 +5,16 @@ import { IconPlods } from "../components/icons";
 import { supabaseBrowser } from "../../lib/supabaseClient";
 import { useOrg } from "../../lib/OrgContext";
 
+// Add a small, tailwind-friendly SVG spinner component
+function Spinner({ className = "h-5 w-5", stroke = "currentColor" }) {
+  return (
+    <svg className={`${className} animate-spin`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke={stroke} strokeWidth="4"></circle>
+      <path className="opacity-75" fill={stroke} d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+    </svg>
+  );
+}
+
 export default function Page() {
   const [vendors, setVendors] = useState([]);
   const [activityTypes, setActivityTypes] = useState([]);
@@ -148,19 +158,19 @@ export default function Page() {
     try {
       const { data, error } = await sb.from("plods")
         .select(`
-          id, 
-          started_at, 
-          finished_at, 
+          id,
+          started_at,
+          finished_at,
           notes,
           vendors:vendor_id(name),
           plod_activities(
-            id, 
+            id,
             activity_type_id,
             hole_id,
             started_at,
             finished_at,
             notes,
-            activity_types:activity_type_id(label, activity_type),
+            activity_types:activity_type_id(activity_type),
             holes:hole_id(hole_id)
           )
         `)
@@ -774,30 +784,19 @@ export default function Page() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700">Started At</label>
-                <input 
-                  type="time" 
-                  value={activityForm.started_at ? new Date(activityForm.started_at).toTimeString().slice(0,5) : ""}
-                  onChange={(e) => {
-                    const timeStr = e.target.value;
-                    const dateStr = form.shift_date;
-                    const dateTimeStr = `${dateStr}T${timeStr}`;
-                    setActivityForm(prev => ({ ...prev, started_at: dateTimeStr }));
-                  }}
-                  className="mt-1 block w-full rounded border p-2" 
+                <SimpleTimePicker
+                  value={activityForm.started_at}
+                  onChange={(val) => setActivityForm((prev) => ({ ...prev, started_at: val }))}
+                  minuteStep={5}
                 />
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700">Finished At</label>
-                <input 
-                  type="time" 
-                  value={activityForm.finished_at ? new Date(activityForm.finished_at).toTimeString().slice(0,5) : ""}
-                  onChange={(e) => {
-                    const timeStr = e.target.value;
-                    const dateStr = form.shift_date;
-                    const dateTimeStr = `${dateStr}T${timeStr}`;
-                    setActivityForm(prev => ({ ...prev, finished_at: dateTimeStr }));
-                  }}
-                  className="mt-1 block w-full rounded border p-2" 
+                <SimpleTimePicker
+                  value={activityForm.finished_at}
+                  onChange={(val) => setActivityForm((prev) => ({ ...prev, finished_at: val }))}
+                  minuteStep={5}
                 />
               </div>
             </div>
@@ -878,7 +877,14 @@ export default function Page() {
               className="inline-flex items-center rounded bg-indigo-600 text-white px-4 py-2" 
               disabled={loading || activities.length === 0}
             >
-              {loading ? "Saving…" : "Save Shift & Activities"}
+              {loading ? (
+                <>
+                  <Spinner className="h-4 w-4 mr-2 text-white" stroke="white" />
+                  Saving…
+                </>
+              ) : (
+                "Save Shift & Activities"
+              )}
             </button>
             <button 
               type="button" 
@@ -1106,51 +1112,128 @@ export default function Page() {
           </button>
         </div>
 
-        {/* ...existing history listing ... */}
-
-        {/* Slide-up drawer (overlay + panel) */}
-        <div aria-hidden={!showNewPlod} className={`fixed inset-0 z-40 ${showNewPlod ? 'pointer-events-auto' : 'pointer-events-none'}`}>
-          {/* overlay */}
-          <div
-            onClick={() => setShowNewPlod(false)}
-            className={`absolute inset-0 bg-black/40 transition-opacity ${showNewPlod ? 'opacity-100' : 'opacity-0'}`}
-          />
-
-          {/* flexible container ensures the panel is kept within viewport */}
-          <div className="fixed inset-0 flex items-end sm:items-center justify-center px-4 pb-4 sm:pb-8">
-            <div
-              className={`w-full max-w-3xl transform transition-transform duration-300 ${showNewPlod ? 'translate-y-0' : 'translate-y-full'}`}
-            >
-              <div
-                className="bg-white rounded-t-xl sm:rounded-xl shadow-lg relative overflow-auto"
-                style={{ maxHeight: 'calc(100vh - 5rem)', paddingBottom: 'env(safe-area-inset-bottom)', paddingTop: '1rem' }}
-              >
-                {/* Top-right close button */}
-                <button
-                  type="button"
-                  onClick={() => setShowNewPlod(false)}
-                  aria-label="Close new plod form"
-                  className="absolute top-3 right-3 inline-flex items-center justify-center h-8 w-8 rounded-md text-gray-600 hover:bg-gray-100"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-
-                <div className="px-4 pt-3 pb-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-lg font-medium">New Plod</h4>
-                  </div>
-
-                  {/* Render the same Add Plod form here */}
-                  <div className="pb-6">
-                    <AddPlodForm onClose={() => setShowNewPlod(false)} />
-                  </div>
-                </div>
-              </div>
-            </div>
+        {/* show spinner while plods are loading */}
+        {plodsLoading ? (
+          <div className="py-8 flex justify-center">
+            <Spinner className="h-8 w-8 text-gray-600" stroke="currentColor" />
           </div>
-        </div>
+        ) : (
+          /* existing history listing rendering */
+          <>
+            {/* ...existing history listing code goes here... */}
+          </>
+        )}
+
+        {/* (end plods listing) */}
+      </div>
+    );
+  }
+
+  // SimpleTimePicker: lightweight hour/minute selector that returns "HH:MM"
+  function SimpleTimePicker({ value = "", onChange, minuteStep = 5, ampm = true }) {
+    // parse incoming value to HH:MM
+    const normalize = (v) => {
+      if (!v) return "00:00";
+      const t = v.includes("T") ? v.split("T")[1] : v;
+      return t.split(":").slice(0, 2).join(":");
+    };
+
+    const initial = normalize(value);
+    const [initH, initM] = initial.split(":");
+
+    const hours = ampm
+      ? Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"))
+      : Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+    const minutes = Array.from({ length: Math.ceil(60 / minuteStep) }, (_, i) => String(i * minuteStep).padStart(2, "0"));
+
+    // local display state
+    const [hour, setHour] = useState(() => {
+      if (!ampm) return initH.padStart(2, "0");
+      const hn = parseInt(initH, 10);
+      const dh = ((hn + 11) % 12) + 1;
+      return String(dh).padStart(2, "0");
+    });
+    const [minute, setMinute] = useState(initM || "00");
+    const [period, setPeriod] = useState(() => (parseInt(initH, 10) >= 12 ? "PM" : "AM"));
+
+    // keep local state in sync with prop changes without emitting onChange
+    useEffect(() => {
+      const n = normalize(value);
+      const [h = "00", m = "00"] = n.split(":");
+      const hn = parseInt(h, 10);
+      if (ampm) {
+        const dh = ((hn + 11) % 12) + 1;
+        setHour(String(dh).padStart(2, "0"));
+        setPeriod(hn >= 12 ? "PM" : "AM");
+      } else {
+        setHour(String(h).padStart(2, "0"));
+      }
+      setMinute(String(m).padStart(2, "0"));
+      // only run when value/ampm changes
+    }, [value, ampm]);
+
+    // helper to emit normalized HH:MM to parent only when changed
+    const emit = (h, m, p) => {
+      let outHour = parseInt(h, 10);
+      if (ampm) {
+        if (p === "AM" && outHour === 12) outHour = 0;
+        if (p === "PM" && outHour !== 12) outHour = outHour + 12;
+      }
+      const out = `${String(outHour).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+      if (normalize(value) !== out) onChange && onChange(out);
+    };
+
+    return (
+      <div className="flex gap-2 items-center">
+        <select
+          value={hour}
+          onChange={(e) => {
+            const nh = e.target.value;
+            setHour(nh);
+            emit(nh, minute, period);
+          }}
+          className="mt-1 block rounded border p-2"
+          aria-label="Hour"
+        >
+          {hours.map((h) => (
+            <option key={h} value={h}>
+              {h}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={minute}
+          onChange={(e) => {
+            const nm = e.target.value;
+            setMinute(nm);
+            emit(hour, nm, period);
+          }}
+          className="mt-1 block rounded border p-2"
+          aria-label="Minute"
+        >
+          {minutes.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+
+        {ampm && (
+          <select
+            value={period}
+            onChange={(e) => {
+              const np = e.target.value;
+              setPeriod(np);
+              emit(hour, minute, np);
+            }}
+            className="mt-1 block rounded border p-2"
+            aria-label="AM/PM"
+          >
+            <option value="AM">AM</option>
+            <option value="PM">PM</option>
+          </select>
+        )}
       </div>
     );
   }
@@ -1228,8 +1311,7 @@ export default function Page() {
                       <label className="block text-sm font-medium text-gray-700">Resource Name *</label>
                       <input
                         value={resourceForm.name}
-                        onChange={(e) => setResourceForm(prev => ({ ...prev, name: e.target.value }))
-                        }
+                        onChange={(e) => setResourceForm(prev => ({ ...prev, name: e.target.value }))}
                         className="mt-1 block w-full rounded border p-2"
                         placeholder="e.g., Drill Rig #1"
                         required
@@ -1240,8 +1322,7 @@ export default function Page() {
                       <label className="block text-sm font-medium text-gray-700">Resource Type</label>
                       <input
                         value={resourceForm.resource_type}
-                        onChange={(e) => setResourceForm(prev => ({ ...prev, resource_type: e.target.value }))
-                        }
+                        onChange={(e) => setResourceForm(prev => ({ ...prev, resource_type: e.target.value }))}
                         className="mt-1 block w-full rounded border p-2"
                         placeholder="e.g., Drill / Vehicle / Team"
                       />
@@ -1251,8 +1332,7 @@ export default function Page() {
                       <label className="block text-sm font-medium text-gray-700">Status</label>
                       <select
                         value={resourceForm.status}
-                        onChange={(e) => setResourceForm(prev => ({ ...prev, status: e.target.value }))
-                        }
+                        onChange={(e) => setResourceForm(prev => ({ ...prev, status: e.target.value }))}
                         className="mt-1 block w-full rounded border p-2"
                       >
                         <option value="Active">Active</option>
@@ -1264,8 +1344,7 @@ export default function Page() {
                       <label className="block text-sm font-medium text-gray-700">Notes</label>
                       <textarea
                         value={resourceForm.notes}
-                        onChange={(e) => setResourceForm(prev => ({ ...prev, notes: e.target.value }))
-                        }
+                        onChange={(e) => setResourceForm(prev => ({ ...prev, notes: e.target.value }))}
                         className="mt-1 block w-full rounded border p-2"
                         rows={3}
                       />
@@ -1291,6 +1370,49 @@ export default function Page() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Slide-up drawer for "Enter New Plod" */}
+      {showNewPlod && (
+        <div className="fixed inset-0 z-40 pointer-events-auto">
+          {/* darkened backdrop */}
+          <div
+            onClick={() => setShowNewPlod(false)}
+            className="absolute inset-0 bg-black/40"
+          />
+  
+          {/* container keeps panel inside viewport and centered on larger screens */}
+          <div className="fixed inset-0 flex items-end sm:items-center justify-center px-4 pb-4 sm:pb-8">
+            <div className="w-full max-w-3xl transform translate-y-0 transition-transform duration-300">
+              <div
+                className="bg-white rounded-t-xl sm:rounded-xl shadow-lg relative overflow-auto"
+                style={{ maxHeight: 'calc(100vh - 5rem)', paddingBottom: 'env(safe-area-inset-bottom)', paddingTop: '1rem' }}
+              >
+                {/* close button */}
+                <button
+                  type="button"
+                  onClick={() => setShowNewPlod(false)}
+                  aria-label="Close new plod form"
+                  className="absolute top-3 right-3 inline-flex items-center justify-center h-8 w-8 rounded-md text-gray-600 hover:bg-gray-100"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+  
+                <div className="px-4 pt-3 pb-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-lg font-medium">New Plod</h4>
+                  </div>
+  
+                  <div className="pb-6">
+                    <AddPlodForm onClose={() => setShowNewPlod(false)} />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

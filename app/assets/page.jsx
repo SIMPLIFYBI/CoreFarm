@@ -2,8 +2,9 @@
 import React, { useState, useEffect } from "react";
 import { supabaseBrowser } from "../../lib/supabaseClient";
 import { Fragment } from "react";
-import { VehicleIcon } from "../components/icons";
 import ActivityTypesTab from "./ActivityTypesTab";
+import { useOrg } from "../../lib/OrgContext";
+import { AssetIcon } from "../components/icons";
 
 const TABS = [
   { key: "assets", label: "Assets" },
@@ -13,12 +14,71 @@ const TABS = [
 
 export default function AssetsPage() {
   const [activeTab, setActiveTab] = useState("assets");
+  // org context + vendor state (moved here so hooks/state are available)
+  const { orgId } = useOrg();
+  const [vendors, setVendors] = useState([]);
+  const [vendorForm, setVendorForm] = useState({ name: "", contact: "" });
+  const [vendorLoading, setVendorLoading] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  // load vendors (filtered by org) - can be called when needed
+  const loadVendors = async () => {
+    if (!orgId) return setVendors([]);
+    try {
+      const sb = supabaseBrowser();
+      const { data, error } = await sb
+        .from("vendors")
+        .select("*")
+        .eq("organization_id", orgId)
+        .order("name");
+      if (error) throw error;
+      setVendors(data || []);
+    } catch (err) {
+      console.error("Error loading vendors:", err);
+      setMessage({ type: "error", text: `Failed to load vendors: ${err.message}` });
+    }
+  };
+
+  const submitVendor = async (e) => {
+    e && e.preventDefault();
+    setVendorLoading(true);
+    setMessage(null);
+    if (!vendorForm.name) {
+      setMessage({ type: "error", text: "Please provide a vendor name." });
+      setVendorLoading(false);
+      return;
+    }
+    if (!orgId) {
+      setMessage({ type: "error", text: "Organization ID is missing." });
+      setVendorLoading(false);
+      return;
+    }
+    try {
+      const sb = supabaseBrowser();
+      const payload = { name: vendorForm.name, contact: vendorForm.contact, organization_id: orgId };
+      const { error } = await sb.from("vendors").insert(payload);
+      if (error) throw error;
+      await loadVendors();
+      setMessage({ type: "success", text: "Vendor added successfully." });
+      setVendorForm({ name: "", contact: "" });
+    } catch (err) {
+      console.error("Error saving vendor:", err);
+      setMessage({ type: "error", text: `Failed to add vendor: ${err.message}` });
+    } finally {
+      setVendorLoading(false);
+    }
+  };
+  // optionally load vendors when assets tab mounts
+  useEffect(() => {
+    loadVendors();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId]);
 
   return (
     <div className="max-w-6xl mx-auto p-6">
       <div className="flex items-center gap-3 mb-6">
         <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-sm">
-          <VehicleIcon size={28} />
+          <AssetIcon className="h-6 w-6" />
         </span>
         <h1 className="text-2xl font-bold text-gray-800">Assets</h1>
       </div>
@@ -33,25 +93,7 @@ export default function AssetsPage() {
           </button>
         ))}
       </div>
-      <div>
-        {activeTab === "assets" && <AssetsTable />}
-        {activeTab === "locations" && <LocationsTable />}
-        {activeTab === "history" && <HistoryTable />}
-      </div>
-      <div style={{ marginTop: 20 }}>
-        <button
-          onClick={() => setActiveTab("assets")}
-          className={`px-4 py-2 font-medium rounded-md transition-colors ${activeTab === "assets" ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-800 hover:bg-indigo-50"}`}
-        >
-          Submit Plod
-        </button>
-        <button
-          onClick={() => setActiveTab("activity-types")}
-          className={`ml-2 px-4 py-2 font-medium rounded-md transition-colors ${activeTab === "activity-types" ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-800 hover:bg-indigo-50"}`}
-        >
-          Activity Types
-        </button>
-      </div>
+      {/* main content rendered once below (removed duplicate AssetsTable block) */}
       <div className="mt-4">
         {activeTab === "assets" && <AssetsTable />}
         {activeTab === "locations" && <LocationsTable />}
@@ -352,95 +394,3 @@ function HistoryTable() {
     </div>
   );
 }
-
-// Add this function to properly load vendors with org filtering
-const loadVendors = async () => {
-  if (!orgId) return;
-  
-  try {
-    const sb = supabaseBrowser();
-    // Explicitly filter by organization_id to prevent showing all vendors
-    const { data, error } = await sb
-      .from("vendors")
-      .select("*")
-      .eq("organization_id", orgId)  // Always filter by current org
-      .order("name");
-    
-    if (error) throw error;
-    setVendors(data || []);
-  } catch (error) {
-    console.error("Error loading vendors:", error);
-    setMessage({ type: "error", text: `Failed to load vendors: ${error.message}` });
-  }
-};
-
-// Update your vendor submission function to use the above function
-const submitVendor = async (e) => {
-  e.preventDefault();
-  setVendorLoading(true);
-  setMessage(null);
-  
-  // Validation
-  if (!vendorForm.name) {
-    setMessage({ type: "error", text: "Please provide a vendor name." });
-    setVendorLoading(false);
-    return;
-  }
-  
-  if (!orgId) {
-    setMessage({ type: "error", text: "Organization ID is missing." });
-    setVendorLoading(false);
-    return;
-  }
-  
-  try {
-    const sb = supabaseBrowser();
-    const payload = {
-      name: vendorForm.name,
-      contact: vendorForm.contact,
-      organization_id: orgId  // Make sure this is always set
-    };
-    
-    const { data, error } = await sb
-      .from("vendors")
-      .insert(payload)
-      .select()
-      .single();
-    
-    if (error) throw error;
-    
-    // IMPORTANT: Use the loadVendors function to reload with proper filtering
-    // instead of directly appending to the state
-    await loadVendors();
-    
-    setMessage({ type: "success", text: "Vendor added successfully." });
-    setVendorForm({ name: "", contact: "" });
-  } catch (error) {
-    console.error("Error saving vendor:", error);
-    setMessage({ type: "error", text: `Failed to add vendor: ${error.message}` });
-  } finally {
-    setVendorLoading(false);
-  }
-};
-
-// Make sure your useEffect is using the loadVendors function
-useEffect(() => {
-  const fetchData = async () => {
-    if (!orgId) return;
-    
-    try {
-      // Load vendors with proper filtering
-      if (activeTab === 'vendors' || activeTab === 'plod') {
-        await loadVendors();
-      }
-      
-      // Rest of your existing code for loading other data
-      // ...
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      setMessage({ type: "error", text: `Failed to load data: ${error.message}` });
-    }
-  };
-  
-  fetchData();
-}, [orgId, activeTab]);
