@@ -1,19 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { IconPlods } from "../components/icons";
 import { supabaseBrowser } from "../../lib/supabaseClient";
 import { useOrg } from "../../lib/OrgContext";
 
-// Add a small, tailwind-friendly SVG spinner component
-function Spinner({ className = "h-5 w-5", stroke = "currentColor" }) {
-  return (
-    <svg className={`${className} animate-spin`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke={stroke} strokeWidth="4"></circle>
-      <path className="opacity-75" fill={stroke} d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-    </svg>
-  );
-}
+import { SimpleTimePicker } from "./components/SimpleTimePicker";
+import { AddPlodForm } from "./components/AddPlodForm";
+import { AdminPanel } from "./components/AdminPanel";
+import { HistoryTable } from "./components/HistoryTable";
+import { Spinner } from "./components/Spinner"; // optional: move Spinner out too
 
 export default function Page() {
   const [vendors, setVendors] = useState([]);
@@ -695,549 +691,6 @@ export default function Page() {
     }
   };
 
-  // Add a reusable AddPlodForm component (move your existing Add Plod tab form JSX here)
-  function AddPlodForm({ onClose } = {}) {
-    return (
-      <form onSubmit={submit} className="space-y-6">
-        <div className="border-b pb-4 mb-4">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Shift Details</h3>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Vendor (optional)</label>
-              <select value={form.vendor_id} onChange={handleChange("vendor_id")} className="mt-1 block w-full rounded border p-2">
-                <option value="">— select vendor —</option>
-                {vendors.map((v) => (
-                  <option key={v.id} value={v.id}>{v.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Shift Date</label>
-              <input 
-                required 
-                type="date" 
-                value={form.shift_date} 
-                onChange={handleChange("shift_date")} 
-                className="mt-1 block w-full rounded border p-2" 
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Plod entered by</label>
-              <input 
-                type="text" 
-                value={form.entered_by} 
-                readOnly
-                className="mt-1 block w-full rounded border bg-gray-50 p-2" 
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Shift Notes (optional)</label>
-              <textarea 
-                value={form.notes} 
-                onChange={handleChange("notes")} 
-                rows={2} 
-                className="mt-1 block w-full rounded border p-2" 
-                placeholder="Overall shift notes"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Shift Activities</h3>
-
-          <div className="bg-gray-50 p-4 rounded-lg mb-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Activity Type</label>
-                <select 
-                  value={activityForm.activity_type_id} 
-                  onChange={(e) => setActivityForm(prev => ({ ...prev, activity_type_id: e.target.value }))
-                  }
-                  className="mt-1 block w-full rounded border p-2"
-                >
-                  <option value="">— select activity —</option>
-                  {activityTypes.map((a) => (
-                    <option key={a.id} value={a.id}>{a.activity_type}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Hole (optional)</label>
-                <select 
-                  value={activityForm.hole_id} 
-                  onChange={(e) => setActivityForm(prev => ({ ...prev, hole_id: e.target.value }))
-                  }
-                  className="mt-1 block w-full rounded border p-2"
-                >
-                  <option value="">— select hole —</option>
-                  {holes.map((h) => (
-                    <option key={h.id} value={h.id}>{h.hole_id}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Started At</label>
-                <SimpleTimePicker
-                  value={activityForm.started_at}
-                  onChange={(val) => setActivityForm((prev) => ({ ...prev, started_at: val }))}
-                  minuteStep={5}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Finished At</label>
-                <SimpleTimePicker
-                  value={activityForm.finished_at}
-                  onChange={(val) => setActivityForm((prev) => ({ ...prev, finished_at: val }))}
-                  minuteStep={5}
-                />
-              </div>
-            </div>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700">Notes</label>
-              <textarea 
-                value={activityForm.notes}
-                onChange={(e) => setActivityForm(prev => ({ ...prev, notes: e.target.value }))
-                }
-                rows={2} 
-                className="mt-1 block w-full rounded border p-2"
-                placeholder="Activity specific notes" 
-              />
-            </div>
-            
-            <div className="flex justify-end">
-              <button 
-                type="button"
-                onClick={addActivity}
-                className="inline-flex items-center rounded bg-indigo-600 text-white px-4 py-2"
-              >
-                {editingActivityIndex !== null ? 'Update Activity' : 'Add Activity'}
-              </button>
-            </div>
-          </div>
-
-          {/* List of added activities */}
-          <div className="space-y-3">
-            {activities.length === 0 ? (
-              <div className="text-center py-6 text-gray-500 bg-gray-50 rounded-lg">
-                No activities added yet. Add at least one activity above.
-              </div>
-            ) : (
-              activities.map((activity, idx) => {
-                const actType = activityTypes.find(a => a.id === activity.activity_type_id);
-                const hole = holes.find(h => h.id === activity.hole_id);
-
-                return (
-                  <div key={idx} className="border rounded-lg p-3 bg-gray-50 flex justify-between items-center">
-                    <div>
-                      <div className="font-medium">
-                        {actType?.activity_type || 'Unknown Activity'}
-                        {hole && <span className="ml-2 text-gray-500">- {hole.hole_id}</span>}
-                      </div>
-                      <div className="text-sm text-gray-600">
-                        {new Date(activity.started_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} 
-                        to 
-                        {new Date(activity.finished_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                        {activity.notes && <div className="mt-1 text-gray-700">{activity.notes}</div>}
-                      </div>
-                    </div>
-                    <div className="flex space-x-2">
-                      <button
-                        type="button"
-                        onClick={() => editActivity(idx)}
-                        className="text-indigo-600 hover:text-indigo-800 p-1"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => removeActivity(idx)}
-                        className="text-red-600 hover:text-red-800 p-1"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          <div className="mt-6 flex items-center gap-3">
-            <button 
-              type="submit" 
-              className="inline-flex items-center rounded bg-indigo-600 text-white px-4 py-2" 
-              disabled={loading || activities.length === 0}
-            >
-              {loading ? (
-                <>
-                  <Spinner className="h-4 w-4 mr-2 text-white" stroke="white" />
-                  Saving…
-                </>
-              ) : (
-                "Save Shift & Activities"
-              )}
-            </button>
-            <button 
-              type="button" 
-              className="text-sm text-gray-600" 
-              onClick={() => {
-                setForm({ vendor_id: "", started_at: "", finished_at: "", notes: "" });
-                setActivities([]);
-                setActivityForm({ activity_type_id: "", hole_id: "", started_at: "", finished_at: "", notes: "" });
-                setEditingActivityIndex(null);
-                if (onClose) onClose();
-              }}
-            >
-              Reset All
-            </button>
-          </div>
-        </div>
-      </form>
-    );
-  }
-
-  // New Admin panel that contains Vendors + Activities sections (now with nested tabs)
-  function AdminPanel() {
-    const [adminTab, setAdminTab] = useState("vendors");
-
-    return (
-      <div className="space-y-6">
-        {/* Admin nested tab bar */}
-        <div className="flex border-b mb-4">
-          <button
-            className={`px-4 py-3 -mb-px ${adminTab === "vendors" ? "border-b-2 border-indigo-600 text-indigo-600" : "text-gray-600"}`}
-            onClick={() => setAdminTab("vendors")}
-          >
-            Vendors
-          </button>
-          <button
-            className={`px-4 py-3 -mb-px ${adminTab === "activities" ? "border-b-2 border-indigo-600 text-indigo-600" : "text-gray-600"}`}
-            onClick={() => setAdminTab("activities")}
-          >
-            Activities
-          </button>
-        </div>
-
-        {/* Vendors tab content */}
-        {adminTab === "vendors" && (
-          <div>
-            <form onSubmit={submitVendor} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-              <div className="md:col-span-1">
-                <label className="block text-sm font-medium text-gray-700">Name</label>
-                <input
-                  value={vendorForm.name}
-                  onChange={handleVendorChange("name")}
-                  className="mt-1 block w-full rounded border p-2"
-                />
-              </div>
-              <div className="md:col-span-1">
-                <label className="block text-sm font-medium text-gray-700">Contact</label>
-                <input
-                  value={vendorForm.contact}
-                  onChange={handleVendorChange("contact")}
-                  className="mt-1 block w-full rounded border p-2"
-                />
-              </div>
-              <div className="md:col-span-1">
-                <button
-                  type="submit"
-                  className="inline-flex items-center rounded bg-indigo-600 text-white px-4 py-2 w-full"
-                  disabled={vendorLoading}
-                >
-                  {vendorLoading ? "Saving…" : "Add Vendor"}
-                </button>
-              </div>
-            </form>
-
-            <div className="mt-8">
-              <h3 className="text-sm font-medium text-gray-700 mb-2">Vendors & Resources</h3>
-              <div className="space-y-2">
-                {vendors.length === 0 && <div className="text-sm text-gray-500">No vendors yet.</div>}
-                {vendors.map((vendor) => (
-                  <div key={vendor.id} className="border rounded overflow-hidden">
-                    <div
-                      className="flex items-center justify-between p-3 bg-gray-50 cursor-pointer"
-                      onClick={() => toggleVendorExpand(vendor.id)}
-                    >
-                      <div>
-                        <div className="font-medium">{vendor.name}</div>
-                        {vendor.contact && <div className="text-sm text-gray-500">{vendor.contact}</div>}
-                      </div>
-                      <div className="flex items-center">
-                        <span className="text-sm text-gray-500 mr-2">
-                          {expandedVendor === vendor.id ? "Hide resources" : "Show resources"}
-                        </span>
-                        <svg
-                          className={`w-5 h-5 transition-transform ${expandedVendor === vendor.id ? "transform rotate-180" : ""}`}
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
-                    </div>
-
-                    {expandedVendor === vendor.id && (
-                      <div className="p-3 border-t">
-                        <div className="mb-3">
-                          <button
-                            onClick={() => openAddResourceModal(vendor.id)}
-                            className="flex items-center text-sm text-indigo-600 hover:text-indigo-900 font-medium"
-                          >
-                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                            </svg>
-                            Add New Resource
-                          </button>
-                        </div>
-
-                        <div className="space-y-2">
-                          {vendorResources.length === 0 ? (
-                            <div className="text-sm text-gray-500 p-2">No resources added yet.</div>
-                          ) : (
-                            <table className="min-w-full divide-y divide-gray-200">
-                              <thead className="bg-gray-50">
-                                <tr>
-                                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                  <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                                </tr>
-                              </thead>
-                              <tbody className="bg-white divide-y divide-gray-200">
-                                {vendorResources.map((resource) => (
-                                  <tr key={resource.id} className="hover:bg-gray-50">
-                                    <td className="px-3 py-2 whitespace-nowrap">
-                                      <div className="text-sm font-medium text-gray-900">{resource.name}</div>
-                                      {resource.notes && <div className="text-xs text-gray-500 truncate max-w-xs">{resource.notes}</div>}
-                                    </td>
-                                    <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">{resource.resource_type || "-"}</td>
-                                    <td className="px-3 py-2 whitespace-nowrap">
-                                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${resource.status === "Active" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
-                                        {resource.status}
-                                      </span>
-                                    </td>
-                                    <td className="px-3 py-2 whitespace-nowrap text-right text-sm">
-                                      <button type="button" className="text-indigo-600 hover:text-indigo-900 mr-3" onClick={() => openEditResourceModal(resource)}>Edit</button>
-                                      <button type="button" className="text-red-600 hover:text-red-900" onClick={() => deleteResource(resource.id)}>Delete</button>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Activities tab content */}
-        {adminTab === "activities" && (
-          <div>
-            <form onSubmit={submitActivityType} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700">Activity Type</label>
-                <input
-                  value={activityTypeForm.activityType}
-                  onChange={handleActivityTypeChange("activityType")}
-                  placeholder="Activity Type (e.g. drilling, maintenance)"
-                  className="mt-1 block w-full rounded border p-2"
-                />
-              </div>
-              <div className="md:col-span-1">
-                <label className="block text-sm font-medium text-gray-700">Group</label>
-                <input value={activityTypeForm.group} onChange={handleActivityTypeChange("group")} placeholder="Drilling" className="mt-1 block w-full rounded border p-2" />
-              </div>
-              <div className="md:col-span-1">
-                <button type="submit" className="inline-flex items-center rounded bg-indigo-600 text-white px-4 py-2 w-full" disabled={activityTypeLoading}>
-                  {activityTypeLoading ? "Saving…" : "Add Activity"}
-                </button>
-              </div>
-              <div className="md:col-span-4">
-                <label className="block text-sm font-medium text-gray-700">Description</label>
-                <input value={activityTypeForm.description} onChange={handleActivityTypeChange("description")} placeholder="Optional activity description" className="mt-1 block w-full rounded border p-2" />
-              </div>
-            </form>
-
-            <div>
-              <h3 className="text-sm font-medium text-gray-700 mb-2">Existing Activity Types</h3>
-              <div className="space-y-2">
-                {activityTypes.length === 0 && <div className="text-sm text-gray-500">No activity types yet.</div>}
-                {activityTypes.map((a) => (
-                  <div key={a.id} className="flex items-center justify-between border rounded p-2">
-                    <div>
-                      <div className="font-medium">{a.activity_type}</div>
-                      <div className="text-sm text-gray-500">{a.group && <span className="mr-2">{a.group}</span>}</div>
-                      {a.description && <div className="text-sm text-gray-500 mt-1">{a.description}</div>}
-                    </div>
-                    <div className="text-sm text-gray-500">{/* actions could go here */}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  function HistoryTable(props) {
-    // ...existing code...
-    return (
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium">Home</h3>
-
-          {/* Enter New Plod button */}
-          <button
-            onClick={() => setShowNewPlod(true)}
-            className="inline-flex items-center gap-2 rounded bg-indigo-600 text-white px-3 py-1.5 text-sm"
-          >
-            Enter New Plod
-          </button>
-        </div>
-
-        {/* show spinner while plods are loading */}
-        {plodsLoading ? (
-          <div className="py-8 flex justify-center">
-            <Spinner className="h-8 w-8 text-gray-600" stroke="currentColor" />
-          </div>
-        ) : (
-          /* existing history listing rendering */
-          <>
-            {/* ...existing history listing code goes here... */}
-          </>
-        )}
-
-        {/* (end plods listing) */}
-      </div>
-    );
-  }
-
-  // SimpleTimePicker: lightweight hour/minute selector that returns "HH:MM"
-  function SimpleTimePicker({ value = "", onChange, minuteStep = 5, ampm = true }) {
-    // parse incoming value to HH:MM
-    const normalize = (v) => {
-      if (!v) return "00:00";
-      const t = v.includes("T") ? v.split("T")[1] : v;
-      return t.split(":").slice(0, 2).join(":");
-    };
-
-    const initial = normalize(value);
-    const [initH, initM] = initial.split(":");
-
-    const hours = ampm
-      ? Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"))
-      : Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
-    const minutes = Array.from({ length: Math.ceil(60 / minuteStep) }, (_, i) => String(i * minuteStep).padStart(2, "0"));
-
-    // local display state
-    const [hour, setHour] = useState(() => {
-      if (!ampm) return initH.padStart(2, "0");
-      const hn = parseInt(initH, 10);
-      const dh = ((hn + 11) % 12) + 1;
-      return String(dh).padStart(2, "0");
-    });
-    const [minute, setMinute] = useState(initM || "00");
-    const [period, setPeriod] = useState(() => (parseInt(initH, 10) >= 12 ? "PM" : "AM"));
-
-    // keep local state in sync with prop changes without emitting onChange
-    useEffect(() => {
-      const n = normalize(value);
-      const [h = "00", m = "00"] = n.split(":");
-      const hn = parseInt(h, 10);
-      if (ampm) {
-        const dh = ((hn + 11) % 12) + 1;
-        setHour(String(dh).padStart(2, "0"));
-        setPeriod(hn >= 12 ? "PM" : "AM");
-      } else {
-        setHour(String(h).padStart(2, "0"));
-      }
-      setMinute(String(m).padStart(2, "0"));
-      // only run when value/ampm changes
-    }, [value, ampm]);
-
-    // helper to emit normalized HH:MM to parent only when changed
-    const emit = (h, m, p) => {
-      let outHour = parseInt(h, 10);
-      if (ampm) {
-        if (p === "AM" && outHour === 12) outHour = 0;
-        if (p === "PM" && outHour !== 12) outHour = outHour + 12;
-      }
-      const out = `${String(outHour).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-      if (normalize(value) !== out) onChange && onChange(out);
-    };
-
-    return (
-      <div className="flex gap-2 items-center">
-        <select
-          value={hour}
-          onChange={(e) => {
-            const nh = e.target.value;
-            setHour(nh);
-            emit(nh, minute, period);
-          }}
-          className="mt-1 block rounded border p-2"
-          aria-label="Hour"
-        >
-          {hours.map((h) => (
-            <option key={h} value={h}>
-              {h}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={minute}
-          onChange={(e) => {
-            const nm = e.target.value;
-            setMinute(nm);
-            emit(hour, nm, period);
-          }}
-          className="mt-1 block rounded border p-2"
-          aria-label="Minute"
-        >
-          {minutes.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
-
-        {ampm && (
-          <select
-            value={period}
-            onChange={(e) => {
-              const np = e.target.value;
-              setPeriod(np);
-              emit(hour, minute, np);
-            }}
-            className="mt-1 block rounded border p-2"
-            aria-label="AM/PM"
-          >
-            <option value="AM">AM</option>
-            <option value="PM">PM</option>
-          </select>
-        )}
-      </div>
-    );
-  }
-
   return (
     <div className="mx-auto max-w-6xl p-6">
       <header className="mb-6">
@@ -1278,12 +731,59 @@ export default function Page() {
           )}
 
           {activeTab === 'admin' && (
-            <AdminPanel />
+            <AdminPanel
+              vendors={vendors}
+              vendorForm={vendorForm}
+              vendorLoading={vendorLoading}
+              handleVendorChange={handleVendorChange}
+              submitVendor={submitVendor}
+              toggleVendorExpand={toggleVendorExpand}
+              expandedVendor={expandedVendor}
+              vendorResources={vendorResources}
+              openAddResourceModal={openAddResourceModal}
+              openEditResourceModal={openEditResourceModal}
+              deleteResource={deleteResource}
+              activityTypes={activityTypes}
+              activityTypeForm={activityTypeForm}
+              activityTypeLoading={activityTypeLoading}
+              handleActivityTypeChange={handleActivityTypeChange}
+              submitActivityType={submitActivityType}
+            />
           )}
 
-          {/* Home Tab Content (formerly History) */}
           {activeTab === 'home' && (
-            <HistoryTable />
+            <HistoryTable
+              plods={plods}
+              plodsLoading={plodsLoading}
+              dateRange={dateRange}
+              onDateChange={(k, v) => setDateRange((s) => ({ ...s, [k]: v }))}
+              onRefresh={loadPlods}
+              onNew={() => setShowNewPlod(true)}
+            />
+          )}
+
+          {showNewPlod && (
+            /* drawer with AddPlodForm */
+            <AddPlodForm
+              form={form}
+              handleChange={handleChange}
+              vendors={vendors}
+              activityTypes={activityTypes}
+              holes={holes}
+              activityForm={activityForm}
+              setActivityForm={setActivityForm}
+              activities={activities}
+              addActivity={addActivity}
+              editActivity={editActivity}
+              removeActivity={removeActivity}
+              editingActivityIndex={editingActivityIndex}
+              loading={loading}
+              setForm={setForm}
+              setActivities={setActivities}
+              setEditingActivityIndex={setEditingActivityIndex}
+              onSubmit={submit}
+              onClose={() => setShowNewPlod(false)}
+            />
           )}
         </section>
       </div>
@@ -1409,7 +909,26 @@ export default function Page() {
                   </div>
   
                   <div className="pb-6">
-                    <AddPlodForm onClose={() => setShowNewPlod(false)} />
+                    <AddPlodForm
+                      form={form}
+                      handleChange={handleChange}
+                      vendors={vendors}
+                      activityTypes={activityTypes}
+                      holes={holes}
+                      activityForm={activityForm}
+                      setActivityForm={setActivityForm}
+                      activities={activities}
+                      addActivity={addActivity}
+                      editActivity={editActivity}
+                      removeActivity={removeActivity}
+                      editingActivityIndex={editingActivityIndex}
+                      loading={loading}
+                      setForm={setForm}
+                      setActivities={setActivities}
+                      setEditingActivityIndex={setEditingActivityIndex}
+                      onSubmit={submit}
+                      onClose={() => setShowNewPlod(false)}
+                    />
                   </div>
                 </div>
               </div>
