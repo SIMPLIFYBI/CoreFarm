@@ -7,54 +7,50 @@ export function HistoryTable({
   dateRange,
   onDateChange,
   onRefresh,
-  onNew,
 }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <input
           type="date"
-          className="border rounded p-2"
+          className="input input-sm !w-auto"
           value={dateRange?.from || ""}
           onChange={(e) => onDateChange?.("from", e.target.value)}
         />
         <input
           type="date"
-          className="border rounded p-2"
+          className="input input-sm !w-auto"
           value={dateRange?.to || ""}
           onChange={(e) => onDateChange?.("to", e.target.value)}
         />
-        <button onClick={onRefresh} className="px-3 py-2 rounded bg-gray-100 border">
+        <button onClick={onRefresh} className="btn">
           Refresh
-        </button>
-        <button onClick={onNew} className="px-3 py-2 rounded bg-indigo-600 text-white">
-          New Plod
         </button>
       </div>
 
-      <div className="border rounded p-3 bg-white">
+      <div className="table-container p-3">
         {plodsLoading ? (
-          <div className="flex items-center gap-2 text-sm text-gray-500">
+          <div className="flex items-center gap-2 text-sm text-slate-300">
             <Spinner size={16} /> Loading…
           </div>
         ) : plods.length === 0 ? (
-          <div className="text-sm text-gray-500">No plods in range.</div>
+          <div className="text-sm text-slate-300">No plods in range.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="table">
               <thead>
-                <tr className="text-left border-b">
-                  <th className="py-2 pr-4">Date</th>
-                  <th className="py-2 pr-4">Vendor</th>
-                  <th className="py-2 pr-4">Notes</th>
+                <tr>
+                  <th>Date</th>
+                  <th>Vendor</th>
+                  <th>Notes</th>
                 </tr>
               </thead>
               <tbody>
                 {plods.map((p) => (
-                  <tr key={p.id} className="border-b last:border-0">
-                    <td className="py-2 pr-4">{p.shift_date}</td>
-                    <td className="py-2 pr-4">{p.vendor_name ?? p.vendor_id}</td>
-                    <td className="py-2 pr-4">{p.notes}</td>
+                  <tr key={p.id}>
+                    <td>{p.shift_date}</td>
+                    <td>{p.vendor_name ?? p.vendor_id}</td>
+                    <td>{p.notes}</td>
                   </tr>
                 ))}
               </tbody>

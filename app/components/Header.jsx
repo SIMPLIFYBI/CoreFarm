@@ -1,11 +1,23 @@
 "use client";
+
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
-import { IconCore, IconAdmin, IconTeam, IconUser, IconLogin, IconReport, IconClipboard, IconCoreTasks, AssetIcon, IconPlods } from "../components/icons";
+import {
+  IconCore,
+  IconAdmin,
+  IconTeam,
+  IconUser,
+  IconLogin,
+  IconReport,
+  IconClipboard,
+  IconCoreTasks,
+  AssetIcon,
+  IconPlods,
+} from "./icons";
 
 export default function Header() {
   const supabase = supabaseBrowser();
@@ -15,6 +27,30 @@ export default function Header() {
   const [displayName, setDisplayName] = useState(null);
   const [userId, setUserId] = useState(null);
   const { orgId, memberships } = useOrg();
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    // Close menu when navigating
+    setDrawerOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setDrawerOpen(false);
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [drawerOpen]);
 
   useEffect(() => {
     let mounted = true;
@@ -36,87 +72,164 @@ export default function Header() {
     };
   }, [supabase]);
 
-  // Derive current org name from context
-  const currentOrgName = (() => {
+  const currentOrgName = useMemo(() => {
     if (!orgId) return null;
     const m = memberships.find(m => m.organization_id === orgId);
     return m?.organizations?.name || null;
-  })();
-
-  // Sign out now handled at bottom of Team page
+  }, [orgId, memberships]);
 
   const navTabs = [
-  { href: "/dashboard", label: "Dashboard", icon: IconReport },
-  { href: "/coretasks", label: "Core Tasks", icon: IconCoreTasks },
-  { href: "/consumables", label: "Consumables", icon: IconCore },
-  { href: "/projects", label: "Projects", icon: IconClipboard },
-  { href: "/assets", label: "Assets", icon: AssetIcon },
-  { href: "/plods", label: "Plods", icon: IconPlods }, // <-- added Plods tab
-  { href: "/team", label: "Team", icon: IconTeam },
+    { href: "/dashboard", label: "Dashboard", icon: IconReport },
+    { href: "/coretasks", label: "Core Tasks", icon: IconCoreTasks },
+    { href: "/consumables", label: "Consumables", icon: IconCore },
+    { href: "/projects", label: "Projects", icon: IconClipboard },
+    { href: "/assets", label: "Assets", icon: AssetIcon },
+    { href: "/plods", label: "Plods", icon: IconPlods },
+    { href: "/team", label: "Team", icon: IconTeam },
   ];
+
   return (
-    <header className="border-b bg-gradient-to-r from-indigo-50 via-indigo-100 to-purple-50 md:sticky md:top-0 md:z-40 backdrop-blur supports-[backdrop-filter]:bg-white/70">
-      <div className="mx-auto max-w-6xl flex items-center justify-between p-4">
+    <header className="sticky top-0 z-40 pt-[env(safe-area-inset-top)] border-b border-white/10 bg-slate-950/55 backdrop-blur-xl supports-[backdrop-filter]:bg-slate-950/45">
+      <div className="mx-auto max-w-6xl flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3">
+          {/* Burger */}
+          <button
+            type="button"
+            className="inline-flex items-center justify-center h-10 w-10 rounded-full border border-white/15 bg-white/5 hover:bg-white/10 transition-base text-slate-100 focus-ring"
+            aria-label="Open menu"
+            aria-expanded={drawerOpen}
+            aria-controls="app-nav-drawer"
+            onClick={() => setDrawerOpen(true)}
+          >
+            {/* hamburger icon (3 lines only) */}
+            <span aria-hidden="true" className="flex flex-col justify-center gap-1.5">
+              <span className="block h-[2px] w-5 rounded-full bg-current" />
+              <span className="block h-[2px] w-5 rounded-full bg-current" />
+              <span className="block h-[2px] w-5 rounded-full bg-current" />
+            </span>
+          </button>
+
           {/* Logo */}
           <div className="flex-shrink-0 flex items-center">
-            <Link href="/home" className="flex items-center">  {/* navigate to Preview (/home) */}
+            <Link className="flex items-center" href="/home">
               <Image
                 src="/demo/GeoFarm.png"
                 alt="GeoFarm Logo"
                 width={120}
                 height={40}
                 className="h-8 w-auto"
+                priority
               />
             </Link>
           </div>
-          <nav className="hidden md:flex gap-2 text-sm">
-            {navTabs.map((t) => {
-              const active = pathname?.startsWith(t.href);
-              const Icon = t.icon;
-              return (
-                <Link
-                  key={t.href}
-                  href={t.href}
-                  className={
-                    "flex items-center gap-2 px-2 py-1 rounded-full transition-base " +
-                    (active ? "text-indigo-600 bg-white/70" : "text-gray-700 hover:opacity-80")
-                  }
-                >
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 text-white">
-                    <Icon />
-                  </span>
-                  <span className="text-center">{t.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
+
+          {/* Remove the horizontal nav */}
+          {/* (intentionally not rendering nav across the top anymore) */}
         </div>
+
         <div className="text-sm flex items-center gap-3">
           {currentOrgName && (
             <button
               type="button"
+              className="glass inline-flex flex-col justify-center h-9 px-3 rounded-xl max-w-[180px] overflow-hidden text-slate-100 hover:bg-white/10 transition-base focus-ring"
+              title={`${currentOrgName}${email ? " — " + email : ""}`}
               onClick={() => router.push("/team")}
-              className="inline-flex flex-col justify-center h-8 px-2 rounded-md bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm border border-white/20 max-w-[160px] overflow-hidden focus:outline-none focus:ring-2 focus:ring-indigo-400"
-              title={`${currentOrgName}${email ? ' — ' + email : ''}`}
             >
-              <span className="text-[10px] leading-tight font-medium truncate">
-                {currentOrgName}
-              </span>
+              <span className="text-[10px] leading-tight font-medium truncate">{currentOrgName}</span>
               {email && (
-                <span className="text-[9px] leading-tight opacity-90 truncate -mt-0.5">
-                  {email}
-                </span>
+                <span className="text-[9px] leading-tight opacity-80 truncate -mt-0.5">{email}</span>
               )}
             </button>
           )}
-          {!email && (
-            <Link href="/" className="btn">
-              <IconLogin /> Sign in
-            </Link>
-          )}
         </div>
       </div>
+
+      {/* Drawer + overlay (fresh rebuild) */}
+      {drawerOpen && (
+        <div className="fixed inset-0 z-[999]">
+          <div
+            className="fixed inset-0 bg-black/70"
+            onClick={() => setDrawerOpen(false)}
+            aria-hidden="true"
+          />
+
+          <aside
+            id="app-nav-drawer"
+            className="fixed left-0 top-0 z-10 h-dvh w-[320px] max-w-[85vw] border-r border-white/10 shadow-2xl bg-slate-950"
+            style={{ backgroundColor: "#020617" }}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="p-4 border-b border-white/10 flex items-center justify-between">
+              <Image
+                src="/demo/GeoFarm.png"
+                alt="GeoFarm Logo"
+                width={120}
+                height={40}
+                className="h-7 w-auto"
+              />
+              <button
+                type="button"
+                className="h-10 w-10 inline-flex items-center justify-center rounded-full text-slate-100 hover:bg-white/10 transition-base focus-ring"
+                aria-label="Close menu"
+                onClick={() => setDrawerOpen(false)}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+
+            <nav className="p-3">
+              <div className="space-y-1">
+                {navTabs.map((t) => {
+                  const active = pathname === t.href || pathname?.startsWith(t.href + "/");
+                  const Icon = t.icon;
+                  return (
+                    <Link
+                      key={t.href}
+                      href={t.href}
+                      className={[
+                        "flex items-center gap-3 px-3 py-2 rounded-xl transition-base",
+                        active ? "bg-white/10 text-white" : "text-slate-200 hover:bg-white/5 hover:text-white",
+                      ].join(" ")}
+                    >
+                      <span
+                        className={[
+                          "inline-flex h-9 w-9 items-center justify-center rounded-full",
+                          "border border-white/10",
+                          active ? "bg-white/15 text-white" : "bg-white/5 text-slate-100",
+                        ].join(" ")}
+                      >
+                        <Icon />
+                      </span>
+                      <span className="font-medium">{t.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-white/10">
+                {email ? (
+                  <div className="text-xs text-slate-300">
+                    Signed in as <span className="font-medium text-slate-100">{email}</span>
+                  </div>
+                ) : (
+                  <Link
+                    href="/"
+                    className="flex items-center gap-3 px-3 py-2 rounded-xl text-slate-200 hover:bg-white/5 hover:text-white transition-base"
+                  >
+                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-100">
+                      <IconLogin />
+                    </span>
+                    <span className="font-medium">Sign in</span>
+                  </Link>
+                )}
+              </div>
+            </nav>
+          </aside>
+        </div>
+      )}
     </header>
   );
 }

@@ -28,25 +28,25 @@ export const viewport = {
   maximumScale: 1,
   userScalable: "no",
   viewportFit: "cover",
-  themeColor: "#ffffff",
+  themeColor: "#0b1220", // was white; match your new dark bg
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-dvh bg-bg text-fg`}
       >
-  <OrgProvider>
-    <Header />
-    <AuthGuard>
-      <main className="min-h-screen md:pt-[72px] md:pb-0 pb-[calc(env(safe-area-inset-bottom)+64px)]">
-        {children}
-      </main>
-    </AuthGuard>
-    <MobileNav />
-    <Toaster position="top-right" />
-  </OrgProvider>
+        <OrgProvider>
+          <Header />
+          <AuthGuard>
+            <main className="min-h-screen md:pt-[72px] md:pb-0 pb-[calc(env(safe-area-inset-bottom)+64px)] bg-transparent">
+              {children}
+            </main>
+          </AuthGuard>
+          <MobileNav />
+          <Toaster position="top-right" />
+        </OrgProvider>
       </body>
     </html>
   );

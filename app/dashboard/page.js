@@ -4,6 +4,9 @@ import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import { TASK_TYPES } from "@/lib/taskTypes";
 import { BarChart, DonutChart, StackedColumnChart } from "@/app/components/Charts";
+import { DashboardTabs } from "./components/DashboardTabs";
+import { DashboardFilters } from "./components/DashboardFilters";
+import { DashboardKpis } from "./components/DashboardKpis";
 
 const COLORS = [
 	"#4f46e5",
@@ -56,6 +59,7 @@ export default function UserDashboardPage() {
 		return () => sub?.unsubscribe?.();
 	}, [supabase]);
 
+
 	useEffect(() => {
 		if (tab !== "activity" || !user) return;
 		setActivityLoading(true);
@@ -68,20 +72,20 @@ export default function UserDashboardPage() {
 			setActivityRows(rows || []);
 			setActivityLoading(false);
 		})();
-	}, [tab, user]);
+	}, [tab, user, supabase]);
 
 	useEffect(() => {
-		if (tab !== 'consumables' || !orgId) return;
+		if (tab !== "consumables" || !orgId) return;
 		(async () => {
 			setConsumableLoading(true);
 			try {
 				const { data: inv } = await supabase
-					.from('consumable_items')
-					.select('id,key,label,count,reorder_value,cost_per_unit,unit_size,include_in_report')
-					.eq('organization_id', orgId)
-					.order('label');
+					.from("consumable_items")
+					.select("id,key,label,count,reorder_value,cost_per_unit,unit_size,include_in_report")
+					.eq("organization_id", orgId)
+					.order("label");
 				const allItems = inv || [];
-				const lowReorder = allItems.filter(it => {
+				const lowReorder = allItems.filter((it) => {
 					const rv = it.reorder_value || 0;
 					if (rv <= 0) return false;
 					const c = it.count || 0;
@@ -90,31 +94,34 @@ export default function UserDashboardPage() {
 					return false;
 				});
 				setConsumableItems(lowReorder);
-				const includedForTrend = allItems.filter(i => i.include_in_report);
-				const includedKeys = new Set(includedForTrend.map(i => i.key));
+
+				const includedForTrend = allItems.filter((i) => i.include_in_report);
+				const includedKeys = new Set(includedForTrend.map((i) => i.key));
 				const { data: orderedItems } = await supabase
-					.from('purchase_order_items')
-					.select('created_at, quantity, status, item_key, label, po:purchase_orders(status, ordered_date)')
-					.eq('organization_id', orgId);
+					.from("purchase_order_items")
+					.select("created_at, quantity, status, item_key, label, po:purchase_orders(status, ordered_date)")
+					.eq("organization_id", orgId);
 				const monthMap = {};
 				for (const row of orderedItems || []) {
 					if (!includedKeys.has(row.item_key)) continue;
-					const isOrdered = row.status === 'ordered' || row.status === 'received' || (row.po && (row.po.status === 'ordered' || row.po.status === 'received'));
+					const isOrdered =
+						row.status === "ordered" ||
+						row.status === "received" ||
+						(row.po && (row.po.status === "ordered" || row.po.status === "received"));
 					if (!isOrdered) continue;
 					const dt = row.po?.ordered_date || row.created_at || new Date().toISOString();
-					const month = (dt || '').slice(0,7);
+					const month = (dt || "").slice(0, 7);
 					if (!month) continue;
 					monthMap[month] = (monthMap[month] || 0) + (row.quantity || 0);
 				}
 				const now = new Date();
 				const months = [];
-				for (let i=5;i>=0;i--) {
-					const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth()-i, 1));
-					const m = d.toISOString().slice(0,7);
-					months.push(m);
+				for (let i = 5; i >= 0; i--) {
+					const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+					months.push(d.toISOString().slice(0, 7));
 				}
-				setConsumableTrend(months.map(m => ({ label: m, value: monthMap[m] || 0 })));
-			} catch(e) {
+				setConsumableTrend(months.map((m) => ({ label: m, value: monthMap[m] || 0 })));
+			} catch (e) {
 				console.error(e);
 				setConsumableItems([]);
 				setConsumableTrend([]);
@@ -134,33 +141,29 @@ export default function UserDashboardPage() {
 		(async () => {
 			setLoading(true);
 			try {
-				const { data: holes } = await supabase
-					.from("holes")
-					.select("id")
-					.eq("organization_id", orgId);
+				const { data: holes } = await supabase.from("holes").select("id").eq("organization_id", orgId);
 				const holeIds = (holes || []).map((h) => h.id);
 				if (holeIds.length === 0) {
 					setByType([]);
 					setTrend([]);
 					setUnloggedMeters(0);
-					setLoading(false);
 					return;
 				}
 
 				try {
 					const { data: completionRows } = await supabase
-						.from('hole_completion_summary')
-						.select('hole_id, planned_total_m, done_total_m')
-						.in('hole_id', holeIds);
+						.from("hole_completion_summary")
+						.select("hole_id, planned_total_m, done_total_m")
+						.in("hole_id", holeIds);
 					let remaining = 0;
-						for (const r of completionRows || []) {
-							const planned = Number(r.planned_total_m) || 0;
-							const done = Number(r.done_total_m) || 0;
-							const rem = planned - done;
-							if (rem > 0) remaining += rem;
-						}
-						setUnloggedMeters(remaining);
-				} catch (e) {
+					for (const r of completionRows || []) {
+						const planned = Number(r.planned_total_m) || 0;
+						const done = Number(r.done_total_m) || 0;
+						const rem = planned - done;
+						if (rem > 0) remaining += rem;
+					}
+					setUnloggedMeters(remaining);
+				} catch {
 					setUnloggedMeters(0);
 				}
 
@@ -170,9 +173,7 @@ export default function UserDashboardPage() {
 					.in("hole_id", holeIds)
 					.gte("logged_on", fromDate)
 					.lte("logged_on", toDate);
-				if ((types || []).length > 0 && types.length < TASK_TYPES.length) {
-					q = q.in("task_type", types);
-				}
+				if ((types || []).length > 0 && types.length < TASK_TYPES.length) q = q.in("task_type", types);
 				const { data: rows, error } = await q;
 				if (error) throw error;
 
@@ -182,7 +183,7 @@ export default function UserDashboardPage() {
 					if (!Number.isFinite(m) || m <= 0) continue;
 					metersByType[r.task_type] = (metersByType[r.task_type] || 0) + m;
 				}
-	const pie = TASK_TYPES.map((t, i) => ({
+				const pie = TASK_TYPES.map((t, i) => ({
 					key: t,
 					label: labelForTask(t),
 					value: metersByType[t] || 0,
@@ -201,32 +202,36 @@ export default function UserDashboardPage() {
 					byDateTask[day][r.task_type] = (byDateTask[day][r.task_type] || 0) + m;
 				}
 				const days = eachDay(fromDate, toDate);
-				const points = days.map((d) => ({ label: d, value: byDateTotal[d] || 0 }));
-	setTrend(points);
-	const orientationTotal = metersByType['orientation'] || 0;
-	const orientationDays = Object.values(byDateTask).filter(m => (m.orientation || 0) > 0).length;
-	setOrientationAvg(orientationDays ? orientationTotal / orientationDays : 0);
-				const to = new Date(toDate + 'T00:00:00');
+				setTrend(days.map((d) => ({ label: d, value: byDateTotal[d] || 0 })));
+				const orientationTotal = metersByType.orientation || 0;
+				const orientationDays = Object.values(byDateTask).filter((m) => (m.orientation || 0) > 0).length;
+				setOrientationAvg(orientationDays ? orientationTotal / orientationDays : 0);
+
+				const to = new Date(`${toDate}T00:00:00`);
 				const last14 = [];
-				for (let i=13;i>=0;i--) {
+				for (let i = 13; i >= 0; i--) {
 					const d = new Date(to);
-						d.setDate(d.getDate()-i);
-						const key = d.toISOString().slice(0,10);
-						const taskMap = byDateTask[key] || {};
-						const segments = TASK_TYPES.filter(t => types.includes(t)).map((t, idx) => ({
+					d.setDate(d.getDate() - i);
+					const key = d.toISOString().slice(0, 10);
+					const taskMap = byDateTask[key] || {};
+					const segments = TASK_TYPES.filter((t) => types.includes(t))
+						.map((t, idx) => ({
 							key: t,
 							label: labelForTask(t),
 							color: COLORS[idx % COLORS.length],
 							value: taskMap[t] || 0,
-						})).filter(s => s.value > 0);
-						const total = segments.reduce((a,b)=>a+b.value,0);
-						last14.push({ date: key, segments, total });
+						}))
+						.filter((s) => s.value > 0);
+					last14.push({ date: key, segments, total: segments.reduce((a, b) => a + b.value, 0) });
 				}
-		setStacked14(last14);
+				setStacked14(last14);
 			} catch (e) {
 				console.error(e);
 				setByType([]);
-	setTrend([]); setStacked14([]); setOrientationAvg(0); setUnloggedMeters(0);
+				setTrend([]);
+				setStacked14([]);
+				setOrientationAvg(0);
+				setUnloggedMeters(0);
 			} finally {
 				setLoading(false);
 			}
@@ -238,184 +243,90 @@ export default function UserDashboardPage() {
 			const exists = prev.includes(t);
 			if (exists) {
 				const next = prev.filter((x) => x !== t);
-				return next.length === 0 ? prev : next; // prevent empty selection
-			} else {
-				return [...prev, t];
+				return next.length === 0 ? prev : next;
 			}
+			return [...prev, t];
 		});
 	};
 
 	const allSelected = types.length === TASK_TYPES.length;
-	const selectedLabels = typeOptions.filter(o => types.includes(o.key)).map(o => o.label);
+	const selectedLabels = typeOptions.filter((o) => types.includes(o.key)).map((o) => o.label);
 	const buttonLabel = allSelected
 		? `All Tasks (${types.length})`
-		: selectedLabels.slice(0,3).join(', ') + (selectedLabels.length > 3 ? ` +${selectedLabels.length-3}` : '');
+		: selectedLabels.slice(0, 3).join(", ") + (selectedLabels.length > 3 ? ` +${selectedLabels.length - 3}` : "");
 
 	return (
-		<>
 		<div className="max-w-6xl mx-auto p-4 md:p-6">
-			<h1 className="text-2xl font-semibold mb-4">Report</h1>
-			<div className="mb-6 flex gap-2 border-b">
-				<button
-					className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm ${tab === "dashboard" ? "border-indigo-500 text-indigo-700" : "border-transparent text-gray-500"}`}
-					onClick={() => setTab("dashboard")}
-				>
-					Dashboard
-				</button>
-				<button
-					className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm ${tab === "activity" ? "border-indigo-500 text-indigo-700" : "border-transparent text-gray-500"}`}
-					onClick={() => setTab("activity")}
-				>
-					Logging Activity
-				</button>
-				<button
-					className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm ${tab === "consumables" ? "border-indigo-500 text-indigo-700" : "border-transparent text-gray-500"}`}
-					onClick={() => setTab("consumables")}
-				>
-					Consumables
-				</button>
-			</div>
+			<h1 className="text-2xl font-semibold mb-4 text-slate-50">Report</h1>
+			<DashboardTabs tab={tab} setTab={setTab} />
 
 			{tab === "dashboard" && (
 				<>
-					{/* Filters */}
-					<div className="card p-4 mb-6 grid grid-cols-1 md:grid-cols-3 gap-4 relative z-30 overflow-visible">
-						<div>
-							<label className="block text-xs text-gray-600 mb-1">From</label>
-							<input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-full border rounded px-3 py-2 text-sm" />
-						</div>
-						<div>
-							<label className="block text-xs text-gray-600 mb-1">To</label>
-							<input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full border rounded px-3 py-2 text-sm" />
-						</div>
-						<div className="relative">
-							<label className="block text-xs text-gray-600 mb-1">Task types</label>
-							<button
-								type="button"
-								onClick={() => setTaskSelectOpen(o => !o)}
-								className="w-full border rounded px-3 py-2 text-xs flex items-center justify-between hover:bg-gray-50"
-							>
-								<span className="flex items-center gap-2">
-									<span className="flex -space-x-1">
-										{typeOptions.filter(o=>types.includes(o.key)).slice(0,5).map(o => (
-											<span key={o.key} className="inline-block h-3 w-3 rounded-full ring-1 ring-white" style={{background:o.color}} />
-										))}
-										{selectedLabels.length > 5 && (
-											<span className="inline-block h-3 w-3 rounded-full bg-gray-300 text-[8px] flex items-center justify-center ring-1 ring-white">+{selectedLabels.length-5}</span>
-										)}
-									</span>
-									<span className="truncate max-w-[9rem] md:max-w-[12rem]">{buttonLabel}</span>
-								</span>
-								<span className="text-gray-400 text-[10px]">{taskSelectOpen ? '\u25b2' : '\u25bc'}</span>
-							</button>
-							{taskSelectOpen && (
-								<div className="absolute mt-1 w-full max-h-64 overflow-auto border rounded bg-white shadow-lg z-50 text-xs">
-									<div className="sticky top-0 bg-white p-2 flex items-center gap-2 border-b">
-										<button
-											type="button"
-											className="btn btn-xs"
-											onClick={() => setTypes(TASK_TYPES)}
-										>Select all</button>
-										<button
-											type="button"
-											className="btn btn-xs"
-											onClick={() => setTypes(TASK_TYPES.slice(0,0).concat(TASK_TYPES)) /* no-op placeholder */}
-											disabled
-										>|</button>
-										<button
-											type="button"
-											className="btn btn-xs"
-											onClick={() => setTypes(prev => prev.length===TASK_TYPES.length ? [TASK_TYPES[0]] : TASK_TYPES)}
-										>Toggle bulk</button>
-									</div>
-									<ul className="divide-y">
-										{typeOptions.map(opt => {
-											const active = types.includes(opt.key);
-											return (
-												<li key={opt.key}>
-													<button
-														type="button"
-														onClick={() => toggleType(opt.key)}
-														className={`w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-indigo-50 ${active ? 'bg-indigo-50/60' : ''}`}
-													>
-														<span className="inline-block h-3 w-3 rounded" style={{background: opt.color}} />
-														<span className="flex-1 truncate">{opt.label}</span>
-														<span className={`text-[10px] ${active ? 'text-indigo-600' : 'text-gray-300'}`}>{active ? '\u2714' : ''}</span>
-													</button>
-												</li>
-											);
-										})}
-									</ul>
-									<div className="p-2 text-right">
-										<button
-											type="button"
-											className="btn btn-xs"
-											onClick={() => setTaskSelectOpen(false)}
-										>Close</button>
-									</div>
-								</div>
-							)}
-						</div>
-					</div>
+					<DashboardFilters
+						fromDate={fromDate}
+						toDate={toDate}
+						setFromDate={setFromDate}
+						setToDate={setToDate}
+						types={types}
+						setTypes={setTypes}
+						allTaskTypes={TASK_TYPES}
+						typeOptions={typeOptions}
+						taskSelectOpen={taskSelectOpen}
+						setTaskSelectOpen={setTaskSelectOpen}
+						buttonLabel={buttonLabel}
+						selectedLabels={selectedLabels}
+						toggleType={toggleType}
+					/>
 
-					{/* KPI tiles */}
-					<div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-						<Kpi title="Total meters" value={sum(byType.map((d) => d.value))} suffix=" m" />
-						<Kpi title="Avg Orientated / day" value={orientationAvg} suffix=" m" />
-						<Kpi title="Un-logged metres" value={unloggedMeters} suffix=" m" />
-						<Kpi title="Avg m/day" value={avg(trend.map((p) => p.value))} suffix=" m" />
-					</div>
+					<DashboardKpis byType={byType} orientationAvg={orientationAvg} unloggedMeters={unloggedMeters} trend={trend} />
 
-					{/* Charts */}
 					<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 						<div className="card p-4">
-							<div className="text-sm font-medium mb-2">Meters by task type</div>
+							<div className="text-sm font-medium mb-2 text-slate-100">Meters by task type</div>
 							<BarChart data={byType} />
 						</div>
 						<div className="card p-4">
-							<div className="text-sm font-medium mb-2">Distribution</div>
+							<div className="text-sm font-medium mb-2 text-slate-100">Distribution</div>
 							<DonutChart data={byType} />
 						</div>
 						<div className="card p-4 md:col-span-2">
-							<div className="text-sm font-medium mb-2">Daily production (last 14 days)</div>
+							<div className="text-sm font-medium mb-2 text-slate-100">Daily production (last 14 days)</div>
 							<StackedColumnChart data={stacked14} height={160} fullBleed />
 						</div>
 					</div>
 
-					{loading && <div className="mt-4 text-sm text-gray-500">Loading</div>}
-					{!loading && byType.length === 0 && (
-						<div className="mt-4 text-sm text-gray-500">No data in the selected range.</div>
-					)}
+					{loading && <div className="mt-4 text-sm text-slate-400">Loadingâ€¦</div>}
+					{!loading && byType.length === 0 && <div className="mt-4 text-sm text-slate-400">No data in the selected range.</div>}
 				</>
 			)}
 
 			{tab === "activity" && (
 				<div className="card p-4">
-					<div className="text-sm font-medium mb-2">My Logging Activity</div>
+					<div className="text-sm font-medium mb-2 text-slate-100">My Logging Activity</div>
 					{activityLoading ? (
-						<div className="text-sm text-gray-500">Loading</div>
+						<div className="text-sm text-slate-400">Loadingâ€¦</div>
 					) : activityRows.length === 0 ? (
-						<div className="text-sm text-gray-500">No logging activity found.</div>
+						<div className="text-sm text-slate-400">No logging activity found.</div>
 					) : (
 						<div className="overflow-x-auto">
-							<table className="w-full min-w-[500px] text-[10px] border">
-								<thead className="bg-gray-50">
+							<table className="w-full min-w-[500px] text-[10px] border border-slate-700/70">
+								<thead className="bg-slate-900/80 text-slate-100">
 									<tr>
-										<th className="p-1 border">Hole</th>
-										<th className="p-1 border">Task</th>
-										<th className="p-1 border">Interval (m)</th>
-										<th className="p-1 border">Date</th>
-										<th className="p-1 border">Actions</th>
+										<th className="p-1 border border-slate-700/70">Hole</th>
+										<th className="p-1 border border-slate-700/70">Task</th>
+										<th className="p-1 border border-slate-700/70">Interval (m)</th>
+										<th className="p-1 border border-slate-700/70">Date</th>
+										<th className="p-1 border border-slate-700/70">Actions</th>
 									</tr>
 								</thead>
-								<tbody>
+								<tbody className="bg-slate-900/60 text-slate-100">
 									{activityRows.map((row) => (
-										<tr key={row.id}>
-											<td className="p-1 border">{row.holes?.hole_id || row.hole_id}</td>
-											<td className="p-1 border">{labelForTask(row.task_type)}</td>
-											<td className="p-1 border">{row.from_m}{row.to_m}</td>
-											<td className="p-1 border">{row.logged_on}</td>
-											<td className="p-1 border whitespace-nowrap">
+										<tr key={row.id} className="border-t border-slate-800/80 hover:bg-slate-800/70">
+											<td className="p-1 border border-slate-800/80">{row.holes?.hole_id || row.hole_id}</td>
+											<td className="p-1 border border-slate-800/80">{labelForTask(row.task_type)}</td>
+											<td className="p-1 border border-slate-800/80">{row.from_m}â€“{row.to_m}</td>
+											<td className="p-1 border border-slate-800/80">{row.logged_on}</td>
+											<td className="p-1 border border-slate-800/80 whitespace-nowrap">
 												{editRowId === row.id ? (
 													<>
 														<input
@@ -439,13 +350,9 @@ export default function UserDashboardPage() {
 														<button
 															className="btn btn-primary btn-xs px-2 py-0 mr-1"
 															onClick={async () => {
-																const { error } = await supabase
+																await supabase
 																	.from("hole_task_progress")
-																	.update({
-																		from_m: editRow.from_m,
-																		to_m: editRow.to_m,
-																		logged_on: editRow.logged_on,
-																	})
+																	.update({ from_m: editRow.from_m, to_m: editRow.to_m, logged_on: editRow.logged_on })
 																	.eq("id", row.id);
 																setEditRowId(null);
 																setEditRow({});
@@ -463,15 +370,17 @@ export default function UserDashboardPage() {
 													<>
 														<button
 															className="btn btn-xs px-2 py-0 mr-1"
-															onClick={() => { setEditRowId(row.id); setEditRow({ from_m: row.from_m, to_m: row.to_m, logged_on: row.logged_on }); }}
-														>Amend</button>
+															onClick={() => {
+																setEditRowId(row.id);
+																setEditRow({ from_m: row.from_m, to_m: row.to_m, logged_on: row.logged_on });
+															}}
+														>
+															Amend
+														</button>
 														<button
 															className="btn btn-danger btn-xs px-2 py-0"
 															onClick={async () => {
-																const { error } = await supabase
-																	.from("hole_task_progress")
-																	.delete()
-																	.eq("id", row.id);
+																await supabase.from("hole_task_progress").delete().eq("id", row.id);
 																const { data: rows } = await supabase
 																	.from("hole_task_progress")
 																	.select("id, hole_id, task_type, from_m, to_m, logged_on, holes(hole_id)")
@@ -479,7 +388,9 @@ export default function UserDashboardPage() {
 																	.order("logged_on", { ascending: false });
 																setActivityRows(rows || []);
 															}}
-														>Delete</button>
+														>
+															Delete
+														</button>
 													</>
 												)}
 											</td>
@@ -496,40 +407,49 @@ export default function UserDashboardPage() {
 				<div className="space-y-6">
 					<div className="grid grid-cols-1 gap-6">
 						<div className="card p-4">
-							<div className="text-sm font-medium mb-2">Low / Reorder Inventory</div>
-							{consumableLoading ? <div className="text-xs text-gray-500">Loading</div> : consumableItems.length === 0 ? (
-								<div className="text-xs text-gray-500">No items currently Low or at Reorder threshold.</div>
+							<div className="text-sm font-medium mb-2 text-slate-100">Low / Reorder Inventory</div>
+							{consumableLoading ? (
+								<div className="text-xs text-slate-400">Loadingâ€¦</div>
+							) : consumableItems.length === 0 ? (
+								<div className="text-xs text-slate-400">No items currently Low or at Reorder threshold.</div>
 							) : (
 								<div className="overflow-x-auto">
 									<table className="w-full text-xs md:text-sm">
 										<thead>
-											<tr className="text-left bg-gray-50">
+											<tr className="text-left bg-slate-900/80 text-slate-100">
 												<th className="p-2">Item</th>
 												<th className="p-2 text-right">Count</th>
 												<th className="p-2 text-right">Status</th>
 											</tr>
 										</thead>
 										<tbody>
-											{consumableItems.map(it => (
-												<tr key={it.key} className="border-b last:border-b-0">
-													<td className="p-2">{it.label}</td>
-													<td className="p-2 text-right">{it.count}</td>
-													<td className="p-2 text-right">
-														{(() => {
-															const rv = it.reorder_value || 0;
-															const c = it.count || 0;
-															let cls = 'badge-gray';
-															let txt = '—';
-															if (rv > 0) {
-																if (c <= rv) { cls='badge-red'; txt='Reorder'; }
-																else if (c <= rv*1.5) { cls='badge-amber'; txt='Low'; }
-																else { cls='badge-green'; txt='OK'; }
-															}
-															return <span className={`badge ${cls} text-[10px]`}>{txt}</span>;
-														})()}
-													</td>
-												</tr>
-											))}
+											{consumableItems.map((it) => {
+												const rv = it.reorder_value || 0;
+												const c = it.count || 0;
+												let cls = "badge-gray";
+												let txt = "â€”";
+												if (rv > 0) {
+													if (c <= rv) {
+														cls = "badge-red";
+														txt = "Reorder";
+													} else if (c <= rv * 1.5) {
+														cls = "badge-amber";
+														txt = "Low";
+													} else {
+														cls = "badge-green";
+														txt = "OK";
+													}
+												}
+												return (
+													<tr key={it.key} className="border-b border-slate-800/80 last:border-b-0 text-slate-100">
+														<td className="p-2">{it.label}</td>
+														<td className="p-2 text-right">{it.count}</td>
+														<td className="p-2 text-right">
+															<span className={`badge ${cls} text-[10px]`}>{txt}</span>
+														</td>
+													</tr>
+												);
+											})}
 										</tbody>
 									</table>
 								</div>
@@ -538,22 +458,6 @@ export default function UserDashboardPage() {
 					</div>
 				</div>
 			)}
-	</div>
-		</>
-	);
-}
-
-function Kpi({ title, value, suffix }) {
-	const formatted = typeof value === "number"
-		? new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value)
-		: (value ?? 0);
-	return (
-		<div className="card p-4">
-			<div className="text-xs text-gray-500">{title}</div>
-			<div className="text-2xl font-semibold mt-1">
-				{formatted}
-				{suffix ? <span className="text-sm text-gray-500">{suffix}</span> : null}
-			</div>
 		</div>
 	);
 }
@@ -562,11 +466,11 @@ function labelForTask(t) {
 	return (
 		{
 			orientation: "Orientation",
-	magnetic_susceptibility: "Mag Sus",
-	whole_core_sampling: "WC Samp",
+			magnetic_susceptibility: "Mag Sus",
+			whole_core_sampling: "WC Samp",
 			cutting: "Cutting",
 			rqd: "RQD",
-	specific_gravity: "SG",
+			specific_gravity: "SG",
 		}[t] || t
 	);
 }
@@ -580,12 +484,4 @@ function eachDay(from, to) {
 		d.setDate(d.getDate() + 1);
 	}
 	return out;
-}
-
-function sum(arr) {
-	return Math.round((arr.reduce((a, b) => a + (Number(b) || 0), 0) + Number.EPSILON) * 10) / 10;
-}
-function avg(arr) {
-	if (!arr.length) return 0;
-	return Math.round(((arr.reduce((a, b) => a + (Number(b) || 0), 0) / arr.length) + Number.EPSILON) * 10) / 10;
 }
