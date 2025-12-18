@@ -9,12 +9,13 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@capacitor/android": "^8.0.0",
     "@capacitor/cli": "^8.0.0",
     "@capacitor/core": "^8.0.0",
     "@supabase/supabase-js": "^2.55.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.1",
-    "next": "15.4.6",
+    "next": "^15.5.9",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-hot-toast": "^2.5.2"
