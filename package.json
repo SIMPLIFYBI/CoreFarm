@@ -9,6 +9,8 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@capacitor/cli": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
     "@supabase/supabase-js": "^2.55.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.1",
