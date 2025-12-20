@@ -7,6 +7,9 @@ import ProjectsTable from "./ProjectsTable";
 import TenementsTable from "./TenementsTable";
 import ProjectModal from "./ProjectModal";
 import TenementModal from "./TenementModal";
+import LocationsTable from "./LocationsTable";
+import ResourcesTable from "./ResourcesTable";
+import ResourceModal from "./ResourceModal";
 
 export default function ProjectsView() {
   const supabase = useMemo(() => supabaseBrowser(), []);
@@ -21,8 +24,9 @@ export default function ProjectsView() {
   const emptyForm = { name: "", start_date: "", finish_date: "", cost_code: "", wbs_code: "" };
   const [form, setForm] = useState(emptyForm);
 
+  const [activeTab, setActiveTab] = useState("projects"); // "projects" | "tenements" | "locations" | "resources"
+
   // --- Tenements state ---
-  const [activeTab, setActiveTab] = useState("projects"); // "projects" | "tenements"
   const [tenements, setTenements] = useState([]);
   const [tenementsLoading, setTenementsLoading] = useState(false);
   const [showTenementModal, setShowTenementModal] = useState(false);
@@ -41,6 +45,23 @@ export default function ProjectsView() {
     heritage_agreements: "",
   };
   const [tenementForm, setTenementForm] = useState(tenementEmptyForm);
+
+  // --- Resources state ---
+  const [resources, setResources] = useState([]);
+  const [resourcesLoading, setResourcesLoading] = useState(false);
+  const [showResourceModal, setShowResourceModal] = useState(false);
+  const [savingResource, setSavingResource] = useState(false);
+  const [editingResourceId, setEditingResourceId] = useState(null);
+
+  // resources form should include vendor_id
+  const resourceEmptyForm = { name: "", resource_type: "Other", description: "", vendor_id: "" };
+  const [resourceForm, setResourceForm] = useState(resourceEmptyForm);
+
+  // add vendors state for the dropdown
+  const [vendors, setVendors] = useState([]);
+
+  const TABLE_HEAD_ROW = "text-left bg-slate-900/40 text-slate-200 border-b border-white/10";
+  const TABLE_ROW = "border-b border-white/10 last:border-b-0 hover:bg-white/5";
 
   // Load projects
   useEffect(() => {
@@ -83,6 +104,70 @@ export default function ProjectsView() {
 
       setTenements(!error ? data || [] : []);
       setTenementsLoading(false);
+    })();
+  }, [orgId, supabase, activeTab]);
+
+  // load vendors when org is available (or when resources tab is active)
+  useEffect(() => {
+    if (!orgId) {
+      setVendors([]);
+      return;
+    }
+
+    (async () => {
+      const { data, error } = await supabase
+        .from("vendors")
+        .select("id,name")
+        .eq("organization_id", orgId)
+        .order("name");
+
+      if (error) {
+        console.error("Failed to load vendors:", error);
+        setVendors([]);
+        return;
+      }
+
+      setVendors(data || []);
+    })();
+  }, [orgId, supabase]);
+
+  // Load resources (include vendor)
+  useEffect(() => {
+    if (activeTab !== "resources") return;
+
+    if (!orgId) {
+      setResources([]);
+      return;
+    }
+
+    (async () => {
+      setResourcesLoading(true);
+
+      const { data, error } = await supabase
+        .from("resources")
+        .select(`
+          id,
+          name,
+          description,
+          resource_type,
+          vendor_id,
+          vendor:vendors!resources_vendor_fk (
+            id,
+            name
+          ),
+          created_at
+        `)
+        .eq("organization_id", orgId)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Failed to load resources:", error);
+        setResources([]);
+      } else {
+        setResources(data || []);
+      }
+
+      setResourcesLoading(false);
     })();
   }, [orgId, supabase, activeTab]);
 
@@ -228,27 +313,125 @@ export default function ProjectsView() {
     setTenements((prev) => prev.filter((x) => x.id !== t.id));
   };
 
+  // --- Resource handlers ---
+  const openNewResource = () => {
+    setEditingResourceId(null);
+    setResourceForm(resourceEmptyForm);
+    setShowResourceModal(true);
+  };
+
+  const openEditResource = (r) => {
+    setEditingResourceId(r.id);
+    setResourceForm({
+      name: r.name || "",
+      resource_type: r.resource_type || "Other",
+      description: r.description || "",
+      vendor_id: r.vendor_id || "",
+    });
+    setShowResourceModal(true);
+  };
+
+  const saveResource = async () => {
+    if (!orgId) return;
+    if (!resourceForm.name.trim()) return;
+
+    setSavingResource(true);
+    try {
+      const payload = {
+        name: resourceForm.name.trim(),
+        resource_type: resourceForm.resource_type || "Other",
+        description: resourceForm.description?.trim() ? resourceForm.description.trim() : null,
+        vendor_id: resourceForm.vendor_id || null, // optional FK
+        organization_id: orgId,
+      };
+
+      let res;
+      if (editingResourceId) {
+        const { organization_id, ...updateFields } = payload;
+        res = await supabase.from("resources").update(updateFields).eq("id", editingResourceId).select().single();
+      } else {
+        res = await supabase.from("resources").insert(payload).select().single();
+      }
+      if (res.error) throw res.error;
+
+      const { data } = await supabase
+        .from("resources")
+        .select(`
+          id,
+          name,
+          description,
+          resource_type,
+          vendor_id,
+          vendor:vendors!resources_vendor_fk (
+            id,
+            name
+          ),
+          created_at
+        `)
+        .eq("organization_id", orgId)
+        .order("created_at", { ascending: false });
+
+      setResources(data || []);
+      setShowResourceModal(false);
+      setEditingResourceId(null);
+      setResourceForm(resourceEmptyForm);
+    } catch (e) {
+      console.error(e);
+      alert(e?.message || "Failed to save resource");
+    } finally {
+      setSavingResource(false);
+    }
+  };
+
+  const deleteResource = async (r) => {
+    if (!confirm(`Delete resource "${r.name}"?`)) return;
+    await supabase.from("resources").delete().eq("id", r.id);
+    setResources((prev) => prev.filter((x) => x.id !== r.id));
+  };
+
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-6">
       <h1 className="text-2xl font-semibold mb-4">Projects</h1>
 
-      {/* top tab bar */}
       <div className="mb-6 flex gap-2 border-b border-white/10">
         <button
           className={`px-4 py-2 -mb-px font-medium text-sm ${
             activeTab === "projects" ? "border-b-2 border-indigo-500 text-indigo-300" : "text-slate-300/70"
           }`}
           onClick={() => setActiveTab("projects")}
+          type="button"
         >
           Projects
         </button>
+
         <button
           className={`px-4 py-2 -mb-px font-medium text-sm ${
             activeTab === "tenements" ? "border-b-2 border-indigo-500 text-indigo-300" : "text-slate-300/70"
           }`}
           onClick={() => setActiveTab("tenements")}
+          type="button"
         >
           Tenements
+        </button>
+
+        <button
+          className={`px-4 py-2 -mb-px font-medium text-sm ${
+            activeTab === "locations" ? "border-b-2 border-indigo-500 text-indigo-300" : "text-slate-300/70"
+          }`}
+          onClick={() => setActiveTab("locations")}
+          type="button"
+        >
+          Locations
+        </button>
+
+        <button
+          className={`px-4 py-2 -mb-px font-medium text-sm ${
+            activeTab === "resources" ? "border-b-2 border-indigo-500 text-indigo-300" : "text-slate-300/70"
+          }`}
+          onClick={() => setActiveTab("resources")}
+          type="button"
+        >
+          Resources
         </button>
       </div>
 
@@ -258,7 +441,7 @@ export default function ProjectsView() {
           <div className="text-sm text-slate-300/70">
             {projects.length} project{projects.length === 1 ? "" : "s"}
           </div>
-          <button onClick={openNew} className="btn btn-primary">
+          <button onClick={openNew} className="btn btn-primary" type="button">
             New Project
           </button>
         </div>
@@ -269,8 +452,19 @@ export default function ProjectsView() {
           <div className="text-sm text-slate-300/70">
             {tenements.length} tenement{tenements.length === 1 ? "" : "s"}
           </div>
-          <button onClick={openNewTenement} className="btn btn-primary">
+          <button onClick={openNewTenement} className="btn btn-primary" type="button">
             New Tenement
+          </button>
+        </div>
+      )}
+
+      {activeTab === "resources" && (
+        <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+          <div className="text-sm text-slate-300/70">
+            {resources.length} resource{resources.length === 1 ? "" : "s"}
+          </div>
+          <button onClick={openNewResource} className="btn btn-primary" type="button">
+            New Resource
           </button>
         </div>
       )}
@@ -285,6 +479,19 @@ export default function ProjectsView() {
           tenements={tenements}
           onEdit={openEditTenement}
           onDelete={deleteTenement}
+        />
+      )}
+
+      {activeTab === "locations" && <LocationsTable TABLE_HEAD_ROW={TABLE_HEAD_ROW} TABLE_ROW={TABLE_ROW} />}
+
+      {activeTab === "resources" && (
+        <ResourcesTable
+          loading={resourcesLoading}
+          resources={resources}
+          onEdit={openEditResource}
+          onDelete={deleteResource}
+          TABLE_HEAD_ROW={TABLE_HEAD_ROW}
+          TABLE_ROW={TABLE_ROW}
         />
       )}
 
@@ -320,6 +527,25 @@ export default function ProjectsView() {
           onNew={() => {
             setEditingTenementId(null);
             setTenementForm(tenementEmptyForm);
+          }}
+        />
+      )}
+
+      {showResourceModal && (
+        <ResourceModal
+          editingId={editingResourceId}
+          form={resourceForm}
+          setForm={setResourceForm}
+          saving={savingResource}
+          vendors={vendors}
+          onClose={() => {
+            setShowResourceModal(false);
+            setEditingResourceId(null);
+          }}
+          onSave={saveResource}
+          onNew={() => {
+            setEditingResourceId(null);
+            setResourceForm(resourceEmptyForm);
           }}
         />
       )}
