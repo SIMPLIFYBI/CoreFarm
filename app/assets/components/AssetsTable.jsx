@@ -1,7 +1,7 @@
 // filepath: c:\Users\james\supa-CoreYard\supa-coreyard\app\assets\components\AssetsTable.jsx
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 
 export default function AssetsTable({
@@ -10,8 +10,15 @@ export default function AssetsTable({
   title = "Assets",
   addButtonLabel = "Add Asset",
 }) {
+  const PAGE_SIZE = 30;
+
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // pagination + sorting
+  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState({ key: "name", dir: "asc" }); // key: name|type|location|status
+
   const [showModal, setShowModal] = useState(false);
   const [editAsset, setEditAsset] = useState(null);
   const [form, setForm] = useState({ name: "", asset_type_id: "", location_id: "", status: "Active" });
@@ -35,6 +42,70 @@ export default function AssetsTable({
       setLoading(false);
     });
   }, [showModal]);
+
+  // keep page valid if data size changes
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil((assets?.length || 0) / PAGE_SIZE));
+    setPage((p) => Math.min(Math.max(1, p), totalPages));
+  }, [assets, PAGE_SIZE]);
+
+  const getSortValue = (asset, key) => {
+    switch (key) {
+      case "name":
+        return asset?.name ?? "";
+      case "type":
+        return asset?.asset_types?.name ?? "";
+      case "location":
+        return asset?.asset_locations?.name ?? "";
+      case "status":
+        return asset?.status ?? "";
+      default:
+        return "";
+    }
+  };
+
+  const sortedAssets = useMemo(() => {
+    const dir = sort.dir === "desc" ? -1 : 1;
+    const arr = [...(assets || [])];
+
+    arr.sort((a, b) => {
+      const av = getSortValue(a, sort.key);
+      const bv = getSortValue(b, sort.key);
+
+      // string compare (case-insensitive)
+      const as = String(av ?? "").toLowerCase();
+      const bs = String(bv ?? "").toLowerCase();
+
+      if (as < bs) return -1 * dir;
+      if (as > bs) return 1 * dir;
+      return 0;
+    });
+
+    return arr;
+  }, [assets, sort]);
+
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil((sortedAssets?.length || 0) / PAGE_SIZE)),
+    [sortedAssets, PAGE_SIZE]
+  );
+
+  const pagedAssets = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return sortedAssets.slice(start, start + PAGE_SIZE);
+  }, [sortedAssets, page, PAGE_SIZE]);
+
+  const toggleSort = (key) => {
+    setPage(1);
+    setSort((prev) => {
+      if (prev.key !== key) return { key, dir: "asc" };
+      return { key, dir: prev.dir === "asc" ? "desc" : "asc" };
+    });
+  };
+
+  const sortIndicator = (key) => {
+    if (sort.key !== key) return null;
+    return sort.dir === "asc" ? " ▲" : " ▼";
+  };
 
   const openModal = (asset = null) => {
     setEditAsset(asset);
@@ -80,10 +151,26 @@ export default function AssetsTable({
         <table className="w-full text-xs md:text-sm min-w-[720px]">
           <thead>
             <tr className={TABLE_HEAD_ROW}>
-              <th className="p-2 font-medium">Name</th>
-              <th className="p-2 font-medium">Type</th>
-              <th className="p-2 font-medium">Location</th>
-              <th className="p-2 font-medium">Status</th>
+              <th className="p-2 font-medium">
+                <button type="button" className="hover:underline" onClick={() => toggleSort("name")}>
+                  Name{sortIndicator("name")}
+                </button>
+              </th>
+              <th className="p-2 font-medium">
+                <button type="button" className="hover:underline" onClick={() => toggleSort("type")}>
+                  Type{sortIndicator("type")}
+                </button>
+              </th>
+              <th className="p-2 font-medium">
+                <button type="button" className="hover:underline" onClick={() => toggleSort("location")}>
+                  Location{sortIndicator("location")}
+                </button>
+              </th>
+              <th className="p-2 font-medium">
+                <button type="button" className="hover:underline" onClick={() => toggleSort("status")}>
+                  Status{sortIndicator("status")}
+                </button>
+              </th>
               <th className="p-2 font-medium text-right">Actions</th>
             </tr>
           </thead>
@@ -94,14 +181,14 @@ export default function AssetsTable({
                   Loading...
                 </td>
               </tr>
-            ) : assets.length === 0 ? (
+            ) : pagedAssets.length === 0 ? (
               <tr>
                 <td colSpan={5} className="p-4 text-center text-slate-300/70">
                   No assets found.
                 </td>
               </tr>
             ) : (
-              assets.map((asset) => (
+              pagedAssets.map((asset) => (
                 <tr key={asset.id} className={TABLE_ROW}>
                   <td className="p-2 font-medium">{asset.name}</td>
                   <td className="p-2">{asset.asset_types?.name || "-"}</td>
@@ -111,7 +198,11 @@ export default function AssetsTable({
                     <button className="btn btn-xs" onClick={() => openModal(asset)} type="button">
                       Edit
                     </button>
-                    <button className="btn btn-xs btn-danger ml-2" onClick={() => handleDelete(asset.id)} type="button">
+                    <button
+                      className="btn btn-xs btn-danger ml-2"
+                      onClick={() => handleDelete(asset.id)}
+                      type="button"
+                    >
                       Delete
                     </button>
                   </td>
@@ -122,12 +213,42 @@ export default function AssetsTable({
         </table>
       </div>
 
+      {/* Pagination */}
+      {!loading && sortedAssets.length > 0 && (
+        <div className="flex items-center justify-between gap-3 mt-4 flex-wrap">
+          <div className="text-xs text-slate-300/70">
+            Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, sortedAssets.length)} of{" "}
+            {sortedAssets.length}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="btn btn-xs"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+            >
+              Prev
+            </button>
+            <div className="text-xs text-slate-200">
+              Page {page} / {totalPages}
+            </div>
+            <button
+              type="button"
+              className="btn btn-xs"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="card p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold mb-4 text-slate-100">
-              {editAsset ? "Edit Asset" : "Add Asset"}
-            </h3>
+            <h3 className="text-lg font-semibold mb-4 text-slate-100">{editAsset ? "Edit Asset" : "Add Asset"}</h3>
 
             <form
               className="space-y-3"

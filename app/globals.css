@@ -29,12 +29,31 @@ body {
   min-height: 100%;
 }
 
+html {
+  /* ensures any "gap" behind body still matches */
+  background-color: rgb(var(--bg));
+}
+
 body {
   color: rgb(var(--text));
-  background:
-    radial-gradient(900px 500px at 20% -10%, rgba(99,102,241,.22), transparent 60%),
-    radial-gradient(800px 450px at 95% 10%, rgba(34,211,238,.16), transparent 55%),
+  background-color: rgb(var(--bg));
+
+  /* Make sure the background extends and never tiles */
+  min-height: 100dvh;
+
+  /* Long “never repeats” gradient with small colour pops */
+  background-image:
+    radial-gradient(900px 520px at 20% -10%, rgba(99, 102, 241, 0.22), transparent 60%),
+    radial-gradient(820px 460px at 95% 10%, rgba(34, 211, 238, 0.16), transparent 55%),
+    radial-gradient(780px 520px at 10% 85%, rgba(168, 85, 247, 0.12), transparent 58%),
+    radial-gradient(720px 480px at 90% 78%, rgba(59, 130, 246, 0.12), transparent 60%),
     linear-gradient(180deg, rgb(var(--bg)), rgb(var(--bg2)));
+
+  background-repeat: no-repeat;
+  /* Make it “long enough” that it won’t tile for normal pages */
+  background-size: 100% 6000px;
+  background-attachment: scroll;
+
   font-family: Arial, Helvetica, sans-serif;
 }
 
