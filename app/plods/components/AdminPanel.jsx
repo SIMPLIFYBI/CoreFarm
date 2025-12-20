@@ -1,25 +1,33 @@
+"use client";
+
 import React, { useState } from "react";
 import { Spinner } from "./Spinner";
+import { supabaseBrowser } from "@/lib/supabaseClient";
+import toast from "react-hot-toast";
 
-export function AdminPanel({...props}) {
-  const {
-    vendors = [],
-    vendorForm = {},
-    activityTypeForm = {},
-    vendorLoading = false,
-    handleVendorChange,
-    submitVendor,
-    toggleVendorExpand,
-    expandedVendor,
-    vendorResources = {},
-    openAddResourceModal,
-    openEditResourceModal,
-    deleteResource,
-    activityTypes = [],
-    activityTypeLoading = false,
-    handleActivityTypeChange,
-    submitActivityType,
-  } = props;
+export function AdminPanel({
+  vendors = [],
+  vendorForm = {},
+  activityTypeForm = {},
+  vendorLoading = false,
+  handleVendorChange,
+  submitVendor,
+  toggleVendorExpand,
+  expandedVendor,
+  vendorResources = {},
+  openAddResourceModal,
+  openEditResourceModal,
+  deleteResource,
+  activityTypes = [],
+  activityTypeLoading = false,
+  handleActivityTypeChange,
+  submitActivityType,
+  orgId,
+  orgLoading,
+  setActivityTypes,
+}) {
+  const supabase = supabaseBrowser();
+
   const vendorFormSafe = {
     name: "",
     contact: "",
@@ -35,6 +43,43 @@ export function AdminPanel({...props}) {
   };
 
   const [tab, setTab] = useState("vendors");
+  const [newActivityType, setNewActivityType] = useState({
+    activity_type: "",
+    description: "",
+    group: "",
+    label: "",
+    plod_type_scope: ["all"],
+  });
+
+  const addActivityType = async () => {
+    if (!orgId) return toast.error("Organisation not ready yet");
+
+    const payload = {
+      organization_id: orgId,
+      activity_type: (newActivityType.activity_type || "").trim(),
+      description: newActivityType.description?.trim() || null,
+      group: newActivityType.group?.trim() || null,
+      label: newActivityType.label?.trim() || null,
+      plod_type_scope:
+        Array.isArray(newActivityType.plod_type_scope) && newActivityType.plod_type_scope.length
+          ? newActivityType.plod_type_scope
+          : ["all"],
+    };
+
+    const { data, error } = await supabase
+      .from("plod_activity_types")
+      .insert(payload)
+      .select("id, activity_type, description, group, label, plod_type_scope")
+      .single();
+
+    if (error) {
+      console.error("insert plod_activity_types error", error);
+      return toast.error(error.message || "Could not add activity type");
+    }
+
+    setActivityTypes((arr) => [data, ...(arr || [])]);
+    toast.success("Activity type added");
+  };
 
   return (
     <div className="space-y-6">
@@ -145,13 +190,6 @@ export function AdminPanel({...props}) {
               value={activityTypeFormSafe.description}
               onChange={handleActivityTypeChange("description")}
             />
-            <input
-              className="input"
-              placeholder="Organization ID"
-              value={activityTypeFormSafe.organization_id}
-              onChange={handleActivityTypeChange("organization_id")}
-              required
-            />
             <button
               type="submit"
               className="btn btn-primary"
@@ -170,8 +208,29 @@ export function AdminPanel({...props}) {
               </div>
             ))}
           </div>
+
+          {/* Activity Types form */}
+          <div className="space-y-2">
+            {/* TEMP DEBUG: show org id being used for inserts */}
+            <label className="block text-xs text-slate-300">Organisation ID (auto)</label>
+            <input
+              className="input w-full"
+              value={orgId ?? ""}
+              readOnly
+              disabled
+            />
+          </div>
         </div>
       )}
+
+      <button
+        type="button"
+        className="btn btn-primary"
+        disabled={orgLoading || !orgId}
+        onClick={addActivityType}
+      >
+        Add activity type
+      </button>
     </div>
   );
 }

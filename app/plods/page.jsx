@@ -2,14 +2,16 @@
 
 import React, { useEffect, useState } from "react";
 import { IconPlods } from "../components/icons";
-import { supabaseBrowser } from "../../lib/supabaseClient";
-import { useOrg } from "../../lib/OrgContext";
-
+import { supabaseBrowser } from "@/lib/supabaseClient";
+import { useOrg } from "@/lib/OrgContext";
 import { AdminPanel } from "./components/AdminPanel";
 import { HistoryTable } from "./components/HistoryTable";
 import { PlodCreateSheet } from "./components/PlodCreateSheet";
 
 export default function Page() {
+  const supabase = supabaseBrowser();
+  const { orgId: selectedOrgId, loading: orgLoading } = useOrg();
+
   const [vendors, setVendors] = useState([]);
   const [activityTypes, setActivityTypes] = useState([]);
   const [holes, setHoles] = useState([]);
@@ -17,11 +19,8 @@ export default function Page() {
   const [vendorForm, setVendorForm] = useState({ name: "", contact: "", organization_id: "" });
   const [vendorLoading, setVendorLoading] = useState(false);
   const [message, setMessage] = useState(null);
-  const { orgId } = useOrg();
-
   const [enteredBy, setEnteredBy] = useState("");
   const [showCreatePlod, setShowCreatePlod] = useState(false);
-
   const [activityTypeForm, setActivityTypeForm] = useState({
     activityType: "",
     group: "",
@@ -29,17 +28,14 @@ export default function Page() {
     organization_id: "",
   });
   const [activityTypeLoading, setActivityTypeLoading] = useState(false);
-
   const [plods, setPlods] = useState([]);
   const [plodsLoading, setPlodsLoading] = useState(false);
   const [dateRange, setDateRange] = useState({
     from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
     to: new Date().toISOString().split("T")[0],
   });
-
   const [vendorResources, setVendorResources] = useState([]);
   const [expandedVendor, setExpandedVendor] = useState(null);
-
   const [resourceForm, setResourceForm] = useState({
     vendor_id: "",
     name: "",
@@ -52,7 +48,7 @@ export default function Page() {
   const [resourceModalOpen, setResourceModalOpen] = useState(false);
 
   useEffect(() => {
-    const sb = supabaseBrowser();
+    const sb = supabase;
 
     // enteredBy
     (async () => {
@@ -68,14 +64,14 @@ export default function Page() {
     const vQuery = sb.from("vendors").select("id,name").limit(100);
     const aQuery = sb
       .from("plod_activity_types")
-      .select('id,activity_type,"group",description,plod_type_scope')
+      .select('id,activity_type,"group",description')
       .limit(200);
     const hQuery = sb.from("holes").select("id,hole_id").limit(200);
 
-    if (orgId) {
-      vQuery.eq("organization_id", orgId);
-      aQuery.eq("organization_id", orgId);
-      hQuery.eq("organization_id", orgId);
+    if (selectedOrgId) {
+      vQuery.eq("organization_id", selectedOrgId);
+      aQuery.eq("organization_id", selectedOrgId);
+      hQuery.eq("organization_id", selectedOrgId);
     }
 
     Promise.all([vQuery, aQuery, hQuery]).then(([vRes, aRes, hRes]) => {
@@ -87,16 +83,16 @@ export default function Page() {
       else setHoles(hRes?.data || []);
     });
 
-    if (activeTab === "home" && orgId) {
+    if (activeTab === "home" && selectedOrgId) {
       loadPlods();
     }
-  }, [orgId, activeTab, expandedVendor]);
+  }, [selectedOrgId, activeTab, expandedVendor]);
 
   const loadPlods = async () => {
-    if (!orgId) return;
+    if (!selectedOrgId) return;
 
     setPlodsLoading(true);
-    const sb = supabaseBrowser();
+    const sb = supabase;
 
     try {
       const { data, error } = await sb
@@ -107,7 +103,6 @@ export default function Page() {
           started_at,
           finished_at,
           notes,
-          entered_by,
           vendors:vendor_id(name),
           plod_activities(
             id,
@@ -120,7 +115,7 @@ export default function Page() {
             holes:hole_id(hole_id)
           )
         `)
-        .eq("organization_id", orgId)
+        .eq("organization_id", selectedOrgId)
         .gte("started_at", dateRange.from ? `${dateRange.from}T00:00:00` : null)
         .lte("started_at", dateRange.to ? `${dateRange.to}T23:59:59` : null)
         .order("started_at", { ascending: false })
@@ -139,9 +134,9 @@ export default function Page() {
   const handleActivityTypeChange = (k) => (e) => setActivityTypeForm((s) => ({ ...s, [k]: e.target.value }));
 
   const loadVendors = async () => {
-    if (!orgId) return;
-    const sb = supabaseBrowser();
-    const { data, error } = await sb.from("vendors").select("*").eq("organization_id", orgId).order("name");
+    if (!selectedOrgId) return;
+    const sb = supabase;
+    const { data, error } = await sb.from("vendors").select("*").eq("organization_id", selectedOrgId).order("name");
     if (error) setMessage({ type: "error", text: `Failed to load vendors: ${error.message}` });
     else setVendors(data || []);
   };
@@ -156,15 +151,15 @@ export default function Page() {
       setVendorLoading(false);
       return;
     }
-    if (!orgId) {
+    if (!selectedOrgId) {
       setMessage({ type: "error", text: "Organization ID is missing." });
       setVendorLoading(false);
       return;
     }
 
     try {
-      const sb = supabaseBrowser();
-      const payload = { name: vendorForm.name, contact: vendorForm.contact, organization_id: orgId };
+      const sb = supabase;
+      const payload = { name: vendorForm.name, contact: vendorForm.contact, organization_id: selectedOrgId };
       const { error } = await sb.from("vendors").insert(payload);
       if (error) throw error;
 
@@ -179,13 +174,13 @@ export default function Page() {
   };
 
   const refreshActivityTypes = async () => {
-    const sb = supabaseBrowser();
+    const sb = supabase;
     const query = sb
       .from("plod_activity_types")
       .select('id,activity_type,"group",description,plod_type_scope')
       .limit(200);
 
-    if (orgId) query.eq("organization_id", orgId);
+    if (selectedOrgId) query.eq("organization_id", selectedOrgId);
 
     const { data, error } = await query;
     if (error) setMessage({ type: "error", text: error.message });
@@ -202,16 +197,16 @@ export default function Page() {
       setActivityTypeLoading(false);
       return;
     }
-    if (!orgId) {
+    if (!selectedOrgId) {
       setMessage({ type: "error", text: "Please select an organization first." });
       setActivityTypeLoading(false);
       return;
     }
 
     try {
-      const sb = supabaseBrowser();
+      const sb = supabase;
       const payload = {
-        organization_id: orgId,
+        organization_id: selectedOrgId,
         activity_type: activityTypeForm.activityType,
         group: activityTypeForm.group || null,
         description: activityTypeForm.description || null,
@@ -229,20 +224,48 @@ export default function Page() {
     }
   };
 
-  // ...existing vendor_resources handlers + modal code remain unchanged...
+  useEffect(() => {
+    if (!selectedOrgId) return;
+
+    (async () => {
+      const { data, error } = await supabase
+        .from("plod_activity_types")
+        .select("id, activity_type, description, group, label, plod_type_scope")
+        .eq("organization_id", selectedOrgId)
+        .order("activity_type", { ascending: true });
+
+      if (error) {
+        console.error("load plod_activity_types error", error);
+        setActivityTypes([]);
+        return;
+      }
+
+      setActivityTypes(data || []);
+    })();
+  }, [selectedOrgId, supabase]);
 
   return (
     <div className="mx-auto max-w-6xl p-6">
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold flex items-center gap-3">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 text-white">
-            <IconPlods />
-          </span>
-          Plods
-        </h1>
-        <p className="text-sm text-slate-300 mt-2">
-          Record a shift. Choose plod type, fill header fields, then add activities.
-        </p>
+      <header className="mb-6 flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold flex items-center gap-3">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 text-white">
+              <IconPlods />
+            </span>
+            Plods
+          </h1>
+          <p className="text-sm text-slate-300 mt-2">
+            Record a shift. Choose plod type, fill header fields, then add activities.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowCreatePlod(true)}
+          className="btn btn-primary whitespace-nowrap"
+        >
+          New Plod
+        </button>
       </header>
 
       <div className="card overflow-hidden">
@@ -251,7 +274,7 @@ export default function Page() {
             className={`px-4 py-3 -mb-px text-sm font-medium transition-base ${activeTab === "home" ? "border-b-2 border-indigo-400 text-slate-100" : "text-slate-300 hover:text-slate-100"}`}
             onClick={() => {
               setActiveTab("home");
-              if (orgId) loadPlods();
+              if (selectedOrgId) loadPlods();
             }}
           >
             Home
@@ -284,17 +307,14 @@ export default function Page() {
               vendorLoading={vendorLoading}
               handleVendorChange={handleVendorChange}
               submitVendor={submitVendor}
-              toggleVendorExpand={toggleVendorExpand}
-              expandedVendor={expandedVendor}
-              vendorResources={vendorResources}
-              openAddResourceModal={openAddResourceModal}
-              openEditResourceModal={openEditResourceModal}
-              deleteResource={deleteResource}
               activityTypes={activityTypes}
               activityTypeForm={activityTypeForm}
               activityTypeLoading={activityTypeLoading}
               handleActivityTypeChange={handleActivityTypeChange}
               submitActivityType={submitActivityType}
+              orgId={selectedOrgId}
+              orgLoading={orgLoading}
+              setActivityTypes={setActivityTypes}
             />
           )}
 
@@ -310,22 +330,11 @@ export default function Page() {
         </section>
       </div>
 
-      {/* Floating action */}
-      <div className="fixed bottom-4 right-4 z-40">
-        <button
-          type="button"
-          onClick={() => setShowCreatePlod(true)}
-          className="btn btn-primary"
-        >
-          New Plod
-        </button>
-      </div>
-
       {/* Create sheet */}
       <PlodCreateSheet
         open={showCreatePlod}
         onClose={() => setShowCreatePlod(false)}
-        orgId={orgId}
+        orgId={selectedOrgId}
         enteredBy={enteredBy}
         vendors={vendors}
         holes={holes}
