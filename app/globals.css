@@ -62,20 +62,57 @@ body {
 .select-gradient-sm {
   font-size: 11px;
   line-height: 1.1rem;
-  padding: 0.35rem 0.5rem; /* approximate input-sm */
-  background-image: linear-gradient(90deg, rgba(2,132,199,0.15), rgba(79,70,229,0.15), rgba(37,99,235,0.15));
+  padding: 0.35rem 0.5rem;
+
+  /* Ensure the control is dark + readable */
+  background-color: rgba(15, 23, 42, 0.85);
+  color: rgb(var(--text));
+
+  /* Helps some browsers render the native popup in dark mode */
+  color-scheme: dark;
+
+  /* Keep your gradient */
+  background-image: linear-gradient(
+    90deg,
+    rgba(2,132,199,0.15),
+    rgba(79,70,229,0.15),
+    rgba(37,99,235,0.15)
+  );
+
   border: 1px solid rgba(56,189,248,0.4);
-  border-radius: 0.375rem; /* md */
+  border-radius: 0.375rem;
   backdrop-filter: blur(4px);
   transition: border-color 120ms, box-shadow 120ms, background-color 120ms;
+
+  /* More modern closed-state + consistent arrow */
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 1.75rem;
+  background-repeat: no-repeat;
+  background-position: right 0.6rem center;
+  background-size: 0.9rem 0.9rem;
+
+  /* Add chevron without losing your gradient */
+  background-image:
+    linear-gradient(90deg, rgba(2,132,199,0.15), rgba(79,70,229,0.15), rgba(37,99,235,0.15)),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M6 8l4 4 4-4' stroke='%23CBD5E1' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
+
 .select-gradient-sm:hover {
   border-color: rgba(56,189,248,0.7);
 }
+
 .select-gradient-sm:focus {
   outline: none;
-  border-color: rgba(56,189,248,0.9);
-  box-shadow: 0 0 0 2px rgba(56,189,248,0.35);
+  border-color: rgba(99,102,241,0.75);
+  box-shadow: 0 0 0 1px rgba(99,102,241,0.4), 0 0 0 4px rgba(99,102,241,0.2);
+}
+
+/* Try to darken option rows (works in some browsers; harmless otherwise) */
+.select-gradient-sm option,
+.select-gradient-sm optgroup {
+  background-color: rgb(15, 23, 42);
+  color: rgb(var(--text));
 }
 
 /* Mobile-friendly base tweaks */

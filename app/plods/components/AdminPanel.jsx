@@ -1,96 +1,141 @@
 "use client";
 
 import React, { useState } from "react";
-import { Spinner } from "./Spinner";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import toast from "react-hot-toast";
 
+function ActivityTypeModal({ form, setForm, saving, onClose, onSave }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="card w-full max-w-md p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-slate-100">New Activity Type</h2>
+          <button className="btn" onClick={onClose} type="button">
+            Close
+          </button>
+        </div>
+
+        <form
+          className="grid grid-cols-1 gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSave();
+          }}
+        >
+          <label className="block text-sm">
+            Activity Type
+            <input
+              className="input w-full"
+              value={form.activity_type}
+              onChange={(e) => setForm((f) => ({ ...f, activity_type: e.target.value }))}
+              placeholder="e.g. Drill & Blast"
+              required
+            />
+          </label>
+
+          <label className="block text-sm">
+            Group (optional)
+            <input
+              className="input w-full"
+              value={form.group}
+              onChange={(e) => setForm((f) => ({ ...f, group: e.target.value }))}
+              placeholder="e.g. Production"
+            />
+          </label>
+
+          <label className="block text-sm">
+            Description (optional)
+            <textarea
+              className="input w-full"
+              rows={4}
+              value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              placeholder="Optional notes…"
+            />
+          </label>
+
+          <div className="flex gap-2 justify-end pt-2">
+            <button type="button" className="btn" onClick={onClose} disabled={saving}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={saving || !form.activity_type.trim()}>
+              {saving ? "Saving…" : "Create"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export function AdminPanel({
-  vendors = [],
-  vendorForm = {},
-  activityTypeForm = {},
-  vendorLoading = false,
-  handleVendorChange,
-  submitVendor,
-  toggleVendorExpand,
-  expandedVendor,
-  vendorResources = {},
-  openAddResourceModal,
-  openEditResourceModal,
-  deleteResource,
   activityTypes = [],
-  activityTypeLoading = false,
-  handleActivityTypeChange,
-  submitActivityType,
   orgId,
   orgLoading,
   setActivityTypes,
+
+  // legacy props (no longer used by this UI, but kept for compatibility)
+  activityTypeForm = {},
+  activityTypeLoading = false,
+  handleActivityTypeChange,
+  submitActivityType,
 }) {
   const supabase = supabaseBrowser();
+  const [tab, setTab] = useState("activity-types");
 
-  const vendorFormSafe = {
-    name: "",
-    contact: "",
-    organization_id: "",
-    ...vendorForm,
-  };
-  const activityTypeFormSafe = {
-    activityType: "",
-    group: "",
-    description: "",
-    organization_id: "",
-    ...activityTypeForm,
-  };
-
-  const [tab, setTab] = useState("vendors");
-  const [newActivityType, setNewActivityType] = useState({
+  const emptyActivityType = {
     activity_type: "",
     description: "",
     group: "",
     label: "",
     plod_type_scope: ["all"],
-  });
+  };
+
+  const [showModal, setShowModal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [newActivityType, setNewActivityType] = useState(emptyActivityType);
 
   const addActivityType = async () => {
     if (!orgId) return toast.error("Organisation not ready yet");
+    if (!newActivityType.activity_type.trim()) return;
 
-    const payload = {
-      organization_id: orgId,
-      activity_type: (newActivityType.activity_type || "").trim(),
-      description: newActivityType.description?.trim() || null,
-      group: newActivityType.group?.trim() || null,
-      label: newActivityType.label?.trim() || null,
-      plod_type_scope:
-        Array.isArray(newActivityType.plod_type_scope) && newActivityType.plod_type_scope.length
-          ? newActivityType.plod_type_scope
-          : ["all"],
-    };
+    setSaving(true);
+    try {
+      const payload = {
+        organization_id: orgId,
+        activity_type: newActivityType.activity_type.trim(),
+        description: newActivityType.description?.trim() || null,
+        group: newActivityType.group?.trim() || null,
+        label: newActivityType.label?.trim() || null,
+        plod_type_scope:
+          Array.isArray(newActivityType.plod_type_scope) && newActivityType.plod_type_scope.length
+            ? newActivityType.plod_type_scope
+            : ["all"],
+      };
 
-    const { data, error } = await supabase
-      .from("plod_activity_types")
-      .insert(payload)
-      .select("id, activity_type, description, group, label, plod_type_scope")
-      .single();
+      const { data, error } = await supabase
+        .from("plod_activity_types")
+        .insert(payload)
+        .select("id, activity_type, description, group, label, plod_type_scope")
+        .single();
 
-    if (error) {
-      console.error("insert plod_activity_types error", error);
-      return toast.error(error.message || "Could not add activity type");
+      if (error) throw error;
+
+      setActivityTypes((arr) => [data, ...(arr || [])]);
+      setShowModal(false);
+      setNewActivityType(emptyActivityType);
+      toast.success("Activity type added");
+    } catch (e) {
+      console.error("insert plod_activity_types error", e);
+      toast.error(e?.message || "Could not add activity type");
+    } finally {
+      setSaving(false);
     }
-
-    setActivityTypes((arr) => [data, ...(arr || [])]);
-    toast.success("Activity type added");
   };
 
   return (
     <div className="space-y-6">
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => setTab("vendors")}
-          className={`btn ${tab === "vendors" ? "btn-primary" : ""}`}
-        >
-          Vendors
-        </button>
         <button
           type="button"
           onClick={() => setTab("activity-types")}
@@ -100,63 +145,52 @@ export function AdminPanel({
         </button>
       </div>
 
-      {tab === "vendors" && (
+      {tab === "activity-types" && (
         <div className="space-y-4">
-          <form onSubmit={submitVendor} className="card p-4 space-y-3">
-            <div className="font-semibold text-slate-100">Add Vendor</div>
-            <input
-              className="input"
-              placeholder="Name"
-              value={vendorFormSafe.name}
-              onChange={handleVendorChange("name")}
-              required
-            />
-            <input
-              className="input"
-              placeholder="Contact"
-              value={vendorFormSafe.contact}
-              onChange={handleVendorChange("contact")}
-            />
-            <input
-              className="input"
-              placeholder="Organization ID"
-              value={vendorFormSafe.organization_id}
-              onChange={handleVendorChange("organization_id")}
-              required
-            />
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={vendorLoading}
-            >
-              {vendorLoading && <Spinner size={14} />} Save Vendor
-            </button>
-          </form>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="text-sm text-slate-300/70">
+              {activityTypes.length} item{activityTypes.length === 1 ? "" : "s"}
+            </div>
 
-          <div>
-            <div className="px-1 py-1 font-semibold text-slate-100">Vendors in this org</div>
-            <div className="table-container">
-              <table className="table">
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={orgLoading || !orgId}
+              onClick={() => {
+                setNewActivityType(emptyActivityType);
+                setShowModal(true);
+              }}
+            >
+              New Activity Type
+            </button>
+          </div>
+
+          <div className="card p-4">
+            <div className="overflow-x-auto -mx-2 md:mx-0">
+              <table className="w-full text-xs md:text-sm min-w-[720px]">
                 <thead>
-                  <tr>
-                    <th className="py-2 px-3 text-left">Name</th>
-                    <th className="py-2 px-3 text-left">Contact</th>
-                    <th className="py-2 px-3 text-left">Org ID</th>
+                  <tr className="text-left bg-slate-900/40 text-slate-200 border-b border-white/10">
+                    <th className="p-2 font-medium">Activity Type</th>
+                    <th className="p-2 font-medium">Group</th>
+                    <th className="p-2 font-medium">Description</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {vendors.length === 0 ? (
+                  {activityTypes.length === 0 ? (
                     <tr>
-                      <td className="py-2 px-3 text-slate-400" colSpan={3}>
-                        No vendors found.
+                      <td colSpan={3} className="p-4 text-center text-slate-300/70">
+                        No activity types found for this organisation.
                       </td>
                     </tr>
                   ) : (
-                    vendors.map((v) => (
-                      <tr key={v.id}>
-                        <td>{v.name}</td>
-                        <td>{v.contact}</td>
-                        <td>{v.organization_id}</td>
+                    activityTypes.map((t) => (
+                      <tr
+                        key={t.id || t.activity_type}
+                        className="border-b border-white/10 last:border-b-0 hover:bg-white/5"
+                      >
+                        <td className="p-2 font-medium">{t.activity_type}</td>
+                        <td className="p-2">{t.group || "—"}</td>
+                        <td className="p-2">{t.description || "—"}</td>
                       </tr>
                     ))
                   )}
@@ -164,73 +198,18 @@ export function AdminPanel({
               </table>
             </div>
           </div>
+
+          {showModal && (
+            <ActivityTypeModal
+              form={newActivityType}
+              setForm={setNewActivityType}
+              saving={saving}
+              onClose={() => setShowModal(false)}
+              onSave={addActivityType}
+            />
+          )}
         </div>
       )}
-
-      {tab === "activity-types" && (
-        <div className="space-y-4">
-          <form onSubmit={submitActivityType} className="card p-4 space-y-3">
-            <div className="font-semibold text-slate-100">Add Activity Type</div>
-            <input
-              className="input"
-              placeholder="Activity Type"
-              value={activityTypeFormSafe.activityType}
-              onChange={handleActivityTypeChange("activityType")}
-              required
-            />
-            <input
-              className="input"
-              placeholder="Group"
-              value={activityTypeFormSafe.group}
-              onChange={handleActivityTypeChange("group")}
-            />
-            <input
-              className="input"
-              placeholder="Description"
-              value={activityTypeFormSafe.description}
-              onChange={handleActivityTypeChange("description")}
-            />
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={activityTypeLoading}
-            >
-              {activityTypeLoading && <Spinner size={14} />} Save Activity Type
-            </button>
-          </form>
-
-          <div className="space-y-2">
-            {activityTypes.map((t) => (
-              <div key={t.id || t.activityType} className="card p-3">
-                <div className="font-semibold text-slate-100">{t.activityType || t.name}</div>
-                {t.group && <div className="text-sm text-slate-300">{t.group}</div>}
-                {t.description && <div className="text-sm text-slate-300">{t.description}</div>}
-              </div>
-            ))}
-          </div>
-
-          {/* Activity Types form */}
-          <div className="space-y-2">
-            {/* TEMP DEBUG: show org id being used for inserts */}
-            <label className="block text-xs text-slate-300">Organisation ID (auto)</label>
-            <input
-              className="input w-full"
-              value={orgId ?? ""}
-              readOnly
-              disabled
-            />
-          </div>
-        </div>
-      )}
-
-      <button
-        type="button"
-        className="btn btn-primary"
-        disabled={orgLoading || !orgId}
-        onClick={addActivityType}
-      >
-        Add activity type
-      </button>
     </div>
   );
 }

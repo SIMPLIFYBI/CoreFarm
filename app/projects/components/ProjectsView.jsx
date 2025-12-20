@@ -10,6 +10,7 @@ import TenementModal from "./TenementModal";
 import LocationsTable from "./LocationsTable";
 import ResourcesTable from "./ResourcesTable";
 import ResourceModal from "./ResourceModal";
+import VendorsTab from "./VendorsTab";
 
 export default function ProjectsView() {
   const supabase = useMemo(() => supabaseBrowser(), []);
@@ -24,7 +25,7 @@ export default function ProjectsView() {
   const emptyForm = { name: "", start_date: "", finish_date: "", cost_code: "", wbs_code: "" };
   const [form, setForm] = useState(emptyForm);
 
-  const [activeTab, setActiveTab] = useState("projects"); // "projects" | "tenements" | "locations" | "resources"
+  const [activeTab, setActiveTab] = useState("projects"); // "projects" | "tenements" | "locations" | "resources" | "vendors"
 
   // --- Tenements state ---
   const [tenements, setTenements] = useState([]);
@@ -433,6 +434,18 @@ export default function ProjectsView() {
         >
           Resources
         </button>
+
+        <button
+          className={`px-4 py-2 -mb-px font-medium text-sm ${
+            activeTab === "vendors"
+              ? "border-b-2 border-indigo-500 text-indigo-300"
+              : "text-slate-300/70"
+          }`}
+          onClick={() => setActiveTab("vendors")}
+          type="button"
+        >
+          Vendors
+        </button>
       </div>
 
       {/* header actions per tab */}
@@ -490,6 +503,14 @@ export default function ProjectsView() {
           resources={resources}
           onEdit={openEditResource}
           onDelete={deleteResource}
+          TABLE_HEAD_ROW={TABLE_HEAD_ROW}
+          TABLE_ROW={TABLE_ROW}
+        />
+      )}
+
+      {activeTab === "vendors" && (
+        <VendorsTab
+          orgId={orgId}
           TABLE_HEAD_ROW={TABLE_HEAD_ROW}
           TABLE_ROW={TABLE_ROW}
         />
