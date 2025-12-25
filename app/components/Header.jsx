@@ -20,7 +20,7 @@ import {
 } from "./icons";
 
 export default function Header() {
-  const supabase = supabaseBrowser();
+  const supabase = useMemo(() => supabaseBrowser(), []);
   const router = useRouter();
   const pathname = usePathname();
   const [email, setEmail] = useState(null);
@@ -29,6 +29,7 @@ export default function Header() {
   const { orgId, memberships } = useOrg();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [isAppAdmin, setIsAppAdmin] = useState(false);
 
   useEffect(() => {
     // Close menu when navigating
@@ -72,6 +73,32 @@ export default function Header() {
     };
   }, [supabase]);
 
+  useEffect(() => {
+    let alive = true;
+
+    const run = async () => {
+      try {
+        // If RPC doesn't exist yet, we fail closed (hide link) without breaking UI.
+        const { data, error } = await supabase.rpc("is_app_admin_rpc");
+        if (!alive) return;
+        if (error) {
+          setIsAppAdmin(false);
+          return;
+        }
+        setIsAppAdmin(Boolean(data));
+      } catch {
+        if (!alive) return;
+        setIsAppAdmin(false);
+      }
+    };
+
+    run();
+
+    return () => {
+      alive = false;
+    };
+  }, [supabase]);
+
   const currentOrgName = useMemo(() => {
     if (!orgId) return null;
     const m = memberships.find(m => m.organization_id === orgId);
@@ -86,6 +113,9 @@ export default function Header() {
     { href: "/assets", label: "Assets", icon: AssetIcon },
     { href: "/plods", label: "Plods", icon: IconPlods },
     { href: "/team", label: "Team", icon: IconTeam },
+
+    // Step 2: admin-gated
+    ...(isAppAdmin ? [{ href: "/admin/subscriptions", label: "Subscriptions", icon: IconAdmin }] : []),
   ];
 
   return (

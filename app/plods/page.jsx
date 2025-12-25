@@ -21,11 +21,13 @@ export default function Page() {
   const [message, setMessage] = useState(null);
   const [enteredBy, setEnteredBy] = useState("");
   const [showCreatePlod, setShowCreatePlod] = useState(false);
+  const [editingActivityType, setEditingActivityType] = useState(null); // NEW
+
   const [activityTypeForm, setActivityTypeForm] = useState({
     activityType: "",
-    group: "",
     description: "",
     organization_id: "",
+    plodTypeScope: "all",
   });
   const [activityTypeLoading, setActivityTypeLoading] = useState(false);
   const [plods, setPlods] = useState([]);
@@ -62,10 +64,13 @@ export default function Page() {
 
     // org-scoped data
     const vQuery = sb.from("vendors").select("id,name").limit(100);
+
     const aQuery = sb
       .from("plod_activity_types")
-      .select('id,activity_type,"group",description')
+      .select('id,activity_type,"group",description,plod_type_scope') // <-- ADD plod_type_scope
+      .order("activity_type", { ascending: true })                  // <-- keep consistent ordering
       .limit(200);
+
     const hQuery = sb.from("holes").select("id,hole_id").limit(200);
 
     if (selectedOrgId) {
@@ -77,8 +82,10 @@ export default function Page() {
     Promise.all([vQuery, aQuery, hQuery]).then(([vRes, aRes, hRes]) => {
       if (vRes?.error) setMessage({ type: "error", text: vRes.error.message });
       else setVendors(vRes?.data || []);
+
       if (aRes?.error) setMessage({ type: "error", text: aRes.error.message });
       else setActivityTypes(aRes?.data || []);
+
       if (hRes?.error) setMessage({ type: "error", text: hRes.error.message });
       else setHoles(hRes?.data || []);
     });
@@ -174,17 +181,42 @@ export default function Page() {
   };
 
   const refreshActivityTypes = async () => {
-    const sb = supabase;
-    const query = sb
+    if (!selectedOrgId) return;
+
+    const { data, error } = await supabase
       .from("plod_activity_types")
-      .select('id,activity_type,"group",description,plod_type_scope')
-      .limit(200);
+      .select("id, organization_id, activity_type, description, plod_type_scope") // <-- IMPORTANT
+      .eq("organization_id", selectedOrgId)
+      .order("activity_type", { ascending: true });
 
-    if (selectedOrgId) query.eq("organization_id", selectedOrgId);
+    if (error) throw error;
+    setActivityTypes(data || []);
+  };
 
-    const { data, error } = await query;
-    if (error) setMessage({ type: "error", text: error.message });
-    else setActivityTypes(data || []);
+  // NEW: open edit
+  const openEditActivityType = (row) => {
+    setEditingActivityType(row);
+
+    const scopeArr = Array.isArray(row?.plod_type_scope) ? row.plod_type_scope : [];
+    const scopeValue = scopeArr?.[0] || "all";
+
+    setActivityTypeForm({
+      activityType: row?.activity_type || "",
+      description: row?.description || "",
+      organization_id: row?.organization_id || selectedOrgId || "",
+      plodTypeScope: scopeValue,
+    });
+  };
+
+  // NEW: cancel edit
+  const cancelEditActivityType = () => {
+    setEditingActivityType(null);
+    setActivityTypeForm((s) => ({
+      ...s,
+      activityType: "",
+      description: "",
+      plodTypeScope: "all",
+    }));
   };
 
   const submitActivityType = async (e) => {
@@ -204,18 +236,44 @@ export default function Page() {
     }
 
     try {
-      const sb = supabase;
-      const payload = {
-        organization_id: selectedOrgId,
-        activity_type: activityTypeForm.activityType,
-        group: activityTypeForm.group || null,
-        description: activityTypeForm.description || null,
-      };
-      const { error } = await sb.from("plod_activity_types").insert(payload);
-      if (error) throw error;
+      const scopeValue = activityTypeForm.plodTypeScope || "all";
 
-      setMessage({ type: "success", text: "Activity type added." });
-      setActivityTypeForm((s) => ({ ...s, activityType: "", group: "", description: "" }));
+      if (editingActivityType?.id) {
+        // UPDATE (edit mode)
+        const { error } = await supabase
+          .from("plod_activity_types")
+          .update({
+            activity_type: activityTypeForm.activityType,
+            description: activityTypeForm.description || null,
+            plod_type_scope: [scopeValue],
+          })
+          .eq("id", editingActivityType.id)
+          .eq("organization_id", selectedOrgId);
+
+        if (error) throw error;
+
+        setMessage({ type: "success", text: "Activity type updated." });
+        cancelEditActivityType();
+      } else {
+        // INSERT (create mode)
+        const { error } = await supabase.from("plod_activity_types").insert({
+          organization_id: selectedOrgId,
+          activity_type: activityTypeForm.activityType,
+          description: activityTypeForm.description || null,
+          plod_type_scope: [scopeValue],
+        });
+
+        if (error) throw error;
+
+        setMessage({ type: "success", text: "Activity type added." });
+        setActivityTypeForm((s) => ({
+          ...s,
+          activityType: "",
+          description: "",
+          plodTypeScope: "all",
+        }));
+      }
+
       await refreshActivityTypes();
     } catch (err) {
       setMessage({ type: "error", text: err.message });
@@ -308,13 +366,16 @@ export default function Page() {
               handleVendorChange={handleVendorChange}
               submitVendor={submitVendor}
               activityTypes={activityTypes}
+              setActivityTypes={setActivityTypes} // <-- ADD THIS
               activityTypeForm={activityTypeForm}
-              activityTypeLoading={activityTypeLoading}
               handleActivityTypeChange={handleActivityTypeChange}
               submitActivityType={submitActivityType}
               orgId={selectedOrgId}
               orgLoading={orgLoading}
-              setActivityTypes={setActivityTypes}
+              // NEW props:
+              editingActivityType={editingActivityType}
+              openEditActivityType={openEditActivityType}
+              cancelEditActivityType={cancelEditActivityType}
             />
           )}
 
