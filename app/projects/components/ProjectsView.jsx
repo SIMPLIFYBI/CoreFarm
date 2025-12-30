@@ -11,10 +11,12 @@ import LocationsTable from "./LocationsTable";
 import ResourcesTable from "./ResourcesTable";
 import ResourceModal from "./ResourceModal";
 import VendorsTab from "./VendorsTab";
+import ContractsTab from "./ContractsTab";
+import ActivitiesTab from "./ActivitiesTab";
 
 export default function ProjectsView() {
   const supabase = useMemo(() => supabaseBrowser(), []);
-  const { orgId } = useOrg();
+  const { orgId, loading: orgLoading } = useOrg(); // <-- include loading
 
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -446,6 +448,26 @@ export default function ProjectsView() {
         >
           Vendors
         </button>
+
+        <button
+          className={`px-4 py-2 -mb-px font-medium text-sm ${
+            activeTab === "contracts" ? "border-b-2 border-indigo-500 text-indigo-300" : "text-slate-300/70"
+          }`}
+          onClick={() => setActiveTab("contracts")}
+          type="button"
+        >
+          Contracts
+        </button>
+
+        <button
+          className={`px-4 py-2 -mb-px font-medium text-sm ${
+            activeTab === "activities" ? "border-b-2 border-indigo-500 text-indigo-300" : "text-slate-300/70"
+          }`}
+          onClick={() => setActiveTab("activities")}
+          type="button"
+        >
+          Activities
+        </button>
       </div>
 
       {/* header actions per tab */}
@@ -511,9 +533,18 @@ export default function ProjectsView() {
       {activeTab === "vendors" && (
         <VendorsTab
           orgId={orgId}
-          TABLE_HEAD_ROW={TABLE_HEAD_ROW}
-          TABLE_ROW={TABLE_ROW}
+          vendors={vendors}
+          setVendors={setVendors}
+          orgLoading={orgLoading}
         />
+      )}
+
+      {activeTab === "contracts" && (
+        <ContractsTab orgId={orgId} orgLoading={orgLoading} />
+      )}
+
+      {activeTab === "activities" && (
+        <ActivitiesTab orgId={orgId} orgLoading={orgLoading} />
       )}
 
       {showModal && (

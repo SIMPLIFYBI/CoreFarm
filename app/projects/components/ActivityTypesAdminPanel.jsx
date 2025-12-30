@@ -65,7 +65,6 @@ function ActivityTypeModal({ form, setForm, saving, onClose, onSave, isEditing }
             </select>
           </label>
 
-          {/* NEW: Billable */}
           <label className="block text-sm">
             Billable
             <select
@@ -86,7 +85,6 @@ function ActivityTypeModal({ form, setForm, saving, onClose, onSave, isEditing }
             </select>
           </label>
 
-          {/* NEW: Rate + Rate Period */}
           <div className="grid grid-cols-2 gap-3">
             <label className="block text-sm">
               Rate
@@ -160,9 +158,8 @@ function formatPlodScope(scope) {
   return arr.map((x) => PLOD_SCOPE_LABELS[x] || x).join(", ");
 }
 
-export function AdminPanel({ activityTypes, setActivityTypes, orgLoading, orgId }) {
+export function ActivityTypesAdminPanel({ activityTypes, setActivityTypes, orgLoading, orgId }) {
   const supabase = supabaseBrowser();
-  const [tab, setTab] = useState("activity-types");
 
   const emptyActivityType = {
     activity_type: "",
@@ -170,9 +167,9 @@ export function AdminPanel({ activityTypes, setActivityTypes, orgLoading, orgId 
     group: "",
     label: "",
     plod_type_scope: ["all"],
-    billable: false,     // NEW
-    rate: "",            // NEW (string while editing)
-    rate_period: "",     // NEW
+    billable: false,
+    rate: "",
+    rate_period: "",
   };
 
   const [editingActivityTypeId, setEditingActivityTypeId] = useState(null);
@@ -199,9 +196,9 @@ export function AdminPanel({ activityTypes, setActivityTypes, orgLoading, orgId 
       group: row.group ?? "",
       label: row.label ?? "",
       plod_type_scope: [scopeValue],
-      billable: !!row.billable,                         // NEW
-      rate: row.rate ?? "",                             // NEW
-      rate_period: row.rate_period ?? (row.billable ? "hourly" : ""), // NEW
+      billable: !!row.billable,
+      rate: row.rate ?? "",
+      rate_period: row.rate_period ?? (row.billable ? "hourly" : ""),
     });
 
     setShowModal(true);
@@ -236,17 +233,15 @@ export function AdminPanel({ activityTypes, setActivityTypes, orgLoading, orgId 
           Array.isArray(newActivityType.plod_type_scope) && newActivityType.plod_type_scope.length
             ? newActivityType.plod_type_scope
             : ["all"],
-
-        // NEW
         billable,
         rate: billable && Number.isFinite(rateNum) ? rateNum : null,
         rate_period: billable ? (newActivityType.rate_period || "hourly") : null,
       };
 
-      let data;
-
       const returning =
-        "id, organization_id, activity_type, description, group, label, plod_type_scope, billable, rate, rate_period";
+        'id, organization_id, activity_type, description, "group", label, plod_type_scope, billable, rate, rate_period';
+
+      let data;
 
       if (editingActivityTypeId) {
         const res = await supabase
@@ -260,25 +255,14 @@ export function AdminPanel({ activityTypes, setActivityTypes, orgLoading, orgId 
         if (res.error) throw res.error;
         data = res.data;
 
-        if (typeof setActivityTypes === "function") {
-          setActivityTypes((arr) => (arr || []).map((x) => (x.id === data.id ? data : x)));
-        }
-
+        setActivityTypes?.((arr) => (arr || []).map((x) => (x.id === data.id ? data : x)));
         toast.success("Activity type updated");
       } else {
-        const res = await supabase
-          .from("plod_activity_types")
-          .insert(payload)
-          .select(returning)
-          .single();
-
+        const res = await supabase.from("plod_activity_types").insert(payload).select(returning).single();
         if (res.error) throw res.error;
         data = res.data;
 
-        if (typeof setActivityTypes === "function") {
-          setActivityTypes((arr) => [data, ...(arr || [])]);
-        }
-
+        setActivityTypes?.((arr) => [data, ...(arr || [])]);
         toast.success("Activity type added");
       }
 
@@ -292,80 +276,66 @@ export function AdminPanel({ activityTypes, setActivityTypes, orgLoading, orgId 
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => setTab("activity-types")}
-          className={`btn ${tab === "activity-types" ? "btn-primary" : ""}`}
-        >
-          Activity Types
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="text-sm text-slate-300/70">
+          {(activityTypes?.length || 0)} item{(activityTypes?.length || 0) === 1 ? "" : "s"}
+        </div>
+
+        <button type="button" className="btn btn-primary" disabled={orgLoading || !orgId} onClick={openCreateActivityType}>
+          Add Activity Type
         </button>
       </div>
 
-      {tab === "activity-types" && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="text-sm text-slate-300/70">
-              {(activityTypes?.length || 0)} item{(activityTypes?.length || 0) === 1 ? "" : "s"}
-            </div>
+      <div className="card p-4">
+        <div className="overflow-x-auto -mx-2 md:mx-0">
+          <table className="w-full text-xs md:text-sm min-w-[920px]">
+            <thead>
+              <tr className="text-left bg-slate-900/40 text-slate-200 border-b border-white/10">
+                <th className="p-2 font-medium">Activity Type</th>
+                <th className="p-2 font-medium">Plod Category</th>
+                <th className="p-2 font-medium">Billable</th>
+                <th className="p-2 font-medium">Rate</th>
+                <th className="p-2 font-medium">Rate Period</th>
+                <th className="p-2 font-medium">Description</th>
+                <th className="p-2 font-medium w-[1%]"></th>
+              </tr>
+            </thead>
 
-            <button type="button" className="btn btn-primary" disabled={orgLoading || !orgId} onClick={openCreateActivityType}>
-              Add Activity Type
-            </button>
-          </div>
-
-          <div className="card p-4">
-            <div className="overflow-x-auto -mx-2 md:mx-0">
-              <table className="w-full text-xs md:text-sm min-w-[920px]">
-                <thead>
-                  <tr className="text-left bg-slate-900/40 text-slate-200 border-b border-white/10">
-                    <th className="p-2 font-medium">Activity Type</th>
-                    <th className="p-2 font-medium">Plod Category</th>
-                    <th className="p-2 font-medium">Billable</th>
-                    <th className="p-2 font-medium">Rate</th>
-                    <th className="p-2 font-medium">Rate Period</th>
-                    <th className="p-2 font-medium">Description</th>
-                    <th className="p-2 font-medium w-[1%]"></th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {(activityTypes || []).map((t) => (
-                    <tr key={t.id} className="border-b border-white/10 last:border-b-0 hover:bg-white/5">
-                      <td className="p-2 font-medium">{t.activity_type}</td>
-                      <td className="p-2">{formatPlodScope(t.plod_type_scope)}</td>
-                      <td className="p-2">{t.billable ? "Yes" : "No"}</td>
-                      <td className="p-2">{t.billable ? formatMoney(t.rate) : "—"}</td>
-                      <td className="p-2">{t.billable ? formatRatePeriod(t.rate_period) : "—"}</td>
-                      <td className="p-2">{t.description || "—"}</td>
-                      <td className="p-2 text-right">
-                        <button
-                          type="button"
-                          className="text-xs px-2 py-1 rounded border border-white/10 hover:bg-white/5"
-                          onClick={() => handleEditClick(t)}
-                        >
-                          Edit
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {showModal && (
-            <ActivityTypeModal
-              form={newActivityType}
-              setForm={setNewActivityType}
-              saving={saving}
-              onClose={closeModal}
-              onSave={saveActivityType}
-              isEditing={!!editingActivityTypeId}
-            />
-          )}
+            <tbody>
+              {(activityTypes || []).map((t) => (
+                <tr key={t.id} className="border-b border-white/10 last:border-b-0 hover:bg-white/5">
+                  <td className="p-2 font-medium">{t.activity_type}</td>
+                  <td className="p-2">{formatPlodScope(t.plod_type_scope)}</td>
+                  <td className="p-2">{t.billable ? "Yes" : "No"}</td>
+                  <td className="p-2">{t.billable ? formatMoney(t.rate) : "—"}</td>
+                  <td className="p-2">{t.billable ? formatRatePeriod(t.rate_period) : "—"}</td>
+                  <td className="p-2">{t.description || "—"}</td>
+                  <td className="p-2 text-right">
+                    <button
+                      type="button"
+                      className="text-xs px-2 py-1 rounded border border-white/10 hover:bg-white/5"
+                      onClick={() => handleEditClick(t)}
+                    >
+                      Edit
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
+      </div>
+
+      {showModal && (
+        <ActivityTypeModal
+          form={newActivityType}
+          setForm={setNewActivityType}
+          saving={saving}
+          onClose={closeModal}
+          onSave={saveActivityType}
+          isEditing={!!editingActivityTypeId}
+        />
       )}
     </div>
   );

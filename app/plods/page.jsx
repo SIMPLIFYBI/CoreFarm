@@ -1,60 +1,40 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { IconPlods } from "../components/icons";
+import React, { useEffect, useMemo, useState } from "react";
+import toast from "react-hot-toast";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
-import { AdminPanel } from "./components/AdminPanel";
+import { IconPlods } from "../components/icons";
 import { HistoryTable } from "./components/HistoryTable";
 import { PlodCreateSheet } from "./components/PlodCreateSheet";
 
 export default function Page() {
-  const supabase = supabaseBrowser();
-  const { orgId: selectedOrgId, loading: orgLoading } = useOrg();
+  const supabase = useMemo(() => supabaseBrowser(), []);
+  const { orgId: orgIdCtx, loading: orgLoadingCtx } = useOrg();
 
   const [vendors, setVendors] = useState([]);
   const [activityTypes, setActivityTypes] = useState([]);
   const [holes, setHoles] = useState([]);
-  const [activeTab, setActiveTab] = useState("home");
-  const [vendorForm, setVendorForm] = useState({ name: "", contact: "", organization_id: "" });
-  const [vendorLoading, setVendorLoading] = useState(false);
+
   const [message, setMessage] = useState(null);
   const [enteredBy, setEnteredBy] = useState("");
   const [showCreatePlod, setShowCreatePlod] = useState(false);
-  const [editingActivityType, setEditingActivityType] = useState(null); // NEW
 
-  const [activityTypeForm, setActivityTypeForm] = useState({
-    activityType: "",
-    description: "",
-    organization_id: "",
-    plodTypeScope: "all",
-  });
-  const [activityTypeLoading, setActivityTypeLoading] = useState(false);
   const [plods, setPlods] = useState([]);
   const [plodsLoading, setPlodsLoading] = useState(false);
   const [dateRange, setDateRange] = useState({
     from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
     to: new Date().toISOString().split("T")[0],
   });
-  const [vendorResources, setVendorResources] = useState([]);
-  const [expandedVendor, setExpandedVendor] = useState(null);
-  const [resourceForm, setResourceForm] = useState({
-    vendor_id: "",
-    name: "",
-    resource_type: "",
-    status: "Active",
-    notes: "",
-  });
-  const [resourceLoading, setResourceLoading] = useState(false);
-  const [editingResourceId, setEditingResourceId] = useState(null);
-  const [resourceModalOpen, setResourceModalOpen] = useState(false);
 
   useEffect(() => {
     const sb = supabase;
 
     // enteredBy
     (async () => {
-      const { data: { user } } = await sb.auth.getUser();
+      const {
+        data: { user },
+      } = await sb.auth.getUser();
       if (!user) return;
 
       const { data } = await sb.from("profiles").select("full_name,email").eq("id", user.id).single();
@@ -64,19 +44,17 @@ export default function Page() {
 
     // org-scoped data
     const vQuery = sb.from("vendors").select("id,name").limit(100);
-
     const aQuery = sb
       .from("plod_activity_types")
-      .select('id,activity_type,"group",description,plod_type_scope') // <-- ADD plod_type_scope
-      .order("activity_type", { ascending: true })                  // <-- keep consistent ordering
+      .select('id,activity_type,"group",description,plod_type_scope')
+      .order("activity_type", { ascending: true })
       .limit(200);
-
     const hQuery = sb.from("holes").select("id,hole_id").limit(200);
 
-    if (selectedOrgId) {
-      vQuery.eq("organization_id", selectedOrgId);
-      aQuery.eq("organization_id", selectedOrgId);
-      hQuery.eq("organization_id", selectedOrgId);
+    if (orgIdCtx) {
+      vQuery.eq("organization_id", orgIdCtx);
+      aQuery.eq("organization_id", orgIdCtx);
+      hQuery.eq("organization_id", orgIdCtx);
     }
 
     Promise.all([vQuery, aQuery, hQuery]).then(([vRes, aRes, hRes]) => {
@@ -90,13 +68,12 @@ export default function Page() {
       else setHoles(hRes?.data || []);
     });
 
-    if (activeTab === "home" && selectedOrgId) {
-      loadPlods();
-    }
-  }, [selectedOrgId, activeTab, expandedVendor]);
+    if (orgIdCtx) loadPlods();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgIdCtx]);
 
   const loadPlods = async () => {
-    if (!selectedOrgId) return;
+    if (!orgIdCtx) return;
 
     setPlodsLoading(true);
     const sb = supabase;
@@ -122,7 +99,7 @@ export default function Page() {
             holes:hole_id(hole_id)
           )
         `)
-        .eq("organization_id", selectedOrgId)
+        .eq("organization_id", orgIdCtx)
         .gte("started_at", dateRange.from ? `${dateRange.from}T00:00:00` : null)
         .lte("started_at", dateRange.to ? `${dateRange.to}T23:59:59` : null)
         .order("started_at", { ascending: false })
@@ -137,170 +114,89 @@ export default function Page() {
     }
   };
 
-  const handleVendorChange = (k) => (e) => setVendorForm((s) => ({ ...s, [k]: e.target.value }));
-  const handleActivityTypeChange = (k) => (e) => setActivityTypeForm((s) => ({ ...s, [k]: e.target.value }));
-
-  const loadVendors = async () => {
-    if (!selectedOrgId) return;
-    const sb = supabase;
-    const { data, error } = await sb.from("vendors").select("*").eq("organization_id", selectedOrgId).order("name");
-    if (error) setMessage({ type: "error", text: `Failed to load vendors: ${error.message}` });
-    else setVendors(data || []);
-  };
-
-  const submitVendor = async (e) => {
-    e.preventDefault();
-    setVendorLoading(true);
-    setMessage(null);
-
-    if (!vendorForm.name) {
-      setMessage({ type: "error", text: "Please provide a vendor name." });
-      setVendorLoading(false);
-      return;
-    }
-    if (!selectedOrgId) {
-      setMessage({ type: "error", text: "Organization ID is missing." });
-      setVendorLoading(false);
-      return;
-    }
-
+  const load = async () => {
+    if (!orgIdCtx) return;
+    setPlodsLoading(true);
     try {
-      const sb = supabase;
-      const payload = { name: vendorForm.name, contact: vendorForm.contact, organization_id: selectedOrgId };
-      const { error } = await sb.from("vendors").insert(payload);
+      const { data, error } = await supabase
+        .from("plod_activity_types")
+        .select('id, organization_id, activity_type, description, "group", plod_type_scope')
+        .eq("organization_id", orgIdCtx)
+        .order("activity_type", { ascending: true });
+
       if (error) throw error;
-
-      await loadVendors();
-      setMessage({ type: "success", text: "Vendor added successfully." });
-      setVendorForm({ name: "", contact: "", organization_id: "" });
-    } catch (error) {
-      setMessage({ type: "error", text: `Failed to add vendor: ${error.message}` });
+      setPlods(data || []);
+    } catch (e) {
+      console.error("load plod_activity_types", e);
+      toast.error(e?.message || "Failed to load activities");
+      setPlods([]);
     } finally {
-      setVendorLoading(false);
-    }
-  };
-
-  const refreshActivityTypes = async () => {
-    if (!selectedOrgId) return;
-
-    const { data, error } = await supabase
-      .from("plod_activity_types")
-      .select("id, organization_id, activity_type, description, plod_type_scope") // <-- IMPORTANT
-      .eq("organization_id", selectedOrgId)
-      .order("activity_type", { ascending: true });
-
-    if (error) throw error;
-    setActivityTypes(data || []);
-  };
-
-  // NEW: open edit
-  const openEditActivityType = (row) => {
-    setEditingActivityType(row);
-
-    const scopeArr = Array.isArray(row?.plod_type_scope) ? row.plod_type_scope : [];
-    const scopeValue = scopeArr?.[0] || "all";
-
-    setActivityTypeForm({
-      activityType: row?.activity_type || "",
-      description: row?.description || "",
-      organization_id: row?.organization_id || selectedOrgId || "",
-      plodTypeScope: scopeValue,
-    });
-  };
-
-  // NEW: cancel edit
-  const cancelEditActivityType = () => {
-    setEditingActivityType(null);
-    setActivityTypeForm((s) => ({
-      ...s,
-      activityType: "",
-      description: "",
-      plodTypeScope: "all",
-    }));
-  };
-
-  const submitActivityType = async (e) => {
-    e.preventDefault();
-    setActivityTypeLoading(true);
-    setMessage(null);
-
-    if (!activityTypeForm.activityType) {
-      setMessage({ type: "error", text: "Please provide an activity type." });
-      setActivityTypeLoading(false);
-      return;
-    }
-    if (!selectedOrgId) {
-      setMessage({ type: "error", text: "Please select an organization first." });
-      setActivityTypeLoading(false);
-      return;
-    }
-
-    try {
-      const scopeValue = activityTypeForm.plodTypeScope || "all";
-
-      if (editingActivityType?.id) {
-        // UPDATE (edit mode)
-        const { error } = await supabase
-          .from("plod_activity_types")
-          .update({
-            activity_type: activityTypeForm.activityType,
-            description: activityTypeForm.description || null,
-            plod_type_scope: [scopeValue],
-          })
-          .eq("id", editingActivityType.id)
-          .eq("organization_id", selectedOrgId);
-
-        if (error) throw error;
-
-        setMessage({ type: "success", text: "Activity type updated." });
-        cancelEditActivityType();
-      } else {
-        // INSERT (create mode)
-        const { error } = await supabase.from("plod_activity_types").insert({
-          organization_id: selectedOrgId,
-          activity_type: activityTypeForm.activityType,
-          description: activityTypeForm.description || null,
-          plod_type_scope: [scopeValue],
-        });
-
-        if (error) throw error;
-
-        setMessage({ type: "success", text: "Activity type added." });
-        setActivityTypeForm((s) => ({
-          ...s,
-          activityType: "",
-          description: "",
-          plodTypeScope: "all",
-        }));
-      }
-
-      await refreshActivityTypes();
-    } catch (err) {
-      setMessage({ type: "error", text: err.message });
-    } finally {
-      setActivityTypeLoading(false);
+      setPlodsLoading(false);
     }
   };
 
   useEffect(() => {
-    if (!selectedOrgId) return;
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgIdCtx]);
 
-    (async () => {
-      const { data, error } = await supabase
-        .from("plod_activity_types")
-        .select("id, activity_type, description, group, label, plod_type_scope")
-        .eq("organization_id", selectedOrgId)
-        .order("activity_type", { ascending: true });
+  const startCreate = () => {
+    setEditing(null);
+    setForm({ activity_type: "", description: "", plodTypeScope: "all" });
+  };
 
-      if (error) {
-        console.error("load plod_activity_types error", error);
-        setActivityTypes([]);
-        return;
+  const startEdit = (r) => {
+    setEditing(r);
+    const scopeArr = Array.isArray(r?.plod_type_scope) ? r.plod_type_scope : [];
+    const scopeValue = scopeArr?.[0] || "all";
+    setForm({
+      activity_type: r?.activity_type || "",
+      description: r?.description || "",
+      plodTypeScope: scopeValue,
+    });
+  };
+
+  const save = async () => {
+    if (!orgIdCtx) return toast.error("Organisation not ready");
+    if (!form.activity_type.trim()) return toast.error("Activity type is required");
+
+    setSaving(true);
+    try {
+      const payload = {
+        organization_id: orgIdCtx,
+        activity_type: form.activity_type.trim(),
+        description: form.description?.trim() ? form.description.trim() : null,
+        plod_type_scope: [form.plodTypeScope || "all"],
+      };
+
+      if (editing?.id) {
+        const { error } = await supabase
+          .from("plod_activity_types")
+          .update({
+            activity_type: payload.activity_type,
+            description: payload.description,
+            plod_type_scope: payload.plod_type_scope,
+          })
+          .eq("id", editing.id)
+          .eq("organization_id", orgIdCtx);
+
+        if (error) throw error;
+        toast.success("Activity updated");
+      } else {
+        const { error } = await supabase.from("plod_activity_types").insert(payload);
+        if (error) throw error;
+        toast.success("Activity created");
       }
 
-      setActivityTypes(data || []);
-    })();
-  }, [selectedOrgId, supabase]);
+      await load();
+      startCreate();
+    } catch (e) {
+      console.error("save plod_activity_types", e);
+      toast.error(e?.message || "Failed to save activity");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="mx-auto max-w-6xl p-6">
@@ -317,34 +213,12 @@ export default function Page() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowCreatePlod(true)}
-          className="btn btn-primary whitespace-nowrap"
-        >
+        <button type="button" onClick={() => setShowCreatePlod(true)} className="btn btn-primary whitespace-nowrap">
           New Plod
         </button>
       </header>
 
       <div className="card overflow-hidden">
-        <div className="flex border-b border-white/10">
-          <button
-            className={`px-4 py-3 -mb-px text-sm font-medium transition-base ${activeTab === "home" ? "border-b-2 border-indigo-400 text-slate-100" : "text-slate-300 hover:text-slate-100"}`}
-            onClick={() => {
-              setActiveTab("home");
-              if (selectedOrgId) loadPlods();
-            }}
-          >
-            Home
-          </button>
-          <button
-            className={`px-4 py-3 -mb-px text-sm font-medium transition-base ${activeTab === "admin" ? "border-b-2 border-indigo-400 text-slate-100" : "text-slate-300 hover:text-slate-100"}`}
-            onClick={() => setActiveTab("admin")}
-          >
-            Admin
-          </button>
-        </div>
-
         <section className="p-6">
           {message && (
             <div
@@ -358,52 +232,27 @@ export default function Page() {
             </div>
           )}
 
-          {activeTab === "admin" && (
-            <AdminPanel
-              vendors={vendors}
-              vendorForm={vendorForm}
-              vendorLoading={vendorLoading}
-              handleVendorChange={handleVendorChange}
-              submitVendor={submitVendor}
-              activityTypes={activityTypes}
-              setActivityTypes={setActivityTypes} // <-- ADD THIS
-              activityTypeForm={activityTypeForm}
-              handleActivityTypeChange={handleActivityTypeChange}
-              submitActivityType={submitActivityType}
-              orgId={selectedOrgId}
-              orgLoading={orgLoading}
-              // NEW props:
-              editingActivityType={editingActivityType}
-              openEditActivityType={openEditActivityType}
-              cancelEditActivityType={cancelEditActivityType}
-            />
-          )}
-
-          {activeTab === "home" && (
-            <HistoryTable
-              plods={plods}
-              plodsLoading={plodsLoading}
-              dateRange={dateRange}
-              onDateChange={(k, v) => setDateRange((s) => ({ ...s, [k]: v }))}
-              onRefresh={loadPlods}
-            />
-          )}
+          <HistoryTable
+            plods={plods}
+            plodsLoading={plodsLoading}
+            dateRange={dateRange}
+            onDateChange={(k, v) => setDateRange((s) => ({ ...s, [k]: v }))}
+            onRefresh={loadPlods}
+          />
         </section>
       </div>
 
-      {/* Create sheet */}
       <PlodCreateSheet
         open={showCreatePlod}
         onClose={() => setShowCreatePlod(false)}
-        orgId={selectedOrgId}
+        orgId={orgIdCtx}
         enteredBy={enteredBy}
         vendors={vendors}
         holes={holes}
         activityTypes={activityTypes}
         onCreated={loadPlods}
+        orgLoading={orgLoadingCtx}
       />
-
-      {/* ...existing Resource Modal remains unchanged... */}
     </div>
   );
 }

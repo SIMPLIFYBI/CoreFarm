@@ -1,57 +1,100 @@
 "use client";
 
-export default function VendorModal({ editingId, form, setForm, saving, onClose, onSave, onNew }) {
+import React, { useState } from "react";
+import toast from "react-hot-toast";
+import { supabaseBrowser } from "@/lib/supabaseClient";
+
+export default function VendorModal({ orgId, onClose, onCreated }) {
+  const supabase = supabaseBrowser();
+  const [saving, setSaving] = useState(false);
+
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+  });
+
+  const createVendor = async () => {
+    if (!orgId) return toast.error("Organisation not ready");
+    if (!form.name.trim()) return;
+
+    setSaving(true);
+    try {
+      // Adjust column names here if your vendors table uses different fields.
+      const payload = {
+        organization_id: orgId,
+        name: form.name.trim(),
+        email: form.email.trim() || null,
+        phone: form.phone.trim() || null,
+      };
+
+      const { data, error } = await supabase.from("vendors").insert(payload).select("*").single();
+      if (error) throw error;
+
+      toast.success("Vendor added");
+      onCreated?.(data);
+    } catch (e) {
+      console.error("create vendor error", e);
+      toast.error(e?.message || "Could not add vendor");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="card w-full max-w-md p-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">{editingId ? "Edit Vendor" : "New Vendor"}</h2>
+          <h2 className="text-lg font-semibold text-slate-100">New Vendor</h2>
           <button className="btn" onClick={onClose} type="button">
             Close
           </button>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 mb-4">
+        <form
+          className="grid grid-cols-1 gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            createVendor();
+          }}
+        >
           <label className="block text-sm">
-            Name
+            Vendor name
             <input
-              type="text"
+              className="input w-full"
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              className="input"
-              placeholder="Vendor name"
               required
             />
           </label>
 
           <label className="block text-sm">
-            Contact (optional)
+            Email (optional)
             <input
-              type="text"
-              value={form.contact}
-              onChange={(e) => setForm((f) => ({ ...f, contact: e.target.value }))}
-              className="input"
-              placeholder="Phone / email / contact person"
+              className="input w-full"
+              value={form.email}
+              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
             />
           </label>
-        </div>
 
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={onSave}
-            disabled={saving || !form.name.trim()}
-            className="btn btn-primary flex-1"
-          >
-            {saving ? "Saving…" : editingId ? "Save Changes" : "Create Vendor"}
-          </button>
+          <label className="block text-sm">
+            Phone (optional)
+            <input
+              className="input w-full"
+              value={form.phone}
+              onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+            />
+          </label>
 
-          {editingId && (
-            <button type="button" className="btn" onClick={onNew}>
-              New
+          <div className="flex gap-2 justify-end pt-2">
+            <button type="button" className="btn" onClick={onClose} disabled={saving}>
+              Cancel
             </button>
-          )}
-        </div>
+            <button type="submit" className="btn btn-primary" disabled={saving || !form.name.trim()}>
+              {saving ? "Saving…" : "Create"}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
