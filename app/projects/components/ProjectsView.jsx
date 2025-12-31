@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import ProjectsTable from "./ProjectsTable";
@@ -14,7 +15,47 @@ import VendorsTab from "./VendorsTab";
 import ContractsTab from "./ContractsTab";
 import ActivitiesTab from "./ActivitiesTab";
 
+const DEFAULT_TAB = "projects";
+
+// IMPORTANT: make sure these match your existing tab keys in ProjectsView
+const VALID_TABS = new Set([
+  "projects",
+  "tenements",
+  "locations",
+  "resources",
+  "vendors",
+  "contracts",
+  "activities",
+]);
+
 export default function ProjectsView() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const initialTab = useMemo(() => {
+    const t = searchParams.get("tab") || DEFAULT_TAB;
+    return VALID_TABS.has(t) ? t : DEFAULT_TAB;
+  }, [searchParams]);
+
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  // keep state in sync if user navigates back/forward or lands on a link with ?tab=
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
+  const setTab = (nextTab) => {
+    const t = VALID_TABS.has(nextTab) ? nextTab : DEFAULT_TAB;
+    setActiveTab(t);
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", t);
+
+    // replace avoids polluting history when just switching tabs; change to push if you prefer
+    router.replace(`${pathname}?${params.toString()}`);
+  };
+
   const supabase = useMemo(() => supabaseBrowser(), []);
   const { orgId, loading: orgLoading } = useOrg(); // <-- include loading
 
@@ -26,8 +67,6 @@ export default function ProjectsView() {
 
   const emptyForm = { name: "", start_date: "", finish_date: "", cost_code: "", wbs_code: "" };
   const [form, setForm] = useState(emptyForm);
-
-  const [activeTab, setActiveTab] = useState("projects"); // "projects" | "tenements" | "locations" | "resources" | "vendors"
 
   // --- Tenements state ---
   const [tenements, setTenements] = useState([]);
@@ -401,7 +440,7 @@ export default function ProjectsView() {
           className={`px-4 py-2 -mb-px font-medium text-sm ${
             activeTab === "projects" ? "border-b-2 border-indigo-500 text-indigo-300" : "text-slate-300/70"
           }`}
-          onClick={() => setActiveTab("projects")}
+          onClick={() => setTab("projects")}
           type="button"
         >
           Projects
@@ -411,7 +450,7 @@ export default function ProjectsView() {
           className={`px-4 py-2 -mb-px font-medium text-sm ${
             activeTab === "tenements" ? "border-b-2 border-indigo-500 text-indigo-300" : "text-slate-300/70"
           }`}
-          onClick={() => setActiveTab("tenements")}
+          onClick={() => setTab("tenements")}
           type="button"
         >
           Tenements
@@ -421,7 +460,7 @@ export default function ProjectsView() {
           className={`px-4 py-2 -mb-px font-medium text-sm ${
             activeTab === "locations" ? "border-b-2 border-indigo-500 text-indigo-300" : "text-slate-300/70"
           }`}
-          onClick={() => setActiveTab("locations")}
+          onClick={() => setTab("locations")}
           type="button"
         >
           Locations
@@ -431,7 +470,7 @@ export default function ProjectsView() {
           className={`px-4 py-2 -mb-px font-medium text-sm ${
             activeTab === "resources" ? "border-b-2 border-indigo-500 text-indigo-300" : "text-slate-300/70"
           }`}
-          onClick={() => setActiveTab("resources")}
+          onClick={() => setTab("resources")}
           type="button"
         >
           Resources
@@ -443,7 +482,7 @@ export default function ProjectsView() {
               ? "border-b-2 border-indigo-500 text-indigo-300"
               : "text-slate-300/70"
           }`}
-          onClick={() => setActiveTab("vendors")}
+          onClick={() => setTab("vendors")}
           type="button"
         >
           Vendors
@@ -453,7 +492,7 @@ export default function ProjectsView() {
           className={`px-4 py-2 -mb-px font-medium text-sm ${
             activeTab === "contracts" ? "border-b-2 border-indigo-500 text-indigo-300" : "text-slate-300/70"
           }`}
-          onClick={() => setActiveTab("contracts")}
+          onClick={() => setTab("contracts")}
           type="button"
         >
           Contracts
@@ -463,7 +502,7 @@ export default function ProjectsView() {
           className={`px-4 py-2 -mb-px font-medium text-sm ${
             activeTab === "activities" ? "border-b-2 border-indigo-500 text-indigo-300" : "text-slate-300/70"
           }`}
-          onClick={() => setActiveTab("activities")}
+          onClick={() => setTab("activities")}
           type="button"
         >
           Activities

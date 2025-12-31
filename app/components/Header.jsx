@@ -1,9 +1,9 @@
 "use client";
 
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter, usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import {
@@ -23,6 +23,7 @@ export default function Header() {
   const supabase = useMemo(() => supabaseBrowser(), []);
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState(null);
   const [displayName, setDisplayName] = useState(null);
   const [userId, setUserId] = useState(null);
@@ -31,10 +32,10 @@ export default function Header() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [isAppAdmin, setIsAppAdmin] = useState(false);
 
+  // close drawer on BOTH pathname and query changes
   useEffect(() => {
-    // Close menu when navigating
     setDrawerOpen(false);
-  }, [pathname]);
+  }, [pathname, searchParams]);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -117,6 +118,21 @@ export default function Header() {
     // Step 2: admin-gated
     ...(isAppAdmin ? [{ href: "/admin/subscriptions", label: "Subscriptions", icon: IconAdmin }] : []),
   ];
+
+  const [projectsExpanded, setProjectsExpanded] = useState(false);
+
+  const projectsChildren = useMemo(
+    () => [
+      { label: "Overview", href: "/projects?tab=projects" },
+      { label: "Tenements", href: "/projects?tab=tenements" },
+      { label: "Locations", href: "/projects?tab=locations" },
+      { label: "Resources", href: "/projects?tab=resources" },
+      { label: "Vendors", href: "/projects?tab=vendors" },
+      { label: "Contracts", href: "/projects?tab=contracts" },
+      { label: "Activities", href: "/projects?tab=activities" },
+    ],
+    []
+  );
 
   return (
     <header className="sticky top-0 z-40 pt-[env(safe-area-inset-top)] border-b border-white/10 bg-slate-950/55 backdrop-blur-xl supports-[backdrop-filter]:bg-slate-950/45">
@@ -237,6 +253,35 @@ export default function Header() {
                     </Link>
                   );
                 })}
+              </div>
+
+              {/* Replace your existing "Projects" Link row with this accordion row */}
+              <div className="border-b border-white/10">
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between px-4 py-3 text-left"
+                  onClick={() => setProjectsExpanded((v) => !v)}
+                  aria-expanded={projectsExpanded}
+                  aria-controls="projects-submenu"
+                >
+                  <span>Projects</span>
+                  <span className="text-slate-400">{projectsExpanded ? "▾" : "▸"}</span>
+                </button>
+
+                {projectsExpanded && (
+                  <div id="projects-submenu" className="pb-2">
+                    {projectsChildren.map((c) => (
+                      <Link
+                        key={c.href}
+                        href={c.href}
+                        className="block pl-8 pr-4 py-2 text-sm text-slate-200 hover:bg-white/5"
+                        onClick={() => setDrawerOpen(false)}
+                      >
+                        {c.label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="mt-4 pt-4 border-t border-white/10">
