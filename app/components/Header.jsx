@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
@@ -23,6 +23,8 @@ export default function Header() {
   const supabase = useMemo(() => supabaseBrowser(), []);
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const [email, setEmail] = useState(null);
   const [displayName, setDisplayName] = useState(null);
   const [userId, setUserId] = useState(null);
@@ -30,6 +32,27 @@ export default function Header() {
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [isAppAdmin, setIsAppAdmin] = useState(false);
+
+  // Close menu when navigating (including query string changes like /projects?tab=...)
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [pathname, searchParams]);
+
+  // Projects accordion state (only expands when clicked)
+  const [projectsExpanded, setProjectsExpanded] = useState(false);
+
+  const projectsChildren = useMemo(
+    () => [
+      { label: "Projects", href: "/projects?tab=projects" },
+      { label: "Tenements", href: "/projects?tab=tenements" },
+      { label: "Locations", href: "/projects?tab=locations" },
+      { label: "Resources", href: "/projects?tab=resources" },
+      { label: "Vendors", href: "/projects?tab=vendors" },
+      { label: "Contracts", href: "/projects?tab=contracts" },
+      { label: "Activities", href: "/projects?tab=activities" },
+    ],
+    []
+  );
 
   useEffect(() => {
     // Close menu when navigating
@@ -101,7 +124,7 @@ export default function Header() {
 
   const currentOrgName = useMemo(() => {
     if (!orgId) return null;
-    const m = memberships.find(m => m.organization_id === orgId);
+    const m = memberships.find((m) => m.organization_id === orgId);
     return m?.organizations?.name || null;
   }, [orgId, memberships]);
 
@@ -113,10 +136,14 @@ export default function Header() {
     { href: "/assets", label: "Assets", icon: AssetIcon },
     { href: "/plods", label: "Plods", icon: IconPlods },
     { href: "/team", label: "Team", icon: IconTeam },
-
-    // Step 2: admin-gated
     ...(isAppAdmin ? [{ href: "/admin/subscriptions", label: "Subscriptions", icon: IconAdmin }] : []),
   ];
+
+  const activeProjectsChildHref = useMemo(() => {
+    if (pathname !== "/projects") return null;
+    const t = searchParams.get("tab") || "projects";
+    return `/projects?tab=${t}`;
+  }, [pathname, searchParams]);
 
   return (
     <header className="sticky top-0 z-40 pt-[env(safe-area-inset-top)] border-b border-white/10 bg-slate-950/55 backdrop-blur-xl supports-[backdrop-filter]:bg-slate-950/45">
@@ -177,11 +204,7 @@ export default function Header() {
       {/* Drawer + overlay (fresh rebuild) */}
       {drawerOpen && (
         <div className="fixed inset-0 z-[999]">
-          <div
-            className="fixed inset-0 bg-black/70"
-            onClick={() => setDrawerOpen(false)}
-            aria-hidden="true"
-          />
+          <div className="fixed inset-0 bg-black/70" onClick={() => setDrawerOpen(false)} aria-hidden="true" />
 
           <aside
             id="app-nav-drawer"
@@ -213,28 +236,85 @@ export default function Header() {
             <nav className="p-3">
               <div className="space-y-1">
                 {navTabs.map((t) => {
+                  const isProjects = t.href === "/projects";
                   const active = pathname === t.href || pathname?.startsWith(t.href + "/");
                   const Icon = t.icon;
-                  return (
-                    <Link
-                      key={t.href}
-                      href={t.href}
-                      className={[
-                        "flex items-center gap-3 px-3 py-2 rounded-xl transition-base",
-                        active ? "bg-white/10 text-white" : "text-slate-200 hover:bg-white/5 hover:text-white",
-                      ].join(" ")}
-                    >
-                      <span
+
+                  if (!isProjects) {
+                    return (
+                      <Link
+                        key={t.href}
+                        href={t.href}
                         className={[
-                          "inline-flex h-9 w-9 items-center justify-center rounded-full",
-                          "border border-white/10",
-                          active ? "bg-white/15 text-white" : "bg-white/5 text-slate-100",
+                          "flex items-center gap-3 px-3 py-2 rounded-xl transition-base",
+                          active ? "bg-white/10 text-white" : "text-slate-200 hover:bg-white/5 hover:text-white",
                         ].join(" ")}
                       >
-                        <Icon />
-                      </span>
-                      <span className="font-medium">{t.label}</span>
-                    </Link>
+                        <span
+                          className={[
+                            "inline-flex h-9 w-9 items-center justify-center rounded-full",
+                            "border border-white/10",
+                            active ? "bg-white/15 text-white" : "bg-white/5 text-slate-100",
+                          ].join(" ")}
+                        >
+                          <Icon />
+                        </span>
+                        <span className="font-medium">{t.label}</span>
+                      </Link>
+                    );
+                  }
+
+                  // Projects accordion item (in-place; no duplicate item)
+                  return (
+                    <div key={t.href} className="rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => setProjectsExpanded((v) => !v)}
+                        className={[
+                          "w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-base",
+                          active ? "bg-white/10 text-white" : "text-slate-200 hover:bg-white/5 hover:text-white",
+                        ].join(" ")}
+                        aria-expanded={projectsExpanded}
+                        aria-controls="projects-submenu"
+                      >
+                        <span
+                          className={[
+                            "inline-flex h-9 w-9 items-center justify-center rounded-full",
+                            "border border-white/10",
+                            active ? "bg-white/15 text-white" : "bg-white/5 text-slate-100",
+                          ].join(" ")}
+                        >
+                          <Icon />
+                        </span>
+
+                        <span className="font-medium flex-1 text-left">{t.label}</span>
+
+                        <span className="text-slate-300/70 text-sm">{projectsExpanded ? "▾" : "▸"}</span>
+                      </button>
+
+                      {projectsExpanded && (
+                        <div id="projects-submenu" className="mt-1 ml-[52px] space-y-1">
+                          {projectsChildren.map((c) => {
+                            const childActive = activeProjectsChildHref === c.href;
+                            return (
+                              <Link
+                                key={c.href}
+                                href={c.href}
+                                className={[
+                                  "block px-3 py-2 rounded-lg text-sm transition-base",
+                                  childActive
+                                    ? "bg-white/10 text-white"
+                                    : "text-slate-200 hover:bg-white/5 hover:text-white",
+                                ].join(" ")}
+                                onClick={() => setDrawerOpen(false)}
+                              >
+                                {c.label}
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
