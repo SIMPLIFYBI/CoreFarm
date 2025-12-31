@@ -287,9 +287,9 @@ export default function CorePage() {
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-6">
-      <h1 className="text-2xl font-semibold mb-2">Core Logging</h1>
+      <h1 className="text-2xl font-semibold mb-2 text-slate-100">Core Logging</h1>
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <label className="text-sm text-gray-700">Entering actuals for the date of</label>
+        <label className="text-sm text-slate-200">Entering actuals for the date of</label>
         <input
           type="date"
           className="input input-sm w-auto"
@@ -303,25 +303,25 @@ export default function CorePage() {
               className="input input-sm w-auto flex items-center gap-1 cursor-pointer"
               onClick={() => setProjectMenuOpen(o => !o)}
             >
-              <span className="text-gray-700">Project:</span>
+              <span className="text-slate-200">Project:</span>
               {selectedProject ? (
-                <span className="flex items-center gap-1 text-gray-700">
-                  <span className="text-gray-600">{selectedProject}</span>
+                <span className="flex items-center gap-1 text-slate-200">
+                  <span className="text-slate-300">{selectedProject}</span>
                 </span>
               ) : (
-                <span className="text-gray-500">All</span>
+                <span className="text-slate-300">All</span>
               )}
               <svg className={`w-3 h-3 ml-1 transition-transform ${projectMenuOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path d="M5.23 7.21a.75.75 0 011.06.02L10 11.189l3.71-3.96a.75.75 0 111.08 1.04l-4.24 4.53a.75.75 0 01-1.08 0l-4.24-4.53a.75.75 0 01.02-1.06z" /></svg>
             </button>
             {projectMenuOpen && (
-              <div className="absolute right-0 mt-1 w-56 rounded-md border bg-white shadow-lg z-30 p-2 space-y-1 text-sm max-h-64 overflow-auto">
+              <div className="absolute right-0 mt-1 w-56 rounded-xl border border-white/10 bg-slate-950/95 backdrop-blur-xl shadow-lg z-30 p-2 space-y-1 text-sm max-h-64 overflow-auto">
                 <button
                   type="button"
                   onClick={() => { setSelectedProject(''); setProjectMenuOpen(false); }}
-                  className={`w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-50 text-left ${selectedProject === '' ? 'bg-gray-100' : ''}`}
+                  className={`w-full flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-slate-900/60 text-left ${selectedProject === '' ? 'bg-slate-900/60' : ''}`}
                 >
                   <span className="flex-1">All projects</span>
-                  <span className={`w-4 h-4 inline-flex items-center justify-center text-[10px] rounded ${selectedProject === '' ? 'text-indigo-600' : 'text-transparent'}`}>✓</span>
+                  <span className={`w-4 h-4 inline-flex items-center justify-center text-[10px] rounded ${selectedProject === '' ? 'text-indigo-300' : 'text-transparent'}`}>✓</span>
                 </button>
                 {projects.map(p => {
                   const active = selectedProject === p;
@@ -330,18 +330,18 @@ export default function CorePage() {
                       key={p}
                       type="button"
                       onClick={() => { setSelectedProject(p); setProjectMenuOpen(false); }}
-                      className={`w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-50 text-left ${active ? 'bg-gray-100' : ''}`}
+                      className={`w-full flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-slate-900/60 text-left ${active ? 'bg-slate-900/60' : ''}`}
                     >
                       <span className="flex-1">{p}</span>
-                      <span className={`w-4 h-4 inline-flex items-center justify-center text-[10px] rounded ${active ? 'text-indigo-600' : 'text-transparent'}`}>✓</span>
+                      <span className={`w-4 h-4 inline-flex items-center justify-center text-[10px] rounded ${active ? 'text-indigo-300' : 'text-transparent'}`}>✓</span>
                     </button>
                   );
                 })}
                 {selectedProject && (
-                  <div className="pt-1 mt-1 border-t">
+                  <div className="pt-1 mt-1 border-t border-white/10">
                     <button
                       type="button"
-                      className="text-[11px] text-gray-500 hover:underline"
+                      className="text-[11px] text-slate-300 hover:underline"
                       onClick={() => { setSelectedProject(''); setProjectMenuOpen(false); }}
                     >Clear selection</button>
                   </div>
@@ -355,13 +355,13 @@ export default function CorePage() {
               className="input input-sm w-auto flex items-center gap-1 cursor-pointer"
               onClick={() => setStatusMenuOpen(o => !o)}
             >
-              <span className="text-gray-700">Status:</span>
+              <span className="text-slate-200">Status:</span>
               <span className="flex items-center gap-1">
                 {allSelected ? (
-                  <span className="text-gray-600">All</span>
+                  <span className="text-slate-300">All</span>
                 ) : holeFilters.map(s => {
                   const color = s === 'complete' ? 'bg-green-500' : s === 'in_progress' ? 'bg-amber-500' : 'bg-gray-400';
-                  return <span key={s} className="flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full bg-gray-100">
+                  return <span key={s} className="flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full bg-slate-900/60 border border-white/10">
                     <span className={`inline-block w-2 h-2 rounded-full ${color}`}></span>
                     {s === 'complete' ? 'Done' : s === 'in_progress' ? 'Progress' : 'New'}
                   </span>;
@@ -370,7 +370,7 @@ export default function CorePage() {
               <svg className={`w-3 h-3 ml-1 transition-transform ${statusMenuOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path d="M5.23 7.21a.75.75 0 011.06.02L10 11.189l3.71-3.96a.75.75 0 111.08 1.04l-4.24 4.53a.75.75 0 01-1.08 0l-4.24-4.53a.75.75 0 01.02-1.06z" /></svg>
             </button>
             {statusMenuOpen && (
-              <div className="absolute right-0 mt-1 w-48 rounded-md border bg-white shadow-lg z-30 p-2 space-y-1 text-sm">
+              <div className="absolute right-0 mt-1 w-48 rounded-xl border border-white/10 bg-slate-950/95 backdrop-blur-xl shadow-lg z-30 p-2 space-y-1 text-sm">
                 {[
                   { key: 'complete', label: 'Completed', color: 'bg-green-500' },
                   { key: 'in_progress', label: 'In progress', color: 'bg-amber-500' },
@@ -382,25 +382,25 @@ export default function CorePage() {
                       key={opt.key}
                       type="button"
                       onClick={() => toggleStatusFilter(opt.key)}
-                      className={`w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-50 text-left ${active ? 'bg-gray-100' : ''}`}
+                      className={`w-full flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-slate-900/60 text-left ${active ? 'bg-slate-900/60' : ''}`}
                     >
                       <span className={`inline-block w-2.5 h-2.5 rounded-full ${opt.color}`}></span>
                       <span className="flex-1">{opt.label}</span>
-                      <span className={`w-4 h-4 inline-flex items-center justify-center text-[10px] rounded ${active ? 'text-indigo-600' : 'text-transparent'}`}>✓</span>
+                      <span className={`w-4 h-4 inline-flex items-center justify-center text-[10px] rounded ${active ? 'text-indigo-300' : 'text-transparent'}`}>✓</span>
                     </button>
                   );
                 })}
-                <div className="pt-1 mt-1 border-t flex items-center gap-2">
+                <div className="pt-1 mt-1 border-t border-white/10 flex items-center gap-2">
                   <button
                     type="button"
-                    className="text-[11px] text-indigo-600 hover:underline"
+                    className="text-[11px] text-indigo-300 hover:underline"
                     onClick={() => setHoleFilters(['complete','in_progress','not_started'])}
                   >
                     All
                   </button>
                   <button
                     type="button"
-                    className="text-[11px] text-gray-500 hover:underline"
+                    className="text-[11px] text-slate-300 hover:underline"
                     onClick={() => setHoleFilters([])}
                   >
                     Reset
@@ -414,23 +414,24 @@ export default function CorePage() {
       {loading ? (
         <p>Loading…</p>
       ) : holes.length === 0 ? (
-        <p className="text-sm text-gray-500">No holes available.</p>
+        <p className="text-sm text-slate-300">No holes available.</p>
       ) : (
         <>
           {/* Desktop/tablet table */}
           <div className="overflow-x-auto hidden md:block">
-            <table className="w-full text-sm border">
-            <thead className="bg-gray-50 sticky top-0 z-10">
+            <div className="table-container">
+              <table className="table">
+                <thead>
               <tr>
                 <th className="text-left p-2 border w-10"></th>
                 <th className="text-left p-2 border">Hole</th>
                 <th className="text-left p-2 border w-32">Depth (m)</th>
               </tr>
-            </thead>
-            <tbody>
+                </thead>
+                <tbody>
               {filteredHoles.map((h) => (
                 <Fragment key={h.id}>
-                  <tr className="hover:bg-gray-50">
+                  <tr>
                     <td className="p-2 border align-top">
                       <button className="btn text-xs" onClick={() => toggleHole(h.id)}>
                         {expandedHole[h.id] ? "−" : "+"}
@@ -451,20 +452,21 @@ export default function CorePage() {
                   {expandedHole[h.id] && (
                     <tr>
                       <td className="p-0 border-l border-r" colSpan={3}>
-                        <div className="bg-gray-50/50 p-3">
+                        <div className="p-3">
                           {!details[h.id] ? (
-                            <p className="text-sm text-gray-500">Loading…</p>
+                            <p className="text-sm text-slate-300">Loading…</p>
                           ) : Object.keys(details[h.id].tasks).length === 0 ? (
-                            <p className="text-sm text-gray-500">No planned logging for this hole.</p>
+                            <p className="text-sm text-slate-300">No planned logging for this hole.</p>
                           ) : (
-                            <table className="w-full text-xs border">
-                              <thead className="bg-white">
+                            <div className="table-container">
+                              <table className="table">
+                                <thead>
                                 <tr>
                                   <th className="text-left p-2 border w-10"></th>
                                   <th className="text-left p-2 border">Task</th>
                                 </tr>
-                              </thead>
-                              <tbody>
+                                </thead>
+                                <tbody>
                                 {details[h.id].order.map((task) => (
                                   <Fragment key={task}>
                                     <tr className="hover:bg-white">
@@ -573,8 +575,9 @@ export default function CorePage() {
                                     )}
                                   </Fragment>
                                 ))}
-                              </tbody>
-                            </table>
+                                </tbody>
+                              </table>
+                            </div>
                           )}
                         </div>
                       </td>
@@ -582,8 +585,9 @@ export default function CorePage() {
                   )}
                 </Fragment>
               ))}
-            </tbody>
-          </table>
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* Mobile card list */}
