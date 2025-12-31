@@ -1,6 +1,7 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "react-hot-toast";
 import "./globals.css";
+import { Suspense } from "react";
 import Header from "./components/Header";
 import AuthGuard from "./components/AuthGuard";
 import MobileNav from "./components/MobileNav";
@@ -38,7 +39,9 @@ export default function RootLayout({ children }) {
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-dvh bg-bg text-fg`}
       >
         <OrgProvider>
-          <Header />
+          <Suspense fallback={null}>
+            <Header />
+          </Suspense>
           <AuthGuard>
             <main className="min-h-screen md:pt-[72px] md:pb-0 pb-[calc(env(safe-area-inset-bottom)+64px)] bg-transparent">
               {children}
