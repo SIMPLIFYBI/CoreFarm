@@ -86,6 +86,43 @@ CREATE TABLE public.consumable_items (
   CONSTRAINT consumable_items_pkey PRIMARY KEY (id),
   CONSTRAINT consumable_items_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id)
 );
+CREATE TABLE public.contract_activity_types (
+  contract_id uuid NOT NULL,
+  activity_type_id uuid NOT NULL,
+  billable_override boolean,
+  rate_override numeric CHECK (rate_override IS NULL OR rate_override >= 0::numeric),
+  rate_period_override text CHECK (rate_period_override IS NULL OR (rate_period_override = ANY (ARRAY['hourly'::text, 'daily'::text, 'weekly'::text, 'monthly'::text]))),
+  is_enabled boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT contract_activity_types_pkey PRIMARY KEY (contract_id, activity_type_id),
+  CONSTRAINT contract_activity_types_contract_fkey FOREIGN KEY (contract_id) REFERENCES public.contracts(id),
+  CONSTRAINT contract_activity_types_activity_fkey FOREIGN KEY (activity_type_id) REFERENCES public.plod_activity_types(id)
+);
+CREATE TABLE public.contract_resources (
+  contract_id uuid NOT NULL,
+  resource_id uuid NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid DEFAULT auth.uid(),
+  CONSTRAINT contract_resources_pkey PRIMARY KEY (contract_id, resource_id),
+  CONSTRAINT contract_resources_resource_id_fkey FOREIGN KEY (resource_id) REFERENCES public.resources(id),
+  CONSTRAINT contract_resources_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id),
+  CONSTRAINT contract_resources_contract_id_fkey FOREIGN KEY (contract_id) REFERENCES public.contracts(id)
+);
+CREATE TABLE public.contracts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  client_organization_id uuid NOT NULL,
+  vendor_organization_id uuid NOT NULL,
+  name text NOT NULL,
+  contract_number text,
+  status text NOT NULL DEFAULT 'draft'::text CHECK (status = ANY (ARRAY['draft'::text, 'active'::text, 'paused'::text, 'closed'::text, 'cancelled'::text])),
+  starts_on date,
+  ends_on date,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT contracts_pkey PRIMARY KEY (id),
+  CONSTRAINT contracts_client_organization_id_fkey FOREIGN KEY (client_organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT contracts_vendor_organization_id_fkey FOREIGN KEY (vendor_organization_id) REFERENCES public.organizations(id)
+);
 CREATE TABLE public.hole_task_intervals (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   hole_id uuid NOT NULL,
@@ -237,11 +274,19 @@ CREATE TABLE public.plods (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   plod_type text CHECK (plod_type = ANY (ARRAY['drill_blast'::text, 'drilling_geology'::text, 'load_haul'::text, 'general_works'::text])),
+  contract_id uuid,
+  client_organization_id uuid,
+  vendor_organization_id uuid,
+  resource_id uuid,
   CONSTRAINT plods_pkey PRIMARY KEY (id),
   CONSTRAINT plods_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
   CONSTRAINT plods_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.vendors(id),
   CONSTRAINT plods_hole_id_fkey FOREIGN KEY (hole_id) REFERENCES public.holes(id),
-  CONSTRAINT plods_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
+  CONSTRAINT plods_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id),
+  CONSTRAINT plods_contract_id_fkey FOREIGN KEY (contract_id) REFERENCES public.contracts(id),
+  CONSTRAINT plods_client_organization_id_fkey FOREIGN KEY (client_organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT plods_vendor_organization_id_fkey FOREIGN KEY (vendor_organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT plods_resource_id_fkey FOREIGN KEY (resource_id) REFERENCES public.resources(id)
 );
 CREATE TABLE public.projects (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
