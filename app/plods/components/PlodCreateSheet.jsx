@@ -1,46 +1,22 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "../../../lib/supabaseClient";
-
-const PLOD_TYPES = [
-  { id: "drill_blast", label: "Drill & Blast", desc: "Blast prep, charging, tie-in, firing, clearance" },
-  { id: "drilling_geology", label: "Drilling Geology", desc: "Sampling, logging, core handling, QAQC" },
-  { id: "load_haul", label: "Load & Haul", desc: "Haulage, loading, dumping, ROM management" },
-  { id: "general_works", label: "General Works", desc: "General tasks, maintenance, site works" },
-];
 
 function classNames(...xs) {
   return xs.filter(Boolean).join(" ");
 }
 
-// Expects activityType.plod_type_scope to be:
-// - array of strings (e.g. ["drill_blast","general_works"])
-// - OR null/undefined (treated as "all")
-function activityAppliesToType(activityType, plodType) {
-  const scope = activityType?.plod_type_scope;
-  if (!scope || scope.length === 0) return true;
-  if (scope.includes("all")) return true;
-  return scope.includes(plodType);
-}
-
 function toISOFromDateAndTime(dateStr, timeStr) {
-  // dateStr: "YYYY-MM-DD", timeStr: "HH:mm" or "HH:mm:ss"
   return `${dateStr}T${timeStr.length === 5 ? `${timeStr}:00` : timeStr}`;
 }
 
-export function PlodCreateSheet({
-  open,
-  onClose,
-  orgId,
-  enteredBy,
-  vendors = [],
-  holes = [],
-  activityTypes = [],
-  onCreated,
-}) {
+export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [], holes = [], activityTypes = [], onCreated }) {
   const [step, setStep] = useState(1);
-  const [plodType, setPlodType] = useState("");
+
+  const [plodTypes, setPlodTypes] = useState([]);
+  const [plodTypeId, setPlodTypeId] = useState("");
+
   const [shiftDate, setShiftDate] = useState(new Date().toISOString().slice(0, 10));
   const [vendorId, setVendorId] = useState("");
   const [notes, setNotes] = useState("");
@@ -59,37 +35,90 @@ export function PlodCreateSheet({
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
 
-  // Local state for the Activities select
-  const [selectedActivityId, setSelectedActivityId] = useState("");
+  const [allowedActivityTypeIds, setAllowedActivityTypeIds] = useState(null); // null = not loaded yet
+
+  // Load plod types when opened
+  useEffect(() => {
+    if (!open || !orgId) return;
+
+    let alive = true;
+    (async () => {
+      const sb = supabaseBrowser();
+      const { data, error } = await sb
+        .from("plod_types")
+        .select("id,name,description,sort_order")
+        .eq("organization_id", orgId)
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true })
+        .order("name", { ascending: true });
+
+      if (!alive) return;
+
+      if (error) {
+        console.error("load plod_types", error);
+        setPlodTypes([]);
+      } else {
+        setPlodTypes(data || []);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [open, orgId]);
+
+  // Load allowed activity type ids for selected plod type
+  useEffect(() => {
+    if (!open || !orgId || !plodTypeId) {
+      setAllowedActivityTypeIds(null);
+      return;
+    }
+
+    let alive = true;
+    (async () => {
+      const sb = supabaseBrowser();
+      const { data, error } = await sb
+        .from("plod_type_activity_types")
+        .select("activity_type_id")
+        .eq("plod_type_id", plodTypeId);
+
+      if (!alive) return;
+
+      if (error) {
+        console.error("load plod_type_activity_types", error);
+        setAllowedActivityTypeIds(new Set()); // fail closed
+      } else {
+        setAllowedActivityTypeIds(new Set((data || []).map((x) => x.activity_type_id)));
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [open, orgId, plodTypeId]);
 
   const filteredActivityTypes = useMemo(() => {
-    if (!plodType) return activityTypes;
-    return (activityTypes || []).filter((t) => activityAppliesToType(t, plodType));
-  }, [activityTypes, plodType]);
+    if (!plodTypeId) return activityTypes || [];
+    if (!allowedActivityTypeIds) return [];
+    return (activityTypes || []).filter((t) => allowedActivityTypeIds.has(t.id));
+  }, [activityTypes, plodTypeId, allowedActivityTypeIds]);
 
-  const canGoNextFromType = !!plodType;
+  const canGoNextFromType = !!plodTypeId;
   const canGoNextFromHeader = !!shiftDate;
 
   const canJumpToStep = (target) => {
-    // Always allow going backwards
     if (target <= step) return true;
-
-    // Going forward: enforce prerequisites
     if (target === 2) return canGoNextFromType;
     if (target === 3) return canGoNextFromType && canGoNextFromHeader;
-
     return false;
   };
 
   const jumpToStep = (target) => {
     setMsg(null);
     if (!canJumpToStep(target)) {
-      // Optional: show a helpful message instead of silently ignoring
-      if (target === 2 && !canGoNextFromType) {
-        setMsg({ type: "error", text: "Select a plod type first." });
-      } else if (target === 3 && (!canGoNextFromType || !canGoNextFromHeader)) {
+      if (target === 2 && !canGoNextFromType) setMsg({ type: "error", text: "Select a plod type first." });
+      else if (target === 3 && (!canGoNextFromType || !canGoNextFromHeader))
         setMsg({ type: "error", text: "Complete Type and Header first." });
-      }
       return;
     }
     setStep(target);
@@ -97,7 +126,7 @@ export function PlodCreateSheet({
 
   const resetAll = () => {
     setStep(1);
-    setPlodType("");
+    setPlodTypeId("");
     setShiftDate(new Date().toISOString().slice(0, 10));
     setVendorId("");
     setNotes("");
@@ -105,6 +134,7 @@ export function PlodCreateSheet({
     setEditingIdx(null);
     setActivityForm({ activity_type_id: "", hole_id: "", start_time: "", end_time: "", notes: "" });
     setMsg(null);
+    setAllowedActivityTypeIds(null);
   };
 
   const close = () => {
@@ -124,7 +154,6 @@ export function PlodCreateSheet({
     const startISO = toISOFromDateAndTime(shiftDate, activityForm.start_time);
     let endISO = toISOFromDateAndTime(shiftDate, activityForm.end_time);
 
-    // Overnight support: if end < start, bump end date by +1 day.
     const startMs = new Date(startISO).getTime();
     const endMsSameDay = new Date(endISO).getTime();
     if (endMsSameDay < startMs) {
@@ -178,22 +207,10 @@ export function PlodCreateSheet({
   const submit = async () => {
     setMsg(null);
 
-    if (!orgId) {
-      setMsg({ type: "error", text: "No organization selected." });
-      return;
-    }
-    if (!plodType) {
-      setMsg({ type: "error", text: "Select a plod type." });
-      return;
-    }
-    if (!shiftDate) {
-      setMsg({ type: "error", text: "Select a date." });
-      return;
-    }
-    if (activities.length === 0) {
-      setMsg({ type: "error", text: "Add at least one activity." });
-      return;
-    }
+    if (!orgId) return setMsg({ type: "error", text: "No organization selected." });
+    if (!plodTypeId) return setMsg({ type: "error", text: "Select a plod type." });
+    if (!shiftDate) return setMsg({ type: "error", text: "Select a date." });
+    if (activities.length === 0) return setMsg({ type: "error", text: "Add at least one activity." });
 
     const startTimes = activities.map((a) => new Date(a.started_at).getTime());
     const endTimes = activities.map((a) => new Date(a.finished_at).getTime());
@@ -206,21 +223,16 @@ export function PlodCreateSheet({
 
       const plodPayload = {
         organization_id: orgId,
-        plod_type: plodType,
+        plod_type_id: plodTypeId,
         vendor_id: vendorId || null,
-        shift_date: shiftDate,
+        shift_date: shiftDate, // <-- keep this (now matches DB)
         started_at: earliestStart,
         finished_at: latestEnd,
         notes: notes || null,
         entered_by: enteredBy || null,
       };
 
-      const { data: plod, error: plodError } = await sb
-        .from("plods")
-        .insert(plodPayload)
-        .select("id")
-        .single();
-
+      const { data: plod, error: plodError } = await sb.from("plods").insert(plodPayload).select("id").single();
       if (plodError) throw plodError;
 
       const activitiesPayload = activities.map((a) => ({
@@ -251,27 +263,17 @@ export function PlodCreateSheet({
     <div className="fixed inset-0 z-50">
       <div onClick={close} className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
 
-      <div
-        // This is the drawer/panel container (the fixed right-side sheet)
-        className="fixed right-0 top-0 h-[100dvh] max-h-[100dvh] w-full sm:w-[720px] bg-slate-950 border-l border-white/10 flex flex-col"
-      >
-        {/* Header (stays visible) */}
+      <div className="fixed right-0 top-0 h-[100dvh] max-h-[100dvh] w-full sm:w-[720px] bg-slate-950 border-l border-white/10 flex flex-col">
         <div className="shrink-0 px-4 py-3 border-b border-white/10">
           <div>
             <div className="text-sm text-slate-300">Create</div>
             <div className="text-lg font-semibold text-slate-100">New Plod</div>
           </div>
-          <button
-            type="button"
-            onClick={close}
-            className="btn"
-            disabled={saving}
-          >
+          <button type="button" onClick={close} className="btn" disabled={saving}>
             Close
           </button>
         </div>
 
-        {/* Body (scrolls) */}
         <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
           <div className="space-y-4">
             {msg && (
@@ -287,16 +289,13 @@ export function PlodCreateSheet({
               </div>
             )}
 
-            {/* Stepper (now clickable) */}
             <div className="flex items-center gap-2 text-sm">
               <button
                 type="button"
                 onClick={() => jumpToStep(1)}
                 className={classNames(
                   "px-3 py-2 rounded-lg border transition-base !min-h-0",
-                  step === 1
-                    ? "bg-indigo-600 text-white border-indigo-500"
-                    : "bg-slate-900/60 text-slate-200 border-white/10 hover:bg-slate-900"
+                  step === 1 ? "bg-indigo-600 text-white border-indigo-500" : "bg-slate-900/60 text-slate-200 border-white/10 hover:bg-slate-900"
                 )}
               >
                 1. Type
@@ -308,9 +307,7 @@ export function PlodCreateSheet({
                 disabled={!canJumpToStep(2)}
                 className={classNames(
                   "px-3 py-2 rounded-lg border transition-base !min-h-0 disabled:opacity-50 disabled:cursor-not-allowed",
-                  step === 2
-                    ? "bg-indigo-600 text-white border-indigo-500"
-                    : "bg-slate-900/60 text-slate-200 border-white/10 hover:bg-slate-900"
+                  step === 2 ? "bg-indigo-600 text-white border-indigo-500" : "bg-slate-900/60 text-slate-200 border-white/10 hover:bg-slate-900"
                 )}
               >
                 2. Header
@@ -322,60 +319,49 @@ export function PlodCreateSheet({
                 disabled={!canJumpToStep(3)}
                 className={classNames(
                   "px-3 py-2 rounded-lg border transition-base !min-h-0 disabled:opacity-50 disabled:cursor-not-allowed",
-                  step === 3
-                    ? "bg-indigo-600 text-white border-indigo-500"
-                    : "bg-slate-900/60 text-slate-200 border-white/10 hover:bg-slate-900"
+                  step === 3 ? "bg-indigo-600 text-white border-indigo-500" : "bg-slate-900/60 text-slate-200 border-white/10 hover:bg-slate-900"
                 )}
               >
                 3. Activities
               </button>
             </div>
 
-            {/* Step 1 */}
             {step === 1 && (
               <div className="grid grid-cols-1 gap-3">
-                {PLOD_TYPES.map((t) => {
-                  const selected = plodType === t.id;
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => setPlodType(t.id)}
-                      className={classNames(
-                        "text-left rounded-xl border p-4 transition-base",
-                        selected
-                          ? "border-indigo-400 bg-indigo-500/10"
-                          : "border-white/10 bg-slate-900/40 hover:bg-slate-900/70"
-                      )}
-                    >
-                      <div className="font-semibold text-slate-100">{t.label}</div>
-                      <div className="text-sm text-slate-300 mt-1">{t.desc}</div>
-                    </button>
-                  );
-                })}
+                {plodTypes.length === 0 ? (
+                  <div className="text-sm text-slate-300/70">No plod types found for this organisation.</div>
+                ) : (
+                  plodTypes.map((t) => {
+                    const selected = plodTypeId === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setPlodTypeId(t.id)}
+                        className={classNames(
+                          "text-left rounded-xl border p-4 transition-base",
+                          selected ? "border-indigo-400 bg-indigo-500/10" : "border-white/10 bg-slate-900/40 hover:bg-slate-900/70"
+                        )}
+                      >
+                        <div className="font-semibold text-slate-100">{t.name}</div>
+                        <div className="text-sm text-slate-300 mt-1">{t.description || ""}</div>
+                      </button>
+                    );
+                  })
+                )}
               </div>
             )}
 
-            {/* Step 2 */}
             {step === 2 && (
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-200">Shift date</label>
-                  <input
-                    type="date"
-                    className="input mt-1"
-                    value={shiftDate}
-                    onChange={(e) => setShiftDate(e.target.value)}
-                  />
+                  <input type="date" className="input mt-1" value={shiftDate} onChange={(e) => setShiftDate(e.target.value)} />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-slate-200">Vendor (optional)</label>
-                  <select
-                    className="select mt-1"
-                    value={vendorId}
-                    onChange={(e) => setVendorId(e.target.value)}
-                  >
+                  <select className="select mt-1" value={vendorId} onChange={(e) => setVendorId(e.target.value)}>
                     <option value="">—</option>
                     {vendors.map((v) => (
                       <option key={v.id} value={v.id}>
@@ -387,17 +373,11 @@ export function PlodCreateSheet({
 
                 <div>
                   <label className="block text-sm font-medium text-slate-200">Notes (optional)</label>
-                  <textarea
-                    className="textarea mt-1"
-                    rows={4}
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                  />
+                  <textarea className="textarea mt-1" rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} />
                 </div>
               </div>
             )}
 
-            {/* Step 3 */}
             {step === 3 && (
               <div className="space-y-4">
                 <div className="card p-4">
@@ -405,18 +385,14 @@ export function PlodCreateSheet({
 
                   <div className="grid grid-cols-1 gap-3 mt-3">
                     <div>
-                      <label className="block text-sm font-medium text-slate-200">
-                        Activity type *
-                      </label>
+                      <label className="block text-sm font-medium text-slate-200">Activity type *</label>
                       <select
                         className="select mt-1"
-                        value={activityForm.activity_type_id || ""}   // FK -> plod_activities.activity_type_id
-                        onChange={(e) =>
-                          setActivityForm((f) => ({ ...f, activity_type_id: e.target.value }))
-                        }
+                        value={activityForm.activity_type_id || ""}
+                        onChange={(e) => setActivityForm((f) => ({ ...f, activity_type_id: e.target.value }))}
                       >
                         <option value="">Select…</option>
-                        {activityTypes.map((t) => (
+                        {filteredActivityTypes.map((t) => (
                           <option key={t.id} value={t.id}>
                             {t.activity_type}
                           </option>
@@ -515,18 +491,10 @@ export function PlodCreateSheet({
                               {a.notes && <div className="text-sm text-slate-300 mt-1">{a.notes}</div>}
                             </div>
                             <div className="flex gap-2">
-                              <button
-                                type="button"
-                                className="text-sm rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-slate-100 hover:bg-slate-900 transition-base !min-h-0"
-                                onClick={() => beginEdit(idx)}
-                              >
+                              <button type="button" className="text-sm rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-slate-100 hover:bg-slate-900 transition-base !min-h-0" onClick={() => beginEdit(idx)}>
                                 Edit
                               </button>
-                              <button
-                                type="button"
-                                className="text-sm rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-slate-100 hover:bg-slate-900 transition-base !min-h-0"
-                                onClick={() => removeActivity(idx)}
-                              >
+                              <button type="button" className="text-sm rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-slate-100 hover:bg-slate-900 transition-base !min-h-0" onClick={() => removeActivity(idx)}>
                                 Remove
                               </button>
                             </div>
@@ -541,16 +509,9 @@ export function PlodCreateSheet({
           </div>
         </div>
 
-        {/* Footer/actions (optional, stays visible) */}
         <div className="shrink-0 px-4 py-3 border-t border-white/10">
-          {/* Footer controls */}
           <div className="pt-2 flex items-center justify-between">
-            <button
-              type="button"
-              className="btn"
-              onClick={() => setStep((s) => Math.max(1, s - 1))}
-              disabled={saving || step === 1}
-            >
+            <button type="button" className="btn" onClick={() => setStep((s) => Math.max(1, s - 1))} disabled={saving || step === 1}>
               Back
             </button>
 
@@ -565,12 +526,7 @@ export function PlodCreateSheet({
                   Continue
                 </button>
               ) : (
-                <button
-                  type="button"
-                  className="btn btn-primary disabled:opacity-50"
-                  onClick={submit}
-                  disabled={saving}
-                >
+                <button type="button" className="btn btn-primary disabled:opacity-50" onClick={submit} disabled={saving}>
                   {saving ? "Saving…" : "Create plod"}
                 </button>
               )}

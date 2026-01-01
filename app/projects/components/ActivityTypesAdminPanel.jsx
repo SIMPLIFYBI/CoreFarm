@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import toast from "react-hot-toast";
 
@@ -17,8 +17,22 @@ function formatRatePeriod(p) {
   return map[p] || p;
 }
 
-function ActivityTypeModal({ form, setForm, saving, onClose, onSave, isEditing }) {
+function ActivityTypeModal({ form, setForm, saving, onClose, onSave, isEditing, plodTypes }) {
   const billable = !!form.billable;
+
+  const selected = useMemo(() => new Set(form.plod_type_ids || []), [form.plod_type_ids]);
+
+  const toggle = (id) => {
+    setForm((f) => {
+      const cur = new Set(f.plod_type_ids || []);
+      if (cur.has(id)) cur.delete(id);
+      else cur.add(id);
+      return { ...f, plod_type_ids: Array.from(cur) };
+    });
+  };
+
+  const selectAll = () => setForm((f) => ({ ...f, plod_type_ids: (plodTypes || []).map((x) => x.id) }));
+  const clearAll = () => setForm((f) => ({ ...f, plod_type_ids: [] }));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -45,25 +59,44 @@ function ActivityTypeModal({ form, setForm, saving, onClose, onSave, isEditing }
               className="input w-full"
               value={form.activity_type}
               onChange={(e) => setForm((f) => ({ ...f, activity_type: e.target.value }))}
-              placeholder="e.g. Drill & Blast"
+              placeholder="e.g. Standby"
               required
             />
           </label>
 
-          <label className="block text-sm">
-            Plod Category
-            <select
-              className="input w-full"
-              value={(form.plod_type_scope && form.plod_type_scope[0]) || "all"}
-              onChange={(e) => setForm((f) => ({ ...f, plod_type_scope: [e.target.value] }))}
-            >
-              <option value="all">All</option>
-              <option value="drill_blast">Drill &amp; Blast</option>
-              <option value="drilling_geology">Drilling &amp; Geology</option>
-              <option value="load_haul">Load &amp; Haul</option>
-              <option value="general_works">General Works</option>
-            </select>
-          </label>
+          <div className="block text-sm">
+            <div className="flex items-center justify-between">
+              <div>Plod Types</div>
+              <div className="flex gap-2">
+                <button type="button" className="text-xs underline text-slate-300/80" onClick={selectAll}>
+                  Select all
+                </button>
+                <button type="button" className="text-xs underline text-slate-300/80" onClick={clearAll}>
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-2 rounded-lg border border-white/10 bg-slate-900/40 p-2 max-h-[180px] overflow-auto">
+              {(plodTypes || []).length === 0 ? (
+                <div className="text-xs text-slate-300/70">No plod types found for this organisation.</div>
+              ) : (
+                (plodTypes || []).map((pt) => (
+                  <label key={pt.id} className="flex items-start gap-2 py-1 cursor-pointer">
+                    <input type="checkbox" checked={selected.has(pt.id)} onChange={() => toggle(pt.id)} className="mt-1" />
+                    <span className="flex-1">
+                      <div className="text-sm text-slate-100">{pt.name}</div>
+                      {pt.description ? <div className="text-xs text-slate-400">{pt.description}</div> : null}
+                    </span>
+                  </label>
+                ))
+              )}
+            </div>
+
+            <div className="mt-1 text-xs text-slate-400">
+              Select one or more plod types this activity can be used for.
+            </div>
+          </div>
 
           <label className="block text-sm">
             Billable
@@ -132,7 +165,11 @@ function ActivityTypeModal({ form, setForm, saving, onClose, onSave, isEditing }
             <button type="button" className="btn" onClick={onClose} disabled={saving}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary" disabled={saving || !form.activity_type.trim()}>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={saving || !form.activity_type.trim() || !(form.plod_type_ids || []).length}
+            >
               {saving ? "Saving…" : isEditing ? "Save" : "Create"}
             </button>
           </div>
@@ -142,20 +179,9 @@ function ActivityTypeModal({ form, setForm, saving, onClose, onSave, isEditing }
   );
 }
 
-const PLOD_SCOPE_LABELS = {
-  all: "All",
-  drill_blast: "Drill & Blast",
-  drilling_geology: "Drilling & Geology",
-  load_haul: "Load & Haul",
-  general_works: "General Works",
-};
-
-function formatPlodScope(scope) {
-  if (!scope) return "—";
-  const arr = Array.isArray(scope) ? scope : [scope];
-  if (arr.length === 0) return "—";
-  if (arr.includes("all")) return "All";
-  return arr.map((x) => PLOD_SCOPE_LABELS[x] || x).join(", ");
+function formatPlodTypes(names) {
+  if (!names || !Array.isArray(names) || names.length === 0) return "—";
+  return names.join(", ");
 }
 
 export function ActivityTypesAdminPanel({ activityTypes, setActivityTypes, orgLoading, orgId }) {
@@ -166,16 +192,81 @@ export function ActivityTypesAdminPanel({ activityTypes, setActivityTypes, orgLo
     description: "",
     group: "",
     label: "",
-    plod_type_scope: ["all"],
     billable: false,
     rate: "",
     rate_period: "",
+    plod_type_ids: [], // <-- NEW
   };
+
+  const [plodTypes, setPlodTypes] = useState([]);
+  const [activityPlodTypeNames, setActivityPlodTypeNames] = useState({}); // activity_type_id -> [name]
 
   const [editingActivityTypeId, setEditingActivityTypeId] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [newActivityType, setNewActivityType] = useState(emptyActivityType);
+
+  // Load plod types + mapping for display
+  useEffect(() => {
+    if (!orgId) {
+      setPlodTypes([]);
+      setActivityPlodTypeNames({});
+      return;
+    }
+
+    let alive = true;
+
+    (async () => {
+      const { data: pts, error: ptErr } = await supabase
+        .from("plod_types")
+        .select("id,name,description,sort_order,is_active")
+        .eq("organization_id", orgId)
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true })
+        .order("name", { ascending: true });
+
+      if (!alive) return;
+
+      if (ptErr) {
+        console.error("load plod_types", ptErr);
+        setPlodTypes([]);
+      } else {
+        setPlodTypes(pts || []);
+      }
+
+      // mapping: activity_type_id -> [plod type names]
+      const { data: links, error: linkErr } = await supabase
+        .from("plod_type_activity_types")
+        .select("activity_type_id, plod_types(name)")
+        .in(
+          "activity_type_id",
+          (activityTypes || []).map((x) => x.id)
+        );
+
+      if (!alive) return;
+
+      if (linkErr) {
+        console.error("load plod_type_activity_types", linkErr);
+        setActivityPlodTypeNames({});
+      } else {
+        const map = {};
+        for (const row of links || []) {
+          const id = row.activity_type_id;
+          const nm = row.plod_types?.name;
+          if (!id || !nm) continue;
+          map[id] = map[id] || [];
+          map[id].push(nm);
+        }
+        // sort names for stable display
+        Object.keys(map).forEach((k) => map[k].sort((a, b) => a.localeCompare(b)));
+        setActivityPlodTypeNames(map);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [orgId, supabase, activityTypes]);
 
   const openCreateActivityType = () => {
     setEditingActivityTypeId(null);
@@ -183,11 +274,19 @@ export function ActivityTypesAdminPanel({ activityTypes, setActivityTypes, orgLo
     setShowModal(true);
   };
 
-  const handleEditClick = (row) => {
+  const handleEditClick = async (row) => {
     setEditingActivityTypeId(row.id);
 
-    const scopeArr = Array.isArray(row.plod_type_scope) ? row.plod_type_scope : [];
-    const scopeValue = scopeArr[0] || "all";
+    // load selected plod types for this activity type
+    const { data: links, error } = await supabase
+      .from("plod_type_activity_types")
+      .select("plod_type_id")
+      .eq("activity_type_id", row.id);
+
+    if (error) {
+      console.error("load links for edit", error);
+      toast.error("Could not load plod types for this activity type");
+    }
 
     setNewActivityType({
       ...emptyActivityType,
@@ -195,10 +294,10 @@ export function ActivityTypesAdminPanel({ activityTypes, setActivityTypes, orgLo
       description: row.description ?? "",
       group: row.group ?? "",
       label: row.label ?? "",
-      plod_type_scope: [scopeValue],
       billable: !!row.billable,
       rate: row.rate ?? "",
       rate_period: row.rate_period ?? (row.billable ? "hourly" : ""),
+      plod_type_ids: (links || []).map((x) => x.plod_type_id).filter(Boolean),
     });
 
     setShowModal(true);
@@ -213,6 +312,7 @@ export function ActivityTypesAdminPanel({ activityTypes, setActivityTypes, orgLo
   const saveActivityType = async () => {
     if (!orgId) return toast.error("Organisation not ready yet");
     if (!newActivityType.activity_type.trim()) return;
+    if (!(newActivityType.plod_type_ids || []).length) return toast.error("Select at least one plod type");
 
     setSaving(true);
     try {
@@ -223,16 +323,14 @@ export function ActivityTypesAdminPanel({ activityTypes, setActivityTypes, orgLo
           ? null
           : Number(newActivityType.rate);
 
+      // keep legacy column harmless (do not depend on it). Leave as ['all'] to avoid older constraints.
       const payload = {
         organization_id: orgId,
         activity_type: newActivityType.activity_type.trim(),
         description: newActivityType.description?.trim() || null,
         group: newActivityType.group?.trim() || null,
         label: newActivityType.label?.trim() || null,
-        plod_type_scope:
-          Array.isArray(newActivityType.plod_type_scope) && newActivityType.plod_type_scope.length
-            ? newActivityType.plod_type_scope
-            : ["all"],
+        plod_type_scope: ["all"],
         billable,
         rate: billable && Number.isFinite(rateNum) ? rateNum : null,
         rate_period: billable ? (newActivityType.rate_period || "hourly") : null,
@@ -241,7 +339,7 @@ export function ActivityTypesAdminPanel({ activityTypes, setActivityTypes, orgLo
       const returning =
         'id, organization_id, activity_type, description, "group", label, plod_type_scope, billable, rate, rate_period';
 
-      let data;
+      let saved;
 
       if (editingActivityTypeId) {
         const res = await supabase
@@ -253,22 +351,40 @@ export function ActivityTypesAdminPanel({ activityTypes, setActivityTypes, orgLo
           .single();
 
         if (res.error) throw res.error;
-        data = res.data;
+        saved = res.data;
 
-        setActivityTypes?.((arr) => (arr || []).map((x) => (x.id === data.id ? data : x)));
+        setActivityTypes?.((arr) => (arr || []).map((x) => (x.id === saved.id ? saved : x)));
         toast.success("Activity type updated");
       } else {
         const res = await supabase.from("plod_activity_types").insert(payload).select(returning).single();
         if (res.error) throw res.error;
-        data = res.data;
+        saved = res.data;
 
-        setActivityTypes?.((arr) => [data, ...(arr || [])]);
+        setActivityTypes?.((arr) => [saved, ...(arr || [])]);
         toast.success("Activity type added");
+      }
+
+      // Replace join rows for this activity type
+      {
+        const { error: delErr } = await supabase
+          .from("plod_type_activity_types")
+          .delete()
+          .eq("activity_type_id", saved.id);
+
+        if (delErr) throw delErr;
+
+        const rows = (newActivityType.plod_type_ids || []).map((plod_type_id) => ({
+          plod_type_id,
+          activity_type_id: saved.id,
+        }));
+
+        const { error: insErr } = await supabase.from("plod_type_activity_types").insert(rows);
+        if (insErr) throw insErr;
       }
 
       closeModal();
     } catch (e) {
-      console.error("save plod_activity_types error", e);
+      console.error("save activity type error", e);
       toast.error(e?.message || "Could not save activity type");
     } finally {
       setSaving(false);
@@ -293,7 +409,7 @@ export function ActivityTypesAdminPanel({ activityTypes, setActivityTypes, orgLo
             <thead>
               <tr className="text-left bg-slate-900/40 text-slate-200 border-b border-white/10">
                 <th className="p-2 font-medium">Activity Type</th>
-                <th className="p-2 font-medium">Plod Category</th>
+                <th className="p-2 font-medium">Plod Types</th>
                 <th className="p-2 font-medium">Billable</th>
                 <th className="p-2 font-medium">Rate</th>
                 <th className="p-2 font-medium">Rate Period</th>
@@ -306,7 +422,7 @@ export function ActivityTypesAdminPanel({ activityTypes, setActivityTypes, orgLo
               {(activityTypes || []).map((t) => (
                 <tr key={t.id} className="border-b border-white/10 last:border-b-0 hover:bg-white/5">
                   <td className="p-2 font-medium">{t.activity_type}</td>
-                  <td className="p-2">{formatPlodScope(t.plod_type_scope)}</td>
+                  <td className="p-2">{formatPlodTypes(activityPlodTypeNames[t.id])}</td>
                   <td className="p-2">{t.billable ? "Yes" : "No"}</td>
                   <td className="p-2">{t.billable ? formatMoney(t.rate) : "—"}</td>
                   <td className="p-2">{t.billable ? formatRatePeriod(t.rate_period) : "—"}</td>
@@ -335,6 +451,7 @@ export function ActivityTypesAdminPanel({ activityTypes, setActivityTypes, orgLo
           onClose={closeModal}
           onSave={saveActivityType}
           isEditing={!!editingActivityTypeId}
+          plodTypes={plodTypes}
         />
       )}
     </div>

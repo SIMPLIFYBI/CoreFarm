@@ -14,6 +14,7 @@ import ResourceModal from "./ResourceModal";
 import VendorsTab from "./VendorsTab";
 import ContractsTab from "./ContractsTab";
 import ActivitiesTab from "./ActivitiesTab";
+import PlodTypesAdminPanel from "./PlodTypesAdminPanel";
 
 const DEFAULT_TAB = "projects";
 const VALID_TABS = new Set([
@@ -24,6 +25,7 @@ const VALID_TABS = new Set([
   "vendors",
   "contracts",
   "activities",
+  "plodtypes",
 ]);
 
 export default function ProjectsView() {
@@ -505,6 +507,16 @@ export default function ProjectsView() {
         >
           Activities
         </button>
+
+        <button
+          className={`px-4 py-2 -mb-px font-medium text-sm ${
+            activeTab === "plodtypes" ? "border-b-2 border-indigo-500 text-indigo-300" : "text-slate-300/70"
+          }`}
+          onClick={() => setTab("plodtypes")}
+          type="button"
+        >
+          Plod Types
+        </button>
       </div>
 
       {/* header actions per tab */}
@@ -582,6 +594,15 @@ export default function ProjectsView() {
 
       {activeTab === "activities" && (
         <ActivitiesTab orgId={orgId} orgLoading={orgLoading} />
+      )}
+
+      {activeTab === "plodtypes" && (
+        <div className="space-y-4">
+          <div className="text-sm text-slate-300/70">
+            Configure which Plod Types exist for this organisation. Activity Types can be assigned to one or more Plod Types.
+          </div>
+          <PlodTypesAdminPanel orgId={orgId} />
+        </div>
       )}
 
       {showModal && (

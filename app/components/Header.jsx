@@ -50,6 +50,7 @@ export default function Header() {
       { label: "Vendors", href: "/projects?tab=vendors" },
       { label: "Contracts", href: "/projects?tab=contracts" },
       { label: "Activities", href: "/projects?tab=activities" },
+      { label: "Plod Types", href: "/projects?tab=plodtypes" }, // <-- ADD
     ],
     []
   );

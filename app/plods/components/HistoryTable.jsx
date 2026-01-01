@@ -1,6 +1,13 @@
 import React from "react";
 import { Spinner } from "./Spinner";
 
+function formatDateFromStartedAt(startedAt) {
+  if (!startedAt) return "—";
+  const d = new Date(startedAt);
+  if (Number.isNaN(d.getTime())) return String(startedAt).slice(0, 10);
+  return d.toISOString().slice(0, 10);
+}
+
 export function HistoryTable({
   plods = [],
   plodsLoading = false,
@@ -41,6 +48,7 @@ export function HistoryTable({
               <thead>
                 <tr>
                   <th>Date</th>
+                  <th>Type</th>
                   <th>Vendor</th>
                   <th>Notes</th>
                 </tr>
@@ -48,9 +56,11 @@ export function HistoryTable({
               <tbody>
                 {plods.map((p) => (
                   <tr key={p.id}>
-                    <td>{p.shift_date}</td>
-                    <td>{p.vendor_name ?? p.vendor_id}</td>
+                    <td>{formatDateFromStartedAt(p.started_at)}</td>
+                    <td>{p.plod_types?.name ?? p.plod_type ?? p.plod_type_id ?? "—"}</td>
+                    <td>{p.vendors?.name ?? p.vendor_name ?? p.vendor_id ?? "—"}</td>
                     <td>{p.notes}</td>
+                    <td>{p.shift_date ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>

@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import toast from "react-hot-toast";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import { IconPlods } from "../components/icons";
@@ -27,6 +26,55 @@ export default function Page() {
     to: new Date().toISOString().split("T")[0],
   });
 
+  const loadPlods = async () => {
+    if (!orgIdCtx) return;
+
+    setPlodsLoading(true);
+    const sb = supabase;
+
+    try {
+      let q = sb
+        .from("plods")
+        .select(`
+          id,
+          shift_date,
+          plod_type_id,
+          plod_type,
+          started_at,
+          finished_at,
+          notes,
+          vendors:vendor_id(name),
+          plod_types:plod_type_id(name),
+          plod_activities(
+            id,
+            activity_type_id,
+            hole_id,
+            started_at,
+            finished_at,
+            notes,
+            activity_types:activity_type_id(activity_type),
+            holes:hole_id(hole_id)
+          )
+        `)
+        .eq("organization_id", orgIdCtx)
+        .order("shift_date", { ascending: false })
+        .order("started_at", { ascending: false })
+        .limit(100);
+
+      if (dateRange.from) q = q.gte("shift_date", dateRange.from);
+      if (dateRange.to) q = q.lte("shift_date", dateRange.to);
+
+      const { data, error } = await q;
+
+      if (error) setMessage({ type: "error", text: error.message });
+      else setPlods(data || []);
+    } catch (_err) {
+      setMessage({ type: "error", text: "Failed to load plods history" });
+    } finally {
+      setPlodsLoading(false);
+    }
+  };
+
   useEffect(() => {
     const sb = supabase;
 
@@ -42,11 +90,11 @@ export default function Page() {
       setEnteredBy(name);
     })();
 
-    // org-scoped data
+    // org-scoped reference data
     const vQuery = sb.from("vendors").select("id,name").limit(100);
     const aQuery = sb
       .from("plod_activity_types")
-      .select('id,activity_type,"group",description,plod_type_scope')
+      .select('id,activity_type,"group",description') // legacy plod_type_scope no longer needed here
       .order("activity_type", { ascending: true })
       .limit(200);
     const hQuery = sb.from("holes").select("id,hole_id").limit(200);
@@ -71,132 +119,6 @@ export default function Page() {
     if (orgIdCtx) loadPlods();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgIdCtx]);
-
-  const loadPlods = async () => {
-    if (!orgIdCtx) return;
-
-    setPlodsLoading(true);
-    const sb = supabase;
-
-    try {
-      const { data, error } = await sb
-        .from("plods")
-        .select(`
-          id,
-          plod_type,
-          started_at,
-          finished_at,
-          notes,
-          vendors:vendor_id(name),
-          plod_activities(
-            id,
-            activity_type_id,
-            hole_id,
-            started_at,
-            finished_at,
-            notes,
-            activity_types:activity_type_id(activity_type),
-            holes:hole_id(hole_id)
-          )
-        `)
-        .eq("organization_id", orgIdCtx)
-        .gte("started_at", dateRange.from ? `${dateRange.from}T00:00:00` : null)
-        .lte("started_at", dateRange.to ? `${dateRange.to}T23:59:59` : null)
-        .order("started_at", { ascending: false })
-        .limit(100);
-
-      if (error) setMessage({ type: "error", text: error.message });
-      else setPlods(data || []);
-    } catch (err) {
-      setMessage({ type: "error", text: "Failed to load plods history" });
-    } finally {
-      setPlodsLoading(false);
-    }
-  };
-
-  const load = async () => {
-    if (!orgIdCtx) return;
-    setPlodsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("plod_activity_types")
-        .select('id, organization_id, activity_type, description, "group", plod_type_scope')
-        .eq("organization_id", orgIdCtx)
-        .order("activity_type", { ascending: true });
-
-      if (error) throw error;
-      setPlods(data || []);
-    } catch (e) {
-      console.error("load plod_activity_types", e);
-      toast.error(e?.message || "Failed to load activities");
-      setPlods([]);
-    } finally {
-      setPlodsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orgIdCtx]);
-
-  const startCreate = () => {
-    setEditing(null);
-    setForm({ activity_type: "", description: "", plodTypeScope: "all" });
-  };
-
-  const startEdit = (r) => {
-    setEditing(r);
-    const scopeArr = Array.isArray(r?.plod_type_scope) ? r.plod_type_scope : [];
-    const scopeValue = scopeArr?.[0] || "all";
-    setForm({
-      activity_type: r?.activity_type || "",
-      description: r?.description || "",
-      plodTypeScope: scopeValue,
-    });
-  };
-
-  const save = async () => {
-    if (!orgIdCtx) return toast.error("Organisation not ready");
-    if (!form.activity_type.trim()) return toast.error("Activity type is required");
-
-    setSaving(true);
-    try {
-      const payload = {
-        organization_id: orgIdCtx,
-        activity_type: form.activity_type.trim(),
-        description: form.description?.trim() ? form.description.trim() : null,
-        plod_type_scope: [form.plodTypeScope || "all"],
-      };
-
-      if (editing?.id) {
-        const { error } = await supabase
-          .from("plod_activity_types")
-          .update({
-            activity_type: payload.activity_type,
-            description: payload.description,
-            plod_type_scope: payload.plod_type_scope,
-          })
-          .eq("id", editing.id)
-          .eq("organization_id", orgIdCtx);
-
-        if (error) throw error;
-        toast.success("Activity updated");
-      } else {
-        const { error } = await supabase.from("plod_activity_types").insert(payload);
-        if (error) throw error;
-        toast.success("Activity created");
-      }
-
-      await load();
-      startCreate();
-    } catch (e) {
-      console.error("save plod_activity_types", e);
-      toast.error(e?.message || "Failed to save activity");
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <div className="mx-auto max-w-6xl p-6">
