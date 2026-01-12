@@ -7,6 +7,7 @@ const tabs = [
   { href: "/user", label: "Dashboard", icon: IconReport },
   { href: "/plods", label: "Plods", icon: IconPlods },
   { href: "/coretasks", label: "Core Tasks", icon: IconCoreTasks },
+  { href: "/drillhole-viz", label: "Drillhole Viz", icon: IconCore },
   { href: "/consumables", label: "Consumables", icon: IconCore },
   { href: "/projects", label: "Projects", icon: IconClipboard },
   { href: "/assets", label: "Assets", icon: AssetIcon },

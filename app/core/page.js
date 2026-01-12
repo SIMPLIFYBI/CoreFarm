@@ -285,6 +285,52 @@ export default function CorePage() {
   // Status is already refreshed via loadHoleDetails using the same logic as initial load
   };
 
+  // 1) Ensure your "Add New Core" / "Add Hole" form state includes planned_depth
+  const [newHole, setNewHole] = useState({
+    hole_id: "",
+    depth: "",
+    planned_depth: "", // <-- add
+    drilling_diameter: "",
+    project_id: "",
+    drilling_contractor: "",
+  });
+
+  function toNumOrNull(v) {
+    if (v === "" || v == null) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function onNewHoleChange(e) {
+    const { name, value } = e.target;
+    setNewHole((prev) => ({ ...prev, [name]: value }));
+  }
+
+  async function addHole() {
+    // ...existing code (validation)...
+
+    const payload = {
+      organization_id: orgId,
+      hole_id: (newHole.hole_id || "").trim(),
+      depth: toNumOrNull(newHole.depth), // actual depth
+      planned_depth: toNumOrNull(newHole.planned_depth), // planned depth (optional)
+      drilling_diameter: newHole.drilling_diameter || null,
+      project_id: newHole.project_id || null,
+      drilling_contractor: (newHole.drilling_contractor || "").trim() || null,
+      // state will default to 'proposed' in DB unless you set it here
+      // ...existing code...
+    };
+
+    const { error } = await supabase.from("holes").insert(payload);
+    if (error) {
+      // ...existing code...
+      return;
+    }
+
+    // ...existing code (refresh list, close modal, reset state)...
+    setNewHole((prev) => ({ ...prev, planned_depth: "" }));
+  }
+
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-6">
       <h1 className="text-2xl font-semibold mb-2 text-slate-100">Core Logging</h1>
@@ -701,6 +747,19 @@ export default function CorePage() {
           </div>
         </>
       )}
+      {/* 2) In your "Add New Core" modal form, add the Planned depth input */}
+      <label className="block text-sm">
+        Planned Depth (m)
+        <input
+          className="input"
+          type="number"
+          name="planned_depth"
+          step="0.1"
+          placeholder="e.g. 250.0"
+          value={newHole.planned_depth}
+          onChange={onNewHoleChange}
+        />
+      </label>
     </div>
   );
 }
