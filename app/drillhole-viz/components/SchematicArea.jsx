@@ -1,6 +1,6 @@
 "use client";
 
-import DepthScalePreview from "./DepthScalePreview";
+import DepthAxisBar from "./DepthAxisBar";
 import BoreholeSchematicPreview from "./BoreholeSchematicPreview";
 
 export default function SchematicArea({
@@ -14,6 +14,8 @@ export default function SchematicArea({
   onExportPdf,
   exportDisabledReason,
 }) {
+  const svgPxHeight = 620;
+
   return (
     <div className="flex-1 h-full overflow-hidden">
       <div className="h-full flex flex-col">
@@ -26,6 +28,7 @@ export default function SchematicArea({
               {selectedHole ? "Unified schematic preview (SVG V1)" : "Select a hole to begin"}
             </div>
           </div>
+
           <button
             type="button"
             className="btn btn-primary text-xs"
@@ -40,30 +43,36 @@ export default function SchematicArea({
         <div className="flex-1 overflow-auto p-4">
           <div className="card p-4">
             {!selectedHole ? (
-              <div className="text-sm text-slate-300">Select a hole to preview the scale.</div>
+              <div className="text-sm text-slate-300">Select a hole to preview the schematic.</div>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
-                <div className="lg:col-span-1 space-y-2">
-                  <DepthScalePreview plannedDepth={selectedHole.planned_depth} actualDepth={selectedHole.depth} />
+              <div className="space-y-2">
+                <div className="text-sm text-slate-200">Borehole schematic (V1)</div>
+                <div className="text-xs text-slate-400">
+                  One shared depth axis. Geology outer panels, annulus band, construction in-hole.
                 </div>
 
-                <div className="lg:col-span-2 space-y-2">
-                  <div className="text-sm text-slate-200">Borehole schematic (V1)</div>
-                  <div className="text-xs text-slate-400">
-                    Geology outer panels, annulus band, construction in-hole. Shared depth scale.
-                  </div>
-
-                  <BoreholeSchematicPreview
+                <div className="flex gap-3 items-start">
+                  <DepthAxisBar
                     plannedDepth={selectedHole.planned_depth}
                     actualDepth={selectedHole.depth}
                     waterLevel={selectedHole.water_level_m}
-                    geologyIntervals={geoRows}
-                    lithById={lithById}
-                    annulusIntervals={annulusRows}
-                    annulusById={annulusById}
-                    constructionIntervals={constructionRows}
-                    constructionById={constructionById}
+                    svgPxHeight={svgPxHeight}
                   />
+
+                  <div className="min-w-0 flex-1">
+                    <BoreholeSchematicPreview
+                      plannedDepth={selectedHole.planned_depth}
+                      actualDepth={selectedHole.depth}
+                      waterLevel={selectedHole.water_level_m}
+                      geologyIntervals={geoRows}
+                      lithById={lithById}
+                      annulusIntervals={annulusRows}
+                      annulusById={annulusById}
+                      constructionIntervals={constructionRows}
+                      constructionById={constructionById}
+                      svgPxHeight={svgPxHeight}
+                    />
+                  </div>
                 </div>
               </div>
             )}
