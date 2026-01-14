@@ -51,7 +51,8 @@ export default function SchematicArea({
                   One shared depth axis. Geology outer panels, annulus band, construction in-hole.
                 </div>
 
-                <div className="flex gap-3 items-start">
+                {/* EXPORT ROOT (axis + schematic) */}
+                <div id="schematic-export-root" className="flex gap-3 items-start">
                   <DepthAxisBar
                     plannedDepth={selectedHole.planned_depth}
                     actualDepth={selectedHole.depth}

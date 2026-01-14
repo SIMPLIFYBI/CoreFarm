@@ -12,6 +12,7 @@ import HoleTab from "./components/HoleTab";
 import AttributesTab from "./components/AttributesTab";
 import SchematicArea from "./components/SchematicArea";
 import TypesTabs from "./components/TypesTabs";
+import { exportSchematicPdf } from "./utils/exportSchematicPdf";
 
 export default function DrillholeVizPage() {
   const supabase = supabaseBrowser();
@@ -1069,13 +1070,56 @@ export default function DrillholeVizPage() {
     setDrawerOpen(true);
   };
 
+  const [exportingPdf, setExportingPdf] = useState(false);
+
   const exportDisabledReason = useMemo(() => {
-    if (!selectedHole) return "Select a hole";
-    if (selectedHole.planned_depth == null || selectedHole.planned_depth === "") return "Set planned depth to export";
-    const n = Number(selectedHole.planned_depth);
-    if (!Number.isFinite(n) || n <= 0) return "Planned depth must be > 0";
+    if (!selectedHole) return "Select a hole first";
+    if (exportingPdf) return "Exporting…";
     return "";
-  }, [selectedHole]);
+  }, [selectedHole, exportingPdf]);
+
+  const onExportPdf = async () => {
+    if (!selectedHole || exportingPdf) return;
+
+    const el = document.getElementById("schematic-export-root");
+    if (!el) {
+      toast.error("Could not find the schematic to export.");
+      return;
+    }
+
+    try {
+      setExportingPdf(true);
+
+      await exportSchematicPdf({
+        element: el,
+        filename: `Schematic-${selectedHole.hole_id || "hole"}.pdf`,
+        hole: selectedHole,
+        geologyIntervals: geoRows,
+        annulusIntervals: annulusRows,
+        constructionIntervals: constructionRows,
+        resolveGeologyType: (r) => {
+          const t = lithById?.get?.(r.lithology_type_id);
+          return { name: t?.name || "", color: t?.color || "" };
+        },
+        resolveAnnulusType: (r) => {
+          const t = annulusById?.get?.(r.annulus_type_id);
+          return { name: t?.name || "", color: t?.color || "" };
+        },
+        resolveConstructionType: (r) => {
+          const t = constructionById?.get?.(r.construction_type_id);
+          return { name: t?.name || "", color: t?.color || "" };
+        },
+        backgroundColor: "#0b1220",
+        pixelRatio: 3,
+        marginMm: 10,
+      });
+    } catch (e) {
+      console.error(e);
+      toast.error(e?.message || "Failed to export PDF");
+    } finally {
+      setExportingPdf(false);
+    }
+  };
 
   const updatePlannedDepth = async () => {
     if (!selectedHole) return;
@@ -1137,14 +1181,6 @@ export default function DrillholeVizPage() {
     } finally {
       setSavingWaterLevel(false);
     }
-  };
-
-  const onExportPdf = async () => {
-    if (exportDisabledReason) {
-      toast.error(exportDisabledReason);
-      return;
-    }
-    toast("PDF export not wired yet (V1 next step).");
   };
 
   return (
