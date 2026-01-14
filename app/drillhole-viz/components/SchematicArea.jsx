@@ -1,9 +1,7 @@
 "use client";
 
 import DepthScalePreview from "./DepthScalePreview";
-import GeologyTrackPreview from "./GeologyTrackPreview";
-import ConstructionTrackPreview from "./ConstructionTrackPreview";
-import AnnulusTrackPreview from "./AnnulusTrackPreview";
+import BoreholeSchematicPreview from "./BoreholeSchematicPreview";
 
 export default function SchematicArea({
   selectedHole,
@@ -24,7 +22,9 @@ export default function SchematicArea({
             <div className="text-slate-100 font-semibold truncate">
               {selectedHole ? `Schematic: ${selectedHole.hole_id}` : "Schematic"}
             </div>
-            <div className="text-[11px] text-slate-400">{selectedHole ? "Scale preview (SVG V1)" : "Select a hole to begin"}</div>
+            <div className="text-[11px] text-slate-400">
+              {selectedHole ? "Unified schematic preview (SVG V1)" : "Select a hole to begin"}
+            </div>
           </div>
           <button
             type="button"
@@ -47,41 +47,23 @@ export default function SchematicArea({
                   <DepthScalePreview plannedDepth={selectedHole.planned_depth} actualDepth={selectedHole.depth} />
                 </div>
 
-                <div className="lg:col-span-2 space-y-4">
-                  <div className="space-y-2">
-                    <div className="text-sm text-slate-200">Geology track (V1)</div>
-                    <div className="text-xs text-slate-400">
-                      Renders saved geology intervals for the selected hole. Scale fits max(planned, actual).
-                    </div>
-                    <GeologyTrackPreview
-                      plannedDepth={selectedHole.planned_depth}
-                      actualDepth={selectedHole.depth}
-                      intervals={geoRows}
-                      lithById={lithById}
-                    />
+                <div className="lg:col-span-2 space-y-2">
+                  <div className="text-sm text-slate-200">Borehole schematic (V1)</div>
+                  <div className="text-xs text-slate-400">
+                    Geology outer panels, annulus band, construction in-hole. Shared depth scale.
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="text-sm text-slate-200">Construction track (V1)</div>
-                    <div className="text-xs text-slate-400">Renders saved construction intervals for the selected hole.</div>
-                    <ConstructionTrackPreview
-                      plannedDepth={selectedHole.planned_depth}
-                      actualDepth={selectedHole.depth}
-                      intervals={constructionRows}
-                      constructionById={constructionById}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="text-sm text-slate-200">Annulus track (V1)</div>
-                    <div className="text-xs text-slate-400">Renders saved annulus intervals for the selected hole.</div>
-                    <AnnulusTrackPreview
-                      plannedDepth={selectedHole.planned_depth}
-                      actualDepth={selectedHole.depth}
-                      intervals={annulusRows}
-                      annulusById={annulusById}
-                    />
-                  </div>
+                  <BoreholeSchematicPreview
+                    plannedDepth={selectedHole.planned_depth}
+                    actualDepth={selectedHole.depth}
+                    waterLevel={selectedHole.water_level_m}
+                    geologyIntervals={geoRows}
+                    lithById={lithById}
+                    annulusIntervals={annulusRows}
+                    annulusById={annulusById}
+                    constructionIntervals={constructionRows}
+                    constructionById={constructionById}
+                  />
                 </div>
               </div>
             )}

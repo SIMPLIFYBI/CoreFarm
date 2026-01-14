@@ -1,0 +1,326 @@
+"use client";
+
+import { useId, useMemo } from "react";
+
+export default function BoreholeSchematicPreview({
+  plannedDepth,
+  actualDepth,
+  geologyIntervals,
+  lithById,
+  annulusIntervals,
+  annulusById,
+  constructionIntervals,
+  constructionById,
+  waterLevel, // NEW
+}) {
+  const uid = useId();
+
+  const planned = Number(plannedDepth);
+  const actual = Number(actualDepth);
+  const hasPlanned = Number.isFinite(planned) && planned > 0;
+  const hasActual = Number.isFinite(actual) && actual > 0;
+  const water = Number(waterLevel);
+  const hasWater = Number.isFinite(water) && water >= 0;
+
+  const maxDepth = useMemo(() => {
+    const m = Math.max(hasPlanned ? planned : 0, hasActual ? actual : 0, 30);
+    return Math.ceil(m / 10) * 10;
+  }, [planned, actual, hasPlanned, hasActual]);
+
+  const normGeology = useMemo(() => {
+    return (geologyIntervals || [])
+      .map((r) => {
+        const from = Number(r.from_m);
+        const to = Number(r.to_m);
+        const id = r.lithology_type_id || "";
+        if (!Number.isFinite(from) || !Number.isFinite(to) || !(from < to) || !id) return null;
+        return { id: r.id || null, from, to, typeId: id, notes: r.notes || "" };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.from - b.from);
+  }, [geologyIntervals]);
+
+  const normAnnulus = useMemo(() => {
+    return (annulusIntervals || [])
+      .map((r) => {
+        const from = Number(r.from_m);
+        const to = Number(r.to_m);
+        const id = r.annulus_type_id || "";
+        if (!Number.isFinite(from) || !Number.isFinite(to) || !(from < to) || !id) return null;
+        return { id: r.id || null, from, to, typeId: id, notes: r.notes || "" };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.from - b.from);
+  }, [annulusIntervals]);
+
+  const normConstruction = useMemo(() => {
+    return (constructionIntervals || [])
+      .map((r) => {
+        const from = Number(r.from_m);
+        const to = Number(r.to_m);
+        const id = r.construction_type_id || "";
+        if (!Number.isFinite(from) || !Number.isFinite(to) || !(from < to) || !id) return null;
+        return { id: r.id || null, from, to, typeId: id, notes: r.notes || "" };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.from - b.from);
+  }, [constructionIntervals]);
+
+  // Layout (tweak these to match your reference screenshot)
+  const H = 620;
+  const W = 980;
+  const padTop = 30;
+  const padBottom = 40;
+
+  const geologyLeftX = 60;
+  const geologyLeftW = 360;
+
+  const holeX = 430;
+  const holeW = 120;
+
+  const annulusBandW = 34;
+
+  const geologyRightX = holeX + holeW + annulusBandW + 30;
+  const geologyRightW = 360;
+
+  const depthAxisX = 40;
+
+  const yForDepth = (d) => {
+    const clamped = Math.max(0, Math.min(maxDepth, d));
+    const t = clamped / maxDepth;
+    return padTop + t * (H - padTop - padBottom);
+  };
+
+  const plannedY = hasPlanned ? yForDepth(planned) : null;
+  const actualY = hasActual ? yForDepth(actual) : null;
+  const waterY = hasWater ? yForDepth(water) : null;
+
+  const clipId = `schemClip-${uid}`;
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} className="block">
+        <defs>
+          <clipPath id={clipId}>
+            <rect x="0" y={padTop} width={W} height={H - padTop - padBottom} />
+          </clipPath>
+        </defs>
+
+        {/* background */}
+        <rect x="0" y="0" width={W} height={H} rx="12" fill="rgba(15,23,42,0.35)" stroke="rgba(255,255,255,0.10)" />
+
+        {/* depth axis */}
+        <line x1={depthAxisX} y1={padTop} x2={depthAxisX} y2={H - padBottom} stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
+        {Array.from({ length: Math.floor(maxDepth / 5) + 1 }, (_, i) => i * 5).map((d) => {
+          const y = yForDepth(d);
+          const major = d % 10 === 0;
+          return (
+            <g key={d}>
+              <line
+                x1={major ? depthAxisX - 10 : depthAxisX - 6}
+                y1={y}
+                x2={depthAxisX}
+                y2={y}
+                stroke="rgba(255,255,255,0.25)"
+                strokeWidth={major ? 1.2 : 1}
+              />
+              {major && (
+                <text x={4} y={y + 4} fontSize="10" fill="rgba(226,232,240,0.85)">
+                  {d}
+                </text>
+              )}
+            </g>
+          );
+        })}
+
+        {/* geology outer panels */}
+        <rect
+          x={geologyLeftX}
+          y={padTop}
+          width={geologyLeftW}
+          height={H - padTop - padBottom}
+          rx="10"
+          fill="rgba(2,6,24,0.20)"
+          stroke="rgba(255,255,255,0.12)"
+        />
+        <rect
+          x={geologyRightX}
+          y={padTop}
+          width={geologyRightW}
+          height={H - padTop - padBottom}
+          rx="10"
+          fill="rgba(2,6,24,0.20)"
+          stroke="rgba(255,255,255,0.12)"
+        />
+
+        {/* hole + annulus bands */}
+        <rect
+          x={holeX}
+          y={padTop}
+          width={holeW}
+          height={H - padTop - padBottom}
+          rx="10"
+          fill="rgba(2,6,24,0.35)"
+          stroke="rgba(255,255,255,0.18)"
+        />
+        <rect
+          x={holeX - annulusBandW}
+          y={padTop}
+          width={annulusBandW}
+          height={H - padTop - padBottom}
+          rx="10"
+          fill="rgba(2,6,24,0.25)"
+          stroke="rgba(255,255,255,0.12)"
+        />
+        <rect
+          x={holeX + holeW}
+          y={padTop}
+          width={annulusBandW}
+          height={H - padTop - padBottom}
+          rx="10"
+          fill="rgba(2,6,24,0.25)"
+          stroke="rgba(255,255,255,0.12)"
+        />
+
+        <g clipPath={`url(#${clipId})`}>
+          {/* geology intervals (paint both sides for “around hole” look) */}
+          {normGeology.map((it, i) => {
+            const t = lithById?.get?.(it.typeId);
+            const color = t?.color || "#64748b";
+            const label = t?.name || "Geology";
+
+            const y1 = yForDepth(it.from);
+            const y2 = yForDepth(it.to);
+            const h = Math.max(0, y2 - y1);
+            if (h <= 0.5) return null;
+
+            return (
+              <g key={it.id || `g-${it.typeId}-${it.from}-${it.to}-${i}`}>
+                <rect x={geologyLeftX + 2} y={y1} width={geologyLeftW - 4} height={h} fill={color} fillOpacity="0.75">
+                  <title>
+                    {label} · {it.from.toFixed(1)}–{it.to.toFixed(1)}m{it.notes ? ` · ${it.notes}` : ""}
+                  </title>
+                </rect>
+                <rect x={geologyRightX + 2} y={y1} width={geologyRightW - 4} height={h} fill={color} fillOpacity="0.75" />
+
+                {/* right-side label (like the reference) */}
+                {h >= 18 && (
+                  <text
+                    x={geologyRightX + geologyRightW - 10}
+                    y={y1 + Math.min(h - 6, 16)}
+                    textAnchor="end"
+                    fontSize="11"
+                    fill="rgba(15,23,42,0.95)"
+                  >
+                    {label}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+
+          {/* annulus intervals (outer edge of hole) */}
+          {normAnnulus.map((it, i) => {
+            const t = annulusById?.get?.(it.typeId);
+            const color = t?.color || "#64748b";
+            const label = t?.name || "Annulus";
+
+            const y1 = yForDepth(it.from);
+            const y2 = yForDepth(it.to);
+            const h = Math.max(0, y2 - y1);
+            if (h <= 0.5) return null;
+
+            return (
+              <g key={it.id || `a-${it.typeId}-${it.from}-${it.to}-${i}`}>
+                <rect x={holeX - annulusBandW + 2} y={y1} width={annulusBandW - 4} height={h} fill={color} fillOpacity="0.88">
+                  <title>
+                    {label} · {it.from.toFixed(1)}–{it.to.toFixed(1)}m{it.notes ? ` · ${it.notes}` : ""}
+                  </title>
+                </rect>
+                <rect x={holeX + holeW + 2} y={y1} width={annulusBandW - 4} height={h} fill={color} fillOpacity="0.88" />
+              </g>
+            );
+          })}
+
+          {/* construction intervals (middle of hole) */}
+          {normConstruction.map((it, i) => {
+            const t = constructionById?.get?.(it.typeId);
+            const color = t?.color || "#64748b";
+            const label = t?.name || "Construction";
+
+            const y1 = yForDepth(it.from);
+            const y2 = yForDepth(it.to);
+            const h = Math.max(0, y2 - y1);
+            if (h <= 0.5) return null;
+
+            return (
+              <g key={it.id || `c-${it.typeId}-${it.from}-${it.to}-${i}`}>
+                <rect x={holeX + 2} y={y1} width={holeW - 4} height={h} fill={color} fillOpacity="0.92" stroke="rgba(255,255,255,0.14)">
+                  <title>
+                    {label} · {it.from.toFixed(1)}–{it.to.toFixed(1)}m{it.notes ? ` · ${it.notes}` : ""}
+                  </title>
+                </rect>
+
+                {h >= 18 && (
+                  <text x={holeX + holeW / 2} y={y1 + Math.min(h - 6, 16)} textAnchor="middle" fontSize="11" fill="rgba(15,23,42,0.95)">
+                    {label}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </g>
+
+        {/* planned/actual markers */}
+        {hasPlanned && (
+          <g>
+            <line x1={geologyLeftX} y1={plannedY} x2={W - 20} y2={plannedY} stroke="rgba(99,102,241,0.7)" strokeWidth="1.5" />
+            <text x={W - 20} y={plannedY - 4} textAnchor="end" fontSize="10" fill="rgba(226,232,240,0.9)">
+              Planned {planned}m
+            </text>
+          </g>
+        )}
+        {hasActual && (
+          <g>
+            <line x1={geologyLeftX} y1={actualY} x2={W - 20} y2={actualY} stroke="rgba(16,185,129,0.7)" strokeWidth="1.5" />
+            <text x={W - 20} y={actualY - 4} textAnchor="end" fontSize="10" fill="rgba(226,232,240,0.9)">
+              Actual {actual}m
+            </text>
+          </g>
+        )}
+
+        {/* NEW: water level marker */}
+        {hasWater && (
+          <g>
+            <line
+              x1={geologyLeftX}
+              y1={waterY}
+              x2={W - 20}
+              y2={waterY}
+              stroke="rgba(59,130,246,0.85)"
+              strokeWidth="2"
+            />
+            <rect
+              x={holeX + 10}
+              y={waterY - 16}
+              width={holeW - 20}
+              height={22}
+              rx="8"
+              fill="rgba(255,255,255,0.92)"
+              stroke="rgba(15,23,42,0.15)"
+            />
+            <text
+              x={holeX + holeW / 2}
+              y={waterY - 1}
+              textAnchor="middle"
+              fontSize="11"
+              fill="rgba(15,23,42,0.95)"
+            >
+              Water level {water.toFixed(1)}m
+            </text>
+          </g>
+        )}
+      </svg>
+    </div>
+  );
+}

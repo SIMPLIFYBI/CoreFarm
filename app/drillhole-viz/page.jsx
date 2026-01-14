@@ -33,6 +33,10 @@ export default function DrillholeVizPage() {
   const [plannedDepthInput, setPlannedDepthInput] = useState("");
   const [savingPlannedDepth, setSavingPlannedDepth] = useState(false);
 
+  // NEW
+  const [waterLevelInput, setWaterLevelInput] = useState("");
+  const [savingWaterLevel, setSavingWaterLevel] = useState(false);
+
   // Types (existing)
   const [lithologyTypesAll, setLithologyTypesAll] = useState([]);
   const [typesLoading, setTypesLoading] = useState(false);
@@ -74,11 +78,13 @@ export default function DrillholeVizPage() {
   useEffect(() => {
     if (!selectedHole) {
       setPlannedDepthInput("");
+      setWaterLevelInput("");
       return;
     }
-    const v = selectedHole.planned_depth;
-    setPlannedDepthInput(v == null ? "" : String(v));
-  }, [selectedHole]);
+
+    setPlannedDepthInput(selectedHole.planned_depth ?? "");
+    setWaterLevelInput(selectedHole.water_level_m ?? "");
+  }, [selectedHole?.id, selectedHole?.planned_depth, selectedHole?.water_level_m]);
 
   // Group holes by project
   const projects = useMemo(() => {
@@ -1025,7 +1031,7 @@ export default function DrillholeVizPage() {
       setLoading(true);
       const { data, error } = await supabase
         .from("holes")
-        .select("id, hole_id, depth, planned_depth, state, project_id, projects(name)")
+        .select("id, organization_id, hole_id, project_id, depth, planned_depth, water_level_m, projects ( id, name )")
         .eq("organization_id", selectedOrgId)
         .order("project_id", { ascending: true })
         .order("hole_id", { ascending: true });
@@ -1038,7 +1044,17 @@ export default function DrillholeVizPage() {
         return;
       }
 
-      setHoles(data || []);
+      setHoles(
+        (data || []).map((h) => ({
+          id: h.id,
+          hole_id: h.hole_id,
+          project_id: h.project_id ?? null,
+          projects: h.projects ?? null, // <-- keep joined project info
+          depth: h.depth ?? null,
+          planned_depth: h.planned_depth ?? null,
+          water_level_m: h.water_level_m ?? null,
+        }))
+      );
       setLoading(false);
     })();
   }, [supabase, selectedOrgId]);
@@ -1085,6 +1101,41 @@ export default function DrillholeVizPage() {
       toast.error(e?.message || "Could not save planned depth");
     } finally {
       setSavingPlannedDepth(false);
+    }
+  };
+
+  // NEW
+  const saveWaterLevel = async () => {
+    if (!selectedOrgId || !selectedHoleId) return;
+
+    const raw = String(waterLevelInput ?? "").trim();
+    const value = raw === "" ? null : Number(raw);
+
+    if (value !== null && (!Number.isFinite(value) || value < 0)) {
+      toast.error("Water level must be a number ≥ 0 (or blank).");
+      return;
+    }
+
+    try {
+      setSavingWaterLevel(true);
+
+      const { error } = await supabase
+        .from("holes")
+        .update({ water_level_m: value })
+        .match({ id: selectedHoleId, organization_id: selectedOrgId });
+
+      if (error) throw error;
+
+      setHoles((prev) =>
+        (prev || []).map((h) => (h.id === selectedHoleId ? { ...h, water_level_m: value } : h))
+      );
+
+      toast.success("Water level saved");
+    } catch (e) {
+      console.error(e);
+      toast.error(e?.message || "Failed to save water level");
+    } finally {
+      setSavingWaterLevel(false);
     }
   };
 
@@ -1191,8 +1242,12 @@ export default function DrillholeVizPage() {
                   canEditHole={canEditHole}
                   plannedDepthInput={plannedDepthInput}
                   savingPlannedDepth={savingPlannedDepth}
-                  onPlannedDepthChange={(v) => setPlannedDepthInput(v)}
-                  onSavePlannedDepth={updatePlannedDepth}
+                  onPlannedDepthChange={setPlannedDepthInput}
+                  onSavePlannedDepth={updatePlannedDepth} // <-- FIX (was savePlannedDepth)
+                  waterLevelInput={waterLevelInput}
+                  savingWaterLevel={savingWaterLevel}
+                  onWaterLevelChange={setWaterLevelInput}
+                  onSaveWaterLevel={saveWaterLevel}
                 />
               ) : drawerTab === "geology" ? (
                 <GeologyIntervalsTab
