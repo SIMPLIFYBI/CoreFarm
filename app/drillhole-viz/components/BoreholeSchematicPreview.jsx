@@ -2,6 +2,7 @@
 
 import { useId, useMemo } from "react";
 import { computeMaxDepth } from "../utils/computeMaxDepth";
+import { DEPTH_PAD_TOP, DEPTH_PAD_BOTTOM, PX_PER_M, svgHeightForMaxDepth } from "../utils/depthScaleConfig";
 
 export default function BoreholeSchematicPreview({
   plannedDepth,
@@ -13,7 +14,6 @@ export default function BoreholeSchematicPreview({
   constructionIntervals,
   constructionById,
   waterLevel,
-  svgPxHeight = 620, // NEW
 }) {
   const uid = useId();
 
@@ -29,41 +29,12 @@ export default function BoreholeSchematicPreview({
     return computeMaxDepth({ plannedDepth, actualDepth, minDepth: 30, step: 10 });
   }, [plannedDepth, actualDepth]);
 
-  // Layout
-  const H = 620;
-  const W = 980;
-  const padTop = 30;
-  const padBottom = 40;
+  const W = 980; // fixed => never gets wider
+  const padTop = DEPTH_PAD_TOP;
+  const padBottom = DEPTH_PAD_BOTTOM;
+  const H = svgHeightForMaxDepth(maxDepth);
 
-  // Center / hole geometry
-  const holeX = 420;
-  const holeW = 120;
-  const annulusBandW = 34;
-
-  // NEW: symmetric outer panel layout (prevents overlap with annulus)
-  const outerMarginX = 20;      // margin from SVG edge
-  const gapToAnnulus = 18;      // clear gap between geology panels and annulus bands
-  const targetGeologyW = 380;   // desired panel width (will clamp if space is smaller)
-
-  const leftPanelEndX = holeX - annulusBandW - gapToAnnulus;
-  const rightPanelStartX = holeX + holeW + annulusBandW + gapToAnnulus;
-
-  const maxLeftW = Math.max(0, leftPanelEndX - outerMarginX);
-  const maxRightW = Math.max(0, W - outerMarginX - rightPanelStartX);
-
-  const geologyPanelW = Math.min(targetGeologyW, maxLeftW, maxRightW);
-
-  const geologyLeftX = leftPanelEndX - geologyPanelW;
-  const geologyLeftW = geologyPanelW;
-
-  const geologyRightX = rightPanelStartX;
-  const geologyRightW = geologyPanelW;
-
-  const yForDepth = (d) => {
-    const clamped = Math.max(0, Math.min(maxDepth, d));
-    const t = clamped / maxDepth;
-    return padTop + t * (H - padTop - padBottom);
-  };
+  const yForDepth = (d) => padTop + Math.max(0, Math.min(maxDepth, d)) * PX_PER_M;
 
   const plannedY = hasPlanned ? yForDepth(planned) : null;
   const actualY = hasActual ? yForDepth(actual) : null;
@@ -110,9 +81,28 @@ export default function BoreholeSchematicPreview({
       .sort((a, b) => a.from - b.from);
   }, [constructionIntervals]);
 
+  // Layout (keep your current symmetric panel math; just ensure it uses W)
+  const holeX = 420;
+  const holeW = 120;
+  const annulusBandW = 34;
+
+  const leftPanelEndX = holeX - annulusBandW - 18;
+  const rightPanelStartX = holeX + holeW + annulusBandW + 18;
+
+  const maxLeftW = Math.max(0, leftPanelEndX - 20);
+  const maxRightW = Math.max(0, W - 20 - rightPanelStartX);
+
+  const geologyPanelW = Math.min(380, maxLeftW, maxRightW);
+
+  const geologyLeftX = leftPanelEndX - geologyPanelW;
+  const geologyLeftW = geologyPanelW;
+
+  const geologyRightX = rightPanelStartX;
+  const geologyRightW = geologyPanelW;
+
   return (
-    <div style={{ height: `${svgPxHeight}px` }} className="w-full">
-      <svg className="block h-full w-full" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMinYMin meet">
+    <div className="shrink-0">
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMinYMin meet" className="block">
         <defs>
           <clipPath id={clipId}>
             <rect x="0" y={padTop} width={W} height={H - padTop - padBottom} />
@@ -253,7 +243,7 @@ export default function BoreholeSchematicPreview({
         {/* markers across the whole schematic */}
         {hasWater && (
           <g>
-            <line x1={geologyLeftX} y1={waterY} x2={W - 20} y2={waterY} stroke="rgba(59,130,246,0.75)" strokeWidth="2" />
+            <line x1={20} y1={waterY} x2={W - 20} y2={waterY} stroke="rgba(59,130,246,0.75)" strokeWidth="2" />
             <rect x={holeX + 10} y={waterY - 16} width={holeW - 20} height={22} rx="8" fill="rgba(255,255,255,0.92)" stroke="rgba(15,23,42,0.15)" />
             <text x={holeX + holeW / 2} y={waterY - 1} textAnchor="middle" fontSize="11" fill="rgba(15,23,42,0.95)">
               Water level {water.toFixed(1)}m
@@ -263,7 +253,7 @@ export default function BoreholeSchematicPreview({
 
         {hasActual && (
           <g>
-            <line x1={geologyLeftX} y1={actualY} x2={W - 20} y2={actualY} stroke="rgba(16,185,129,0.65)" strokeWidth="1.5" />
+            <line x1={20} y1={actualY} x2={W - 20} y2={actualY} stroke="rgba(16,185,129,0.65)" strokeWidth="1.5" />
             <text x={W - 20} y={actualY - 4} textAnchor="end" fontSize="10" fill="rgba(226,232,240,0.9)">
               Actual {actual}m
             </text>
@@ -272,7 +262,7 @@ export default function BoreholeSchematicPreview({
 
         {hasPlanned && (
           <g>
-            <line x1={geologyLeftX} y1={plannedY} x2={W - 20} y2={plannedY} stroke="rgba(99,102,241,0.65)" strokeWidth="1.5" />
+            <line x1={20} y1={plannedY} x2={W - 20} y2={plannedY} stroke="rgba(99,102,241,0.65)" strokeWidth="1.5" />
             <text x={W - 20} y={plannedY - 4} textAnchor="end" fontSize="10" fill="rgba(226,232,240,0.9)">
               Planned {planned}m
             </text>

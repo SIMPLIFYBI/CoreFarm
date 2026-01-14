@@ -52,15 +52,15 @@ export default function SchematicArea({
                 </div>
 
                 {/* EXPORT ROOT (axis + schematic) */}
-                <div id="schematic-export-root" className="flex gap-3 items-start">
-                  <DepthAxisBar
-                    plannedDepth={selectedHole.planned_depth}
-                    actualDepth={selectedHole.depth}
-                    waterLevel={selectedHole.water_level_m}
-                    svgPxHeight={svgPxHeight}
-                  />
+                <div className="overflow-x-auto">
+                  <div id="schematic-export-root" className="inline-flex gap-3 items-start">
+                    <DepthAxisBar
+                      plannedDepth={selectedHole.planned_depth}
+                      actualDepth={selectedHole.depth}
+                      waterLevel={selectedHole.water_level_m}
+                      svgPxHeight={svgPxHeight}
+                    />
 
-                  <div className="min-w-0 flex-1">
                     <BoreholeSchematicPreview
                       plannedDepth={selectedHole.planned_depth}
                       actualDepth={selectedHole.depth}

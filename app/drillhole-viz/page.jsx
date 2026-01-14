@@ -146,6 +146,18 @@ export default function DrillholeVizPage() {
     return Math.round(n * 10) / 10;
   };
 
+  // NEW: default "From" value for the next interval in a category
+  const nextIntervalFromM = (rows) => {
+    const tos = (rows || [])
+      .map((r) => Number(r?.to_m))
+      .filter((n) => Number.isFinite(n) && n >= 0);
+
+    if (!tos.length) return 0;
+
+    // Continue from the deepest completed "to_m"
+    return Math.max(...tos);
+  };
+
   // Existing (geology)
   const validateAndNormalizeIntervals = (rows) => {
     const cleaned = (rows || [])
@@ -763,7 +775,13 @@ export default function DrillholeVizPage() {
   const addGeoRow = () => {
     setGeoRows((prev) => [
       ...(prev || []),
-      { id: null, from_m: "", to_m: "", lithology_type_id: lithologyTypesActive?.[0]?.id || "", notes: "" },
+      {
+        id: null,
+        from_m: nextIntervalFromM(prev), // CHANGED: default start depth
+        to_m: "",
+        lithology_type_id: lithologyTypesActive?.[0]?.id || "",
+        notes: "",
+      },
     ]);
   };
 
@@ -789,7 +807,7 @@ export default function DrillholeVizPage() {
       ...(prev || []),
       {
         id: null,
-        from_m: "",
+        from_m: nextIntervalFromM(prev), // CHANGED: default start depth
         to_m: "",
         construction_type_id: constructionTypesActive?.[0]?.id || "",
         notes: "",
@@ -817,7 +835,13 @@ export default function DrillholeVizPage() {
   const addAnnulusRow = () => {
     setAnnulusRows((prev) => [
       ...(prev || []),
-      { id: null, from_m: "", to_m: "", annulus_type_id: annulusTypesActive?.[0]?.id || "", notes: "" },
+      {
+        id: null,
+        from_m: nextIntervalFromM(prev), // CHANGED: default start depth
+        to_m: "",
+        annulus_type_id: annulusTypesActive?.[0]?.id || "",
+        notes: "",
+      },
     ]);
   };
 
