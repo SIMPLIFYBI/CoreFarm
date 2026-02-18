@@ -1,252 +1,543 @@
--- Initial schema for CoreFarm
--- Users are managed by Supabase Auth (auth.users)
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
 
--- Extensions
-create extension if not exists pgcrypto; -- for gen_random_uuid()
-create extension if not exists btree_gist;
-
--- Multi-tenant organizations
-create table if not exists public.organizations (
-  id uuid primary key default gen_random_uuid(),
-  name text not null,
-  owner_id uuid references auth.users(id) on delete set null,
-  created_at timestamptz default now()
+CREATE TABLE public.activity (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  hole_id uuid,
+  task_id uuid,
+  action text NOT NULL,
+  details jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT activity_pkey PRIMARY KEY (id),
+  CONSTRAINT activity_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT activity_hole_id_fkey FOREIGN KEY (hole_id) REFERENCES public.holes(id),
+  CONSTRAINT activity_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.tasks(id)
 );
-
-create table if not exists public.organization_members (
-  organization_id uuid not null references public.organizations(id) on delete cascade,
-  user_id uuid not null references auth.users(id) on delete cascade,
-  role text not null check (role in ('admin','member')) default 'member',
-  added_by uuid references auth.users(id) on delete set null,
-  created_at timestamptz default now(),
-  primary key (organization_id, user_id)
+CREATE TABLE public.app_admins (
+  user_id uuid NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid,
+  CONSTRAINT app_admins_pkey PRIMARY KEY (user_id),
+  CONSTRAINT app_admins_user_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT app_admins_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
-
-create table if not exists public.organization_invites (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations(id) on delete cascade,
-  email text not null,
-  role text not null check (role in ('admin','member')) default 'member',
-  invited_by uuid references auth.users(id) on delete set null,
-  status text not null check (status in ('pending','accepted','revoked')) default 'pending',
-  created_at timestamptz default now()
+CREATE TABLE public.asset_history (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  asset_id uuid NOT NULL,
+  organization_id uuid NOT NULL,
+  changed_by uuid,
+  change_type text NOT NULL,
+  change_details jsonb,
+  changed_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT asset_history_pkey PRIMARY KEY (id),
+  CONSTRAINT asset_history_asset_id_fkey FOREIGN KEY (asset_id) REFERENCES public.assets(id),
+  CONSTRAINT asset_history_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT asset_history_changed_by_fkey FOREIGN KEY (changed_by) REFERENCES auth.users(id)
 );
-
--- Only one pending invite per org+email (case-insensitive)
-create unique index if not exists uniq_pending_invite_org_email
-on public.organization_invites (organization_id, (lower(email)))
-where status = 'pending';
-
--- When a membership is created, auto-mark any pending invite for that user+org as accepted
-create or replace function public.on_membership_created()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  member_email text;
-begin
-  select u.email into member_email from auth.users u where u.id = new.user_id;
-  if member_email is not null then
-    update public.organization_invites
-    set status = 'accepted'
-    where organization_id = new.organization_id
-      and lower(email) = lower(member_email)
-      and status = 'pending';
-  end if;
-  return new;
-end;
-$$;
-
--- Progress with user email for a hole, gated by org access
-drop function if exists public.get_hole_progress_with_email(uuid);
-create or replace function public.get_hole_progress_with_email(p_hole_id uuid)
-returns table(id uuid, task_type text, from_m numeric, to_m numeric, user_id uuid, email text, name text, created_at timestamptz)
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select p.id, p.task_type, p.from_m, p.to_m, p.user_id, u.email,
-         coalesce(u.raw_user_meta_data->>'name', u.email) as name,
-         p.created_at
-  from public.hole_task_progress p
-  join auth.users u on u.id = p.user_id
-  where p.hole_id = p_hole_id
-    and exists (
-      select 1 from public.holes h
-      where h.id = p_hole_id and (
-        (h.organization_id is not null and public.is_current_org_member(h.organization_id))
-        or (h.organization_id is null and h.created_by = auth.uid())
-      )
-    );
-$$;
-
-drop trigger if exists trg_on_membership_created on public.organization_members;
-create trigger trg_on_membership_created
-after insert on public.organization_members
-for each row execute function public.on_membership_created();
-
--- Secure helper: list members with email for an organization
-drop function if exists public.get_org_members_with_email(uuid);
-create or replace function public.get_org_members_with_email(org uuid)
-returns table(user_id uuid, email text, name text, role text, created_at timestamptz)
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select m.user_id, u.email,
-         coalesce(u.raw_user_meta_data->>'name', u.email) as name,
-         m.role, m.created_at
-  from public.organization_members m
-  join auth.users u on u.id = m.user_id
-  where m.organization_id = org
-    and public.is_current_org_member(org);
-$$;
-
--- Helper to read current user's email from JWT claims
-create or replace function public.current_user_email()
-returns text
-language sql
-stable
-as $$
-  select nullif(current_setting('request.jwt.claims', true), '')::json->>'email';
-$$;
-
--- Helper functions to avoid policy recursion
-create or replace function public.is_current_org_member(org_id uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select exists (
-    select 1 from public.organization_members m
-    where m.organization_id = org_id and m.user_id = auth.uid()
-  );
-$$;
-
-create or replace function public.is_current_org_admin(org_id uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select exists (
-    select 1 from public.organization_members m
-    where m.organization_id = org_id and m.user_id = auth.uid() and m.role = 'admin'
-  );
-$$;
-
--- Auto-add org owner as admin member
-create or replace function public.on_org_created()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  insert into public.organization_members(organization_id, user_id, role, added_by)
-  values (new.id, new.owner_id, 'admin', new.owner_id)
-  on conflict do nothing;
-  return new;
-end;
-$$;
-
-drop trigger if exists trg_on_org_created on public.organizations;
-create trigger trg_on_org_created
-after insert on public.organizations
-for each row execute function public.on_org_created();
-
--- Ensure owner_id is nullable in existing DBs (idempotent)
-do $$ begin
-  begin
-    alter table public.organizations alter column owner_id drop not null;
-  exception when undefined_column then
-    -- column missing or other issue; swallow so migration stays idempotent
-    perform 1;
-  end;
-end $$;
-
--- ============================================================
--- Projects (per-organization) managed by org members
--- ============================================================
-create table if not exists public.projects (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations(id) on delete cascade,
-  name text not null,
+CREATE TABLE public.asset_locations (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  name text NOT NULL,
+  description text,
+  created_by uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT asset_locations_pkey PRIMARY KEY (id),
+  CONSTRAINT asset_locations_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT asset_locations_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
+);
+CREATE TABLE public.asset_types (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL UNIQUE,
+  description text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT asset_types_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.assets (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  name text NOT NULL,
+  asset_type text NOT NULL,
+  value numeric,
+  location_id uuid,
+  next_service_date date,
+  service_interval_months integer,
+  status text,
+  updated_by uuid,
+  updated_at timestamp with time zone DEFAULT now(),
+  asset_type_id uuid,
+  CONSTRAINT assets_pkey PRIMARY KEY (id),
+  CONSTRAINT assets_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT assets_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.asset_locations(id),
+  CONSTRAINT assets_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES auth.users(id),
+  CONSTRAINT assets_asset_type_id_fkey FOREIGN KEY (asset_type_id) REFERENCES public.asset_types(id)
+);
+CREATE TABLE public.consumable_items (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  key text NOT NULL,
+  label text NOT NULL,
+  count integer NOT NULL DEFAULT 0 CHECK (count >= 0),
+  updated_at timestamp with time zone DEFAULT now(),
+  include_in_report boolean NOT NULL DEFAULT false,
+  reorder_value integer NOT NULL DEFAULT 0 CHECK (reorder_value >= 0),
+  cost_per_unit numeric NOT NULL DEFAULT 0 CHECK (cost_per_unit >= 0::numeric),
+  unit_size integer NOT NULL DEFAULT 1 CHECK (unit_size > 0),
+  CONSTRAINT consumable_items_pkey PRIMARY KEY (id),
+  CONSTRAINT consumable_items_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id)
+);
+CREATE TABLE public.contract_activity_types (
+  contract_id uuid NOT NULL,
+  activity_type_id uuid NOT NULL,
+  billable_override boolean,
+  rate_override numeric CHECK (rate_override IS NULL OR rate_override >= 0::numeric),
+  rate_period_override text CHECK (rate_period_override IS NULL OR (rate_period_override = ANY (ARRAY['hourly'::text, 'daily'::text, 'weekly'::text, 'monthly'::text]))),
+  is_enabled boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT contract_activity_types_pkey PRIMARY KEY (contract_id, activity_type_id),
+  CONSTRAINT contract_activity_types_contract_fkey FOREIGN KEY (contract_id) REFERENCES public.contracts(id),
+  CONSTRAINT contract_activity_types_activity_fkey FOREIGN KEY (activity_type_id) REFERENCES public.plod_activity_types(id)
+);
+CREATE TABLE public.contract_resources (
+  contract_id uuid NOT NULL,
+  resource_id uuid NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid DEFAULT auth.uid(),
+  CONSTRAINT contract_resources_pkey PRIMARY KEY (contract_id, resource_id),
+  CONSTRAINT contract_resources_resource_id_fkey FOREIGN KEY (resource_id) REFERENCES public.resources(id),
+  CONSTRAINT contract_resources_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id),
+  CONSTRAINT contract_resources_contract_id_fkey FOREIGN KEY (contract_id) REFERENCES public.contracts(id)
+);
+CREATE TABLE public.contracts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  client_organization_id uuid NOT NULL,
+  vendor_organization_id uuid NOT NULL,
+  name text NOT NULL,
+  contract_number text,
+  status text NOT NULL DEFAULT 'draft'::text CHECK (status = ANY (ARRAY['draft'::text, 'active'::text, 'paused'::text, 'closed'::text, 'cancelled'::text])),
+  starts_on date,
+  ends_on date,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT contracts_pkey PRIMARY KEY (id),
+  CONSTRAINT contracts_client_organization_id_fkey FOREIGN KEY (client_organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT contracts_vendor_organization_id_fkey FOREIGN KEY (vendor_organization_id) REFERENCES public.organizations(id)
+);
+CREATE TABLE public.drillhole_annulus_intervals (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  hole_id uuid NOT NULL,
+  annulus_type_id uuid NOT NULL,
+  from_m numeric NOT NULL,
+  to_m numeric NOT NULL,
+  notes text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid,
+  depth_range numrange DEFAULT numrange(from_m, to_m, '[)'::text),
+  CONSTRAINT drillhole_annulus_intervals_pkey PRIMARY KEY (id),
+  CONSTRAINT drillhole_annulus_intervals_annulus_type_id_fkey FOREIGN KEY (annulus_type_id) REFERENCES public.drillhole_annulus_types(id),
+  CONSTRAINT drillhole_annulus_intervals_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id),
+  CONSTRAINT drillhole_annulus_intervals_hole_fk FOREIGN KEY (organization_id) REFERENCES public.holes(id),
+  CONSTRAINT drillhole_annulus_intervals_hole_fk FOREIGN KEY (hole_id) REFERENCES public.holes(id),
+  CONSTRAINT drillhole_annulus_intervals_hole_fk FOREIGN KEY (organization_id) REFERENCES public.holes(organization_id),
+  CONSTRAINT drillhole_annulus_intervals_hole_fk FOREIGN KEY (hole_id) REFERENCES public.holes(organization_id)
+);
+CREATE TABLE public.drillhole_annulus_types (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  name text NOT NULL,
+  color text NOT NULL,
+  sort_order integer NOT NULL DEFAULT 0,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid,
+  CONSTRAINT drillhole_annulus_types_pkey PRIMARY KEY (id),
+  CONSTRAINT drillhole_annulus_types_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT drillhole_annulus_types_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
+);
+CREATE TABLE public.drillhole_construction_intervals (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  hole_id uuid NOT NULL,
+  construction_type_id uuid NOT NULL,
+  from_m numeric NOT NULL,
+  to_m numeric NOT NULL,
+  notes text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid,
+  depth_range numrange DEFAULT numrange(from_m, to_m, '[)'::text),
+  CONSTRAINT drillhole_construction_intervals_pkey PRIMARY KEY (id),
+  CONSTRAINT drillhole_construction_intervals_construction_type_id_fkey FOREIGN KEY (construction_type_id) REFERENCES public.drillhole_construction_types(id),
+  CONSTRAINT drillhole_construction_intervals_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id),
+  CONSTRAINT drillhole_construction_intervals_hole_fk FOREIGN KEY (organization_id) REFERENCES public.holes(id),
+  CONSTRAINT drillhole_construction_intervals_hole_fk FOREIGN KEY (hole_id) REFERENCES public.holes(id),
+  CONSTRAINT drillhole_construction_intervals_hole_fk FOREIGN KEY (organization_id) REFERENCES public.holes(organization_id),
+  CONSTRAINT drillhole_construction_intervals_hole_fk FOREIGN KEY (hole_id) REFERENCES public.holes(organization_id)
+);
+CREATE TABLE public.drillhole_construction_types (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  name text NOT NULL,
+  color text NOT NULL,
+  sort_order integer NOT NULL DEFAULT 0,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid,
+  CONSTRAINT drillhole_construction_types_pkey PRIMARY KEY (id),
+  CONSTRAINT drillhole_construction_types_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT drillhole_construction_types_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
+);
+CREATE TABLE public.drillhole_geology_intervals (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  hole_id uuid NOT NULL,
+  lithology_type_id uuid NOT NULL,
+  from_m numeric NOT NULL,
+  to_m numeric NOT NULL,
+  notes text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid,
+  depth_range numrange DEFAULT numrange(from_m, to_m, '[)'::text),
+  CONSTRAINT drillhole_geology_intervals_pkey PRIMARY KEY (id),
+  CONSTRAINT drillhole_geology_intervals_lithology_type_id_fkey FOREIGN KEY (lithology_type_id) REFERENCES public.drillhole_lithology_types(id),
+  CONSTRAINT drillhole_geology_intervals_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id),
+  CONSTRAINT drillhole_geology_intervals_hole_fk FOREIGN KEY (organization_id) REFERENCES public.holes(id),
+  CONSTRAINT drillhole_geology_intervals_hole_fk FOREIGN KEY (hole_id) REFERENCES public.holes(id),
+  CONSTRAINT drillhole_geology_intervals_hole_fk FOREIGN KEY (organization_id) REFERENCES public.holes(organization_id),
+  CONSTRAINT drillhole_geology_intervals_hole_fk FOREIGN KEY (hole_id) REFERENCES public.holes(organization_id)
+);
+CREATE TABLE public.drillhole_lithology_types (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  name text NOT NULL,
+  color text NOT NULL,
+  sort_order integer NOT NULL DEFAULT 0,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid,
+  CONSTRAINT drillhole_lithology_types_pkey PRIMARY KEY (id),
+  CONSTRAINT drillhole_lithology_types_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT drillhole_lithology_types_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
+);
+CREATE TABLE public.drillhole_sensor_types (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  name text NOT NULL,
+  color text,
+  icon text,
+  sort_order integer NOT NULL DEFAULT 0,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid,
+  CONSTRAINT drillhole_sensor_types_pkey PRIMARY KEY (id),
+  CONSTRAINT drillhole_sensor_types_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT drillhole_sensor_types_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
+);
+CREATE TABLE public.drillhole_sensors (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  hole_id uuid NOT NULL,
+  sensor_type_id uuid NOT NULL,
+  depth_m numeric NOT NULL CHECK (depth_m >= 0::numeric),
+  label text,
+  notes text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid,
+  CONSTRAINT drillhole_sensors_pkey PRIMARY KEY (id),
+  CONSTRAINT drillhole_sensors_sensor_type_id_fkey FOREIGN KEY (sensor_type_id) REFERENCES public.drillhole_sensor_types(id),
+  CONSTRAINT drillhole_sensors_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id),
+  CONSTRAINT drillhole_sensors_hole_fk FOREIGN KEY (organization_id) REFERENCES public.holes(id),
+  CONSTRAINT drillhole_sensors_hole_fk FOREIGN KEY (hole_id) REFERENCES public.holes(id),
+  CONSTRAINT drillhole_sensors_hole_fk FOREIGN KEY (organization_id) REFERENCES public.holes(organization_id),
+  CONSTRAINT drillhole_sensors_hole_fk FOREIGN KEY (hole_id) REFERENCES public.holes(organization_id)
+);
+CREATE TABLE public.hole_task_intervals (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  hole_id uuid NOT NULL,
+  task_type text NOT NULL CHECK (task_type = ANY (ARRAY['orientation'::text, 'magnetic_susceptibility'::text, 'whole_core_sampling'::text, 'cutting'::text, 'rqd'::text, 'specific_gravity'::text])),
+  from_m numeric NOT NULL,
+  to_m numeric NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT hole_task_intervals_pkey PRIMARY KEY (id),
+  CONSTRAINT hole_task_intervals_hole_id_fkey FOREIGN KEY (hole_id) REFERENCES public.holes(id)
+);
+CREATE TABLE public.hole_task_progress (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  hole_id uuid NOT NULL,
+  task_type text NOT NULL CHECK (task_type = ANY (ARRAY['orientation'::text, 'magnetic_susceptibility'::text, 'whole_core_sampling'::text, 'cutting'::text, 'rqd'::text, 'specific_gravity'::text])),
+  from_m numeric NOT NULL,
+  to_m numeric NOT NULL,
+  user_id uuid NOT NULL DEFAULT auth.uid(),
+  created_at timestamp with time zone DEFAULT now(),
+  interval numrange DEFAULT numrange(from_m, to_m, '[)'::text),
+  logged_on date DEFAULT CURRENT_DATE,
+  CONSTRAINT hole_task_progress_pkey PRIMARY KEY (id),
+  CONSTRAINT hole_task_progress_hole_id_fkey FOREIGN KEY (hole_id) REFERENCES public.holes(id),
+  CONSTRAINT hole_task_progress_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.holes (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  hole_id text NOT NULL,
+  depth numeric,
+  drilling_diameter text CHECK (drilling_diameter IS NULL OR (drilling_diameter = ANY (ARRAY['NQ'::text, 'HQ'::text, 'PQ'::text, 'Other'::text]))) NOT VALI),
+  drilling_contractor text,
+  created_at timestamp with time zone DEFAULT now(),
+  created_by uuid NOT NULL DEFAULT auth.uid(),
+  organization_id uuid,
+  project_id uuid,
+  tenement_id uuid,
+  planned_depth numeric CHECK (planned_depth IS NULL OR planned_depth >= 0::numeric),
+  state text NOT NULL DEFAULT 'proposed'::text CHECK (state = ANY (ARRAY['proposed'::text, 'in_progress'::text, 'drilled'::text])),
+  CONSTRAINT holes_pkey PRIMARY KEY (id),
+  CONSTRAINT holes_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id),
+  CONSTRAINT holes_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT holes_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id),
+  CONSTRAINT holes_tenement_id_fkey FOREIGN KEY (tenement_id) REFERENCES public.tenements(id)
+);
+CREATE TABLE public.organization_invites (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  email text NOT NULL,
+  role text NOT NULL DEFAULT 'member'::text CHECK (role = ANY (ARRAY['admin'::text, 'member'::text])),
+  invited_by uuid,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'accepted'::text, 'revoked'::text])),
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT organization_invites_pkey PRIMARY KEY (id),
+  CONSTRAINT organization_invites_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT organization_invites_invited_by_fkey FOREIGN KEY (invited_by) REFERENCES auth.users(id)
+);
+CREATE TABLE public.organization_members (
+  organization_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  role text NOT NULL DEFAULT 'member'::text CHECK (role = ANY (ARRAY['admin'::text, 'member'::text])),
+  added_by uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT organization_members_pkey PRIMARY KEY (organization_id, user_id),
+  CONSTRAINT organization_members_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT organization_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT organization_members_added_by_fkey FOREIGN KEY (added_by) REFERENCES auth.users(id)
+);
+CREATE TABLE public.organization_relationships (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  client_organization_id uuid NOT NULL,
+  vendor_organization_id uuid NOT NULL,
+  status USER-DEFINED NOT NULL DEFAULT 'pending'::org_relationship_status,
+  permissions jsonb NOT NULL DEFAULT jsonb_build_object('share_project_details', false, 'share_plods', false, 'share_rates', false, 'allow_invoicing', false),
+  invited_by uuid DEFAULT auth.uid(),
+  invited_at timestamp with time zone NOT NULL DEFAULT now(),
+  accepted_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT organization_relationships_pkey PRIMARY KEY (id),
+  CONSTRAINT organization_relationships_vendor_fkey FOREIGN KEY (vendor_organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT organization_relationships_invited_by_fkey FOREIGN KEY (invited_by) REFERENCES auth.users(id),
+  CONSTRAINT organization_relationships_client_fkey FOREIGN KEY (client_organization_id) REFERENCES public.organizations(id)
+);
+CREATE TABLE public.organization_subscriptions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  plan_id uuid NOT NULL,
+  status text NOT NULL DEFAULT 'active'::text CHECK (status = ANY (ARRAY['draft'::text, 'active'::text, 'expired'::text, 'cancelled'::text])),
+  starts_at timestamp with time zone NOT NULL DEFAULT now(),
+  ends_at timestamp with time zone,
+  term_months integer CHECK (term_months IS NULL OR term_months > 0),
+  po_number text,
+  notes text,
+  created_by uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT organization_subscriptions_pkey PRIMARY KEY (id),
+  CONSTRAINT organization_subscriptions_org_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT organization_subscriptions_plan_fkey FOREIGN KEY (plan_id) REFERENCES public.subscription_plans(id),
+  CONSTRAINT organization_subscriptions_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
+);
+CREATE TABLE public.organizations (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  owner_id uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  organization_type text NOT NULL DEFAULT 'client'::text CHECK (organization_type = ANY (ARRAY['client'::text, 'vendor'::text, 'both'::text])),
+  CONSTRAINT organizations_pkey PRIMARY KEY (id),
+  CONSTRAINT organizations_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.plod_activities (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  plod_id uuid NOT NULL,
+  activity_type_id uuid NOT NULL,
+  hole_id uuid,
+  started_at timestamp with time zone NOT NULL,
+  finished_at timestamp with time zone NOT NULL,
+  notes text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT plod_activities_pkey PRIMARY KEY (id),
+  CONSTRAINT plod_activities_plod_id_fkey FOREIGN KEY (plod_id) REFERENCES public.plods(id),
+  CONSTRAINT plod_activities_activity_type_id_fkey FOREIGN KEY (activity_type_id) REFERENCES public.plod_activity_types(id),
+  CONSTRAINT plod_activities_hole_id_fkey FOREIGN KEY (hole_id) REFERENCES public.holes(id)
+);
+CREATE TABLE public.plod_activity_types (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  activity_type text NOT NULL,
+  description text,
+  created_by uuid DEFAULT auth.uid(),
+  created_at timestamp with time zone DEFAULT now(),
+  group text,
+  label text,
+  plod_type_scope ARRAY DEFAULT ARRAY['all'::text] CHECK (plod_type_scope <@ ARRAY['all'::text, 'drill_blast'::text, 'drilling_geology'::text, 'load_haul'::text, 'general_works'::text]),
+  billable boolean NOT NULL DEFAULT false,
+  rate numeric,
+  rate_period text CHECK (rate_period IS NULL OR (rate_period = ANY (ARRAY['hourly'::text, 'daily'::text, 'weekly'::text, 'monthly'::text]))),
+  CONSTRAINT plod_activity_types_pkey PRIMARY KEY (id),
+  CONSTRAINT plod_activity_types_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT plod_activity_types_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
+);
+CREATE TABLE public.plod_type_activity_types (
+  plod_type_id uuid NOT NULL,
+  activity_type_id uuid NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT plod_type_activity_types_pkey PRIMARY KEY (plod_type_id, activity_type_id),
+  CONSTRAINT plod_type_activity_types_plod_type_id_fkey FOREIGN KEY (plod_type_id) REFERENCES public.plod_types(id),
+  CONSTRAINT plod_type_activity_types_activity_type_id_fkey FOREIGN KEY (activity_type_id) REFERENCES public.plod_activity_types(id)
+);
+CREATE TABLE public.plod_types (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  code text,
+  name text NOT NULL,
+  description text,
+  is_active boolean NOT NULL DEFAULT true,
+  sort_order integer NOT NULL DEFAULT 0,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT plod_types_pkey PRIMARY KEY (id),
+  CONSTRAINT plod_types_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id)
+);
+CREATE TABLE public.plods (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  vendor_id uuid,
+  hole_id uuid,
+  started_at timestamp with time zone NOT NULL,
+  finished_at timestamp with time zone NOT NULL,
+  notes text,
+  created_by uuid NOT NULL DEFAULT auth.uid(),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  plod_type text,
+  contract_id uuid,
+  client_organization_id uuid,
+  vendor_organization_id uuid,
+  resource_id uuid,
+  plod_type_id uuid,
+  shift_date date,
+  CONSTRAINT plods_pkey PRIMARY KEY (id),
+  CONSTRAINT plods_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT plods_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.vendors(id),
+  CONSTRAINT plods_hole_id_fkey FOREIGN KEY (hole_id) REFERENCES public.holes(id),
+  CONSTRAINT plods_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id),
+  CONSTRAINT plods_contract_id_fkey FOREIGN KEY (contract_id) REFERENCES public.contracts(id),
+  CONSTRAINT plods_client_organization_id_fkey FOREIGN KEY (client_organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT plods_vendor_organization_id_fkey FOREIGN KEY (vendor_organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT plods_resource_id_fkey FOREIGN KEY (resource_id) REFERENCES public.resources(id),
+  CONSTRAINT plods_plod_type_id_fkey FOREIGN KEY (plod_type_id) REFERENCES public.plod_types(id)
+);
+CREATE TABLE public.projects (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  name text NOT NULL,
   start_date date,
   finish_date date,
   cost_code text,
   wbs_code text,
-  created_by uuid not null default auth.uid() references auth.users(id) on delete set null,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
+  created_by uuid NOT NULL DEFAULT auth.uid(),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT projects_pkey PRIMARY KEY (id),
+  CONSTRAINT projects_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT projects_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
-
--- Avoid duplicate project names within the same organization
-create unique index if not exists uniq_projects_org_name on public.projects(organization_id, lower(name));
-create index if not exists idx_projects_org on public.projects(organization_id);
-
-alter table public.projects enable row level security;
-
-drop policy if exists "read projects (org)" on public.projects;
-drop policy if exists "write projects (org)" on public.projects;
-create policy "read projects (org)" on public.projects for select using (
-  public.is_current_org_member(organization_id)
+CREATE TABLE public.purchase_order_items (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  po_id uuid,
+  item_key text NOT NULL,
+  label text NOT NULL,
+  quantity integer NOT NULL CHECK (quantity > 0),
+  status text NOT NULL DEFAULT 'outstanding'::text CHECK (status = ANY (ARRAY['outstanding'::text, 'ordered'::text, 'received'::text])),
+  created_at timestamp with time zone DEFAULT now(),
+  order_number text,
+  CONSTRAINT purchase_order_items_pkey PRIMARY KEY (id),
+  CONSTRAINT purchase_order_items_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT purchase_order_items_po_id_fkey FOREIGN KEY (po_id) REFERENCES public.purchase_orders(id)
 );
-create policy "write projects (org)" on public.projects for all using (
-  public.is_current_org_member(organization_id)
-) with check (
-  public.is_current_org_member(organization_id)
+CREATE TABLE public.purchase_orders (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  po_number text,
+  status text NOT NULL DEFAULT 'not_ordered'::text CHECK (status = ANY (ARRAY['not_ordered'::text, 'ordered'::text, 'received'::text])),
+  ordered_date date,
+  received_date date,
+  comments text,
+  created_at timestamp with time zone DEFAULT now(),
+  name text,
+  CONSTRAINT purchase_orders_pkey PRIMARY KEY (id),
+  CONSTRAINT purchase_orders_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id)
 );
-
--- Touch updated_at on change
-create or replace function public.touch_projects_updated_at()
-returns trigger language plpgsql security definer set search_path = public as $$
-begin
-  new.updated_at := now();
-  return new;
-end; $$;
-
-drop trigger if exists trg_touch_projects on public.projects;
-create trigger trg_touch_projects
-before update on public.projects
-for each row execute function public.touch_projects_updated_at();
-
--- Holes (base table first to avoid ordering issues for subsequent ALTERs)
-create table if not exists public.holes (
-  id uuid primary key default gen_random_uuid(),
-  hole_id text not null,
-  depth numeric,
-  drilling_diameter text,
-  drilling_contractor text,
-  created_at timestamptz default now(),
-  created_by uuid not null default auth.uid() references auth.users(id)
+CREATE TABLE public.resource_assignments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  resource_id uuid NOT NULL,
+  title text,
+  details text,
+  start_date date NOT NULL,
+  end_date date NOT NULL,
+  created_by uuid NOT NULL DEFAULT auth.uid(),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  interval daterange DEFAULT daterange(start_date, end_date, '[)'::text),
+  CONSTRAINT resource_assignments_pkey PRIMARY KEY (id),
+  CONSTRAINT resource_assignments_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT resource_assignments_resource_id_fkey FOREIGN KEY (resource_id) REFERENCES public.resources(id),
+  CONSTRAINT resource_assignments_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
-
--- Add missing columns / FKs idempotently
-alter table public.holes add column if not exists organization_id uuid references public.organizations(id) on delete cascade;
-alter table public.holes add column if not exists project_id uuid references public.projects(id) on delete set null;
-
--- Indexes (idempotent)
-create index if not exists idx_holes_org on public.holes(organization_id);
-create index if not exists idx_holes_project on public.holes(project_id);
-
--- Enforce uniqueness of hole identifier per organization (case-insensitive)
-create unique index if not exists uniq_holes_org_hole_id on public.holes(organization_id, lower(hole_id));
-
--- ============================================================
--- Tenements: each organization can have many tenements; holes may belong to a tenement
--- ============================================================
-create table if not exists public.tenements (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations(id) on delete cascade,
-  tenement_number text not null,
+CREATE TABLE public.resources (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  name text NOT NULL,
+  description text,
+  created_by uuid NOT NULL DEFAULT auth.uid(),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  resource_type text CHECK (resource_type = ANY (ARRAY['Drill Rig'::text, 'Dump Truck'::text, 'General Earthworks'::text, 'Ancillary'::text, 'Water Cart'::text, 'Other'::text])),
+  vendor_id uuid,
+  CONSTRAINT resources_pkey PRIMARY KEY (id),
+  CONSTRAINT resources_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT resources_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id),
+  CONSTRAINT resources_vendor_fk FOREIGN KEY (vendor_id) REFERENCES public.vendors(id)
+);
+CREATE TABLE public.subscription_plans (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  code text NOT NULL UNIQUE,
+  name text NOT NULL,
+  description text,
+  limits jsonb NOT NULL DEFAULT '{}'::jsonb,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT subscription_plans_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.tasks (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  code text NOT NULL,
+  name text NOT NULL,
+  description text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT tasks_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.tenements (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  tenement_number text NOT NULL,
   tenement_type text,
   application_number text,
   status text,
@@ -255,732 +546,40 @@ create table if not exists public.tenements (
   renewal_date date,
   expenditure_commitment numeric,
   heritage_agreements text,
-  created_by uuid not null default auth.uid() references auth.users(id) on delete set null,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
+  created_by uuid NOT NULL DEFAULT auth.uid(),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT tenements_pkey PRIMARY KEY (id),
+  CONSTRAINT tenements_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT tenements_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
-
-create unique index if not exists uniq_tenements_org_number on public.tenements(organization_id, lower(tenement_number));
-create index if not exists idx_tenements_org on public.tenements(organization_id);
-
-alter table public.tenements enable row level security;
-
-drop policy if exists "read tenements (org)" on public.tenements;
-drop policy if exists "write tenements (org)" on public.tenements;
-create policy "read tenements (org)" on public.tenements for select using (
-  public.is_current_org_member(organization_id)
+CREATE TABLE public.vendor_resources (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  vendor_id uuid NOT NULL,
+  organization_id uuid NOT NULL,
+  name text NOT NULL,
+  resource_type text,
+  status text NOT NULL DEFAULT 'Active'::text CHECK (status = ANY (ARRAY['Active'::text, 'Inactive'::text])),
+  notes text,
+  created_by uuid DEFAULT auth.uid(),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT vendor_resources_pkey PRIMARY KEY (id),
+  CONSTRAINT vendor_resources_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.vendors(id),
+  CONSTRAINT vendor_resources_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT vendor_resources_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
-create policy "write tenements (org)" on public.tenements for all using (
-  public.is_current_org_member(organization_id)
-) with check (
-  public.is_current_org_member(organization_id)
+CREATE TABLE public.vendors (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  name text NOT NULL,
+  contact text,
+  created_by uuid NOT NULL DEFAULT auth.uid(),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  linked_organization_id uuid,
+  CONSTRAINT vendors_pkey PRIMARY KEY (id),
+  CONSTRAINT vendors_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT vendors_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id),
+  CONSTRAINT vendors_linked_organization_id_fkey FOREIGN KEY (linked_organization_id) REFERENCES public.organizations(id)
 );
-
--- Touch updated_at on change for tenements
-create or replace function public.touch_tenements_updated_at()
-returns trigger language plpgsql security definer set search_path = public as $$
-begin
-  new.updated_at := now();
-  return new;
-end; $$;
-
-drop trigger if exists trg_touch_tenements on public.tenements;
-create trigger trg_touch_tenements
-before update on public.tenements
-for each row execute function public.touch_tenements_updated_at();
-
--- Add tenement_id FK on holes (nullable) so holes can be associated with a tenement
-alter table public.holes add column if not exists tenement_id uuid references public.tenements(id) on delete set null;
-create index if not exists idx_holes_tenement on public.holes(tenement_id);
-
-
--- ============================================================
--- MIGRATION: Backfill legacy project_name values into projects & set project_id
--- Then drop deprecated project_name column.
--- Safe to run multiple times (idempotent via ON CONFLICT / IF EXISTS checks).
--- ============================================================
-do $$
-begin
-  -- 1. Insert distinct legacy project names into projects per organization
-  with legacy as (
-    select distinct organization_id, trim(project_name) as name
-    from public.holes
-    where project_name is not null and project_name <> '' and organization_id is not null
-  )
-  insert into public.projects(organization_id, name, created_by)
-  select l.organization_id, l.name,
-         coalesce((select owner_id from public.organizations o where o.id = l.organization_id), auth.uid())
-  from legacy l
-  on conflict do nothing;
-
-  -- 2. Update holes.project_id where missing
-  update public.holes h
-  set project_id = p.id
-  from public.projects p
-  where h.project_id is null
-    and h.organization_id = p.organization_id
-    and h.project_name is not null
-    and h.project_name <> ''
-    and lower(p.name) = lower(h.project_name);
-exception when others then
-  -- Swallow errors so migration doesn't block (e.g., lack of perms in some contexts)
-  perform 1;
-end$$;
-
--- 3. Drop deprecated column (after backfill). Keep conditional so re-runs succeed.
-alter table public.holes drop column if exists project_name;
-
--- Constrain drilling_diameter to common sizes (allow null)
-do $$ begin
-  if not exists (
-    select 1 from pg_constraint where conname = 'holes_drilling_diameter_check'
-  ) then
-    alter table public.holes
-      add constraint holes_drilling_diameter_check
-      check (drilling_diameter is null or drilling_diameter in ('NQ','HQ','PQ','Other')) not valid;
-  end if;
-end $$;
-
--- Tasks that can be assigned to holes (e.g., photography, geotech, logging, sampling)
-create table if not exists public.tasks (
-  id uuid primary key default gen_random_uuid(),
-  code text not null,
-  name text not null,
-  description text,
-  created_at timestamptz default now()
-);
-
--- Task intervals per hole
--- task_type is constrained by a check to one of the known types
-create table if not exists public.hole_task_intervals (
-  id uuid primary key default gen_random_uuid(),
-  hole_id uuid not null references public.holes(id) on delete cascade,
-  task_type text not null,
-  from_m numeric not null,
-  to_m numeric not null,
-  created_at timestamptz default now(),
-  constraint hole_task_intervals_task_type_check check (task_type in (
-    'orientation', 'magnetic_susceptibility', 'whole_core_sampling', 'cutting', 'rqd', 'specific_gravity'
-  ))
-);
-
--- Activity log for productivity metrics
-create table if not exists public.activity (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  hole_id uuid references public.holes(id) on delete set null,
-  task_id uuid references public.tasks(id) on delete set null,
-  action text not null, -- e.g., 'start_task','complete_task','upload_photo'
-  details jsonb,
-  created_at timestamptz default now()
-);
-
--- User progress towards tasks (non-overlapping intervals per hole+task)
-create table if not exists public.hole_task_progress (
-  id uuid primary key default gen_random_uuid(),
-  hole_id uuid not null references public.holes(id) on delete cascade,
-  task_type text not null,
-  from_m numeric not null,
-  to_m numeric not null,
-  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
-  created_at timestamptz default now(),
-  -- Date the work was performed (separate from created_at which is insert timestamp)
-  logged_on date default current_date,
-  interval numrange generated always as (numrange(from_m, to_m, '[)')) stored,
-  constraint hole_task_progress_task_type_check check (task_type in (
-    'orientation', 'magnetic_susceptibility', 'whole_core_sampling', 'cutting', 'rqd', 'specific_gravity'
-  )),
-  constraint hole_task_progress_bounds check (to_m > from_m)
-);
-
--- Backfill schema in existing DBs if column is missing
-alter table public.hole_task_progress add column if not exists logged_on date default current_date;
-
--- Prevent overlapping progress intervals for same hole+task (allow touching at boundaries)
-create index if not exists idx_hole_task_progress_gist on public.hole_task_progress using gist (hole_id, task_type, interval);
-do $$ begin
-  if not exists (
-    select 1 from pg_constraint where conname = 'hole_task_progress_no_overlap'
-  ) then
-    alter table public.hole_task_progress
-      add constraint hole_task_progress_no_overlap exclude using gist (
-        hole_id with =,
-        task_type with =,
-        interval with &&
-      );
-  end if;
-end $$;
-
--- RLS
-alter table public.holes enable row level security;
-alter table public.hole_task_intervals enable row level security;
-alter table public.activity enable row level security;
-alter table public.hole_task_progress enable row level security;
-
--- Policies (basic: users can read all; users can insert/update rows they touch)
--- Org access helpers in policies will rely on membership
-alter table public.organizations enable row level security;
-alter table public.organization_members enable row level security;
-alter table public.organization_invites enable row level security;
-
--- Organizations policies
-drop policy if exists "read orgs" on public.organizations;
-drop policy if exists "create org" on public.organizations;
-drop policy if exists "update own org" on public.organizations;
-create policy "read orgs" on public.organizations for select using (
-  public.is_current_org_member(id) or owner_id = auth.uid()
-);
-create policy "create org" on public.organizations for insert with check (owner_id = auth.uid());
-create policy "update own org" on public.organizations for update using (owner_id = auth.uid());
-
--- Organization members policies
-drop policy if exists "read members" on public.organization_members;
-drop policy if exists "add members (admin)" on public.organization_members;
-drop policy if exists "self-join via invite" on public.organization_members;
-drop policy if exists "update members (admin)" on public.organization_members;
-drop policy if exists "remove members (admin or self)" on public.organization_members;
-create policy "read members" on public.organization_members for select using (
-  public.is_current_org_member(organization_id)
-);
--- Admins can add any user to their org
-create policy "add members (admin)" on public.organization_members for insert with check (
-  public.is_current_org_admin(organization_id)
-);
--- Invited user can add themselves based on a pending invite to their email
-create policy "self-join via invite" on public.organization_members for insert with check (
-  user_id = auth.uid()
-  and exists (
-    select 1 from public.organization_invites i
-    where i.organization_id = organization_members.organization_id
-      and i.email = lower(public.current_user_email())
-      and i.status = 'pending'
-  )
-);
-create policy "update members (admin)" on public.organization_members for update using (
-  public.is_current_org_admin(organization_id)
-);
-create policy "remove members (admin or self)" on public.organization_members for delete using (
-  -- admin of org OR deleting own membership
-  public.is_current_org_admin(organization_id) or user_id = auth.uid()
-);
-
--- Organization invites policies
-drop policy if exists "read invites (admin or self)" on public.organization_invites;
-drop policy if exists "create invites (admin)" on public.organization_invites;
-drop policy if exists "update invites (admin or self)" on public.organization_invites;
-drop policy if exists "delete invites (admin)" on public.organization_invites;
-create policy "read invites (admin or self)" on public.organization_invites for select using (
-  public.is_current_org_admin(organization_id) or organization_invites.email = lower(public.current_user_email())
-);
-create policy "create invites (admin)" on public.organization_invites for insert with check (
-  public.is_current_org_admin(organization_id)
-);
-create policy "update invites (admin or self)" on public.organization_invites for update using (
-  public.is_current_org_admin(organization_id) or organization_invites.email = lower(public.current_user_email())
-);
-create policy "delete invites (admin)" on public.organization_invites for delete using (
-  public.is_current_org_admin(organization_id)
-);
-
--- Rework existing policies to enforce org isolation
-drop policy if exists "read holes" on public.holes;
-drop policy if exists "insert holes" on public.holes;
-drop policy if exists "update holes" on public.holes;
-drop policy if exists "delete holes" on public.holes;
-create policy "read holes" on public.holes for select using (
-  (organization_id is not null and public.is_current_org_member(organization_id))
-  or (organization_id is null and created_by = auth.uid())
-);
-create policy "insert holes" on public.holes for insert with check (
-  auth.uid() = created_by and (
-    (organization_id is not null and public.is_current_org_member(organization_id))
-    or organization_id is null
-  )
-);
-create policy "update holes" on public.holes for update using (
-  auth.uid() = created_by or public.is_current_org_admin(organization_id)
-);
-create policy "delete holes" on public.holes for delete using (
-  -- Any member can delete holes within their organization; legacy personal holes deletable by creator
-  (organization_id is not null and public.is_current_org_member(organization_id))
-  or (organization_id is null and auth.uid() = created_by)
-);
-
-drop policy if exists "read hole task intervals" on public.hole_task_intervals;
-drop policy if exists "write hole task intervals" on public.hole_task_intervals;
-create policy "read hole task intervals" on public.hole_task_intervals for select using (
-  exists (
-    select 1 from public.holes h
-    where h.id = hole_task_intervals.hole_id and (
-      (h.organization_id is not null and public.is_current_org_member(h.organization_id))
-      or (h.organization_id is null and h.created_by = auth.uid())
-    )
-  )
-);
-create policy "write hole task intervals" on public.hole_task_intervals for all using (
-  exists (
-    select 1 from public.holes h
-    where h.id = hole_task_intervals.hole_id and (
-      (h.organization_id is not null and public.is_current_org_member(h.organization_id))
-      or (h.organization_id is null and h.created_by = auth.uid())
-    )
-  )
-) with check (
-  exists (
-    select 1 from public.holes h
-    where h.id = hole_task_intervals.hole_id and (
-      (h.organization_id is not null and public.is_current_org_member(h.organization_id))
-      or (h.organization_id is null and h.created_by = auth.uid())
-    )
-  )
-);
-
-drop policy if exists "read activity" on public.activity;
-drop policy if exists "write activity" on public.activity;
-create policy "read activity" on public.activity for select using (auth.uid() = user_id);
-create policy "write activity" on public.activity for insert with check (auth.uid() = user_id);
-
--- Progress policies: users can read all; users can write their own; admins TBD
-drop policy if exists "read progress" on public.hole_task_progress;
-drop policy if exists "write progress" on public.hole_task_progress;
-drop policy if exists "update own progress" on public.hole_task_progress;
-drop policy if exists "delete own progress" on public.hole_task_progress;
-create policy "read progress" on public.hole_task_progress for select using (
-  exists (
-    select 1 from public.holes h
-    where h.id = hole_task_progress.hole_id and (
-      (h.organization_id is not null and public.is_current_org_member(h.organization_id))
-      or (h.organization_id is null and h.created_by = auth.uid())
-    )
-  )
-);
-create policy "write progress" on public.hole_task_progress for insert with check (
-  auth.uid() = user_id and exists (
-    select 1 from public.holes h
-    where h.id = hole_task_progress.hole_id and (
-      (h.organization_id is not null and public.is_current_org_member(h.organization_id))
-      or (h.organization_id is null and h.created_by = auth.uid())
-    )
-  )
-);
-create policy "update own progress" on public.hole_task_progress for update using (
-  auth.uid() = user_id and exists (
-    select 1 from public.holes h
-    where h.id = hole_task_progress.hole_id and (
-      (h.organization_id is not null and public.is_current_org_member(h.organization_id))
-      or (h.organization_id is null and h.created_by = auth.uid())
-    )
-  )
-);
-create policy "delete own progress" on public.hole_task_progress for delete using (
-  auth.uid() = user_id and exists (
-    select 1 from public.holes h
-    where h.id = hole_task_progress.hole_id and (
-      (h.organization_id is not null and public.is_current_org_member(h.organization_id))
-      or (h.organization_id is null and h.created_by = auth.uid())
-    )
-  )
-);
-
--- Completion view per hole+task: planned vs progress (meters)
-create or replace view public.hole_task_completion as
-select
-  hti.hole_id,
-  hti.task_type,
-  sum(hti.to_m - hti.from_m) as planned_m,
-  coalesce(sum(greatest(0, least(hti.to_m, htp.to_m) - greatest(hti.from_m, htp.from_m))), 0) as done_m
-from public.hole_task_intervals hti
-left join public.hole_task_progress htp
-  on htp.hole_id = hti.hole_id
- and htp.task_type = hti.task_type
- and htp.to_m > hti.from_m
- and htp.from_m < hti.to_m
-group by hti.hole_id, hti.task_type;
-
--- Completion summary per hole across all tasks
-create or replace view public.hole_completion_summary as
-select
-  c.hole_id,
-  sum(c.planned_m) as planned_total_m,
-  sum(c.done_m) as done_total_m,
-  case when sum(c.planned_m) > 0 then round((sum(c.done_m) / sum(c.planned_m)) * 100, 1) else 0 end as percent_done
-from public.hole_task_completion c
-group by c.hole_id;
-
--- ============================================================
--- Consumables: inventory, purchase requests, and purchase orders
--- ============================================================
-
--- Inventory items per organization
-create table if not exists public.consumable_items (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations(id) on delete cascade,
-  key text not null,
-  label text not null,
-  count integer not null default 0 check (count >= 0),
-  -- Reorder threshold (when inventory at or below this value, highlight for reorder). 0 disables threshold.
-  reorder_value integer not null default 0 check (reorder_value >= 0),
-  -- Cost tracking: cost per logical unit (see unit_size) for future cost integration
-  cost_per_unit numeric not null default 0 check (cost_per_unit >= 0),
-  -- Unit size represents how many physical items one unit encompasses (e.g. 1 unit = 1000 sample bags)
-  unit_size integer not null default 1 check (unit_size > 0),
-  -- Whether this item should appear in the consumables report dashboard
-  include_in_report boolean not null default false,
-  updated_at timestamptz default now()
-);
-
-create unique index if not exists uniq_consumable_item_org_key
-on public.consumable_items (organization_id, key);
-
-create index if not exists idx_consumable_items_org
-on public.consumable_items (organization_id);
-
-alter table public.consumable_items enable row level security;
-
-drop policy if exists "read consumable items (org)" on public.consumable_items;
-drop policy if exists "write consumable items (org)" on public.consumable_items;
-create policy "read consumable items (org)" on public.consumable_items for select using (
-  public.is_current_org_member(organization_id)
-);
-create policy "write consumable items (org)" on public.consumable_items for all using (
-  public.is_current_org_member(organization_id)
-) with check (
-  public.is_current_org_member(organization_id)
-);
-
--- Ensure reorder_value column exists for environments created before this field was added
-alter table public.consumable_items add column if not exists reorder_value integer not null default 0 check (reorder_value >= 0);
--- Backfill new cost & unit size columns if deploying to existing environments
-alter table public.consumable_items add column if not exists cost_per_unit numeric not null default 0 check (cost_per_unit >= 0);
-alter table public.consumable_items add column if not exists unit_size integer not null default 1 check (unit_size > 0);
-
--- Purchase Orders per organization
--- status: not_ordered (draft / request bucket), ordered, received
-create table if not exists public.purchase_orders (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations(id) on delete cascade,
-  name text, -- human-friendly name used before PO number is generated
-  po_number text, -- nullable until assigned
-  status text not null check (status in ('not_ordered','ordered','received')) default 'not_ordered',
-  ordered_date date,
-  received_date date,
-  comments text,
-  created_at timestamptz default now()
-);
-
-create index if not exists idx_purchase_orders_org on public.purchase_orders(organization_id);
-create index if not exists idx_purchase_orders_po_number on public.purchase_orders(po_number);
-
-alter table public.purchase_orders enable row level security;
-
-drop policy if exists "read purchase orders (org)" on public.purchase_orders;
-drop policy if exists "write purchase orders (org)" on public.purchase_orders;
-create policy "read purchase orders (org)" on public.purchase_orders for select using (
-  public.is_current_org_member(organization_id)
-);
-create policy "write purchase orders (org)" on public.purchase_orders for all using (
-  public.is_current_org_member(organization_id)
-) with check (
-  public.is_current_org_member(organization_id)
-);
-
--- Items within a purchase order (also denormalized organization_id for simple RLS filtering)
--- item status: outstanding, ordered, received
-create table if not exists public.purchase_order_items (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations(id) on delete cascade,
-  po_id uuid references public.purchase_orders(id) on delete cascade,
-  -- Order number is a client-provided pre-PO grouping identifier (different from PO number)
-  order_number text,
-  item_key text not null,
-  label text not null,
-  quantity integer not null check (quantity > 0),
-  status text not null check (status in ('outstanding','ordered','received')) default 'outstanding',
-  created_at timestamptz default now()
-);
-
--- Ensure existing databases drop NOT NULL on po_id if present
-do $$ begin
-  if exists (
-    select 1 from information_schema.columns
-    where table_schema = 'public' and table_name = 'purchase_order_items' and column_name = 'po_id' and is_nullable = 'NO'
-  ) then
-    alter table public.purchase_order_items alter column po_id drop not null;
-  end if;
-end $$;
-
-create index if not exists idx_po_items_org on public.purchase_order_items(organization_id);
-create index if not exists idx_po_items_po on public.purchase_order_items(po_id);
--- Ensure column exists for existing databases
-alter table public.purchase_order_items add column if not exists order_number text;
-create index if not exists idx_po_items_order_number on public.purchase_order_items(organization_id, order_number);
-
-alter table public.purchase_order_items enable row level security;
-
-drop policy if exists "read purchase order items (org)" on public.purchase_order_items;
-drop policy if exists "write purchase order items (org)" on public.purchase_order_items;
-create policy "read purchase order items (org)" on public.purchase_order_items for select using (
-  public.is_current_org_member(organization_id)
-);
-create policy "write purchase order items (org)" on public.purchase_order_items for all using (
-  public.is_current_org_member(organization_id)
-) with check (
-  public.is_current_org_member(organization_id)
-);
-
-create or replace function public.touch_updated_at()
-returns trigger language plpgsql as $$
-begin
-  new.updated_at := now();
-  return new;
-end; $$;
-
-
--- ============================================================
--- Asset Types and Assets
--- ============================================================
-
--- Asset locations per organization
-create table if not exists public.asset_locations (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations(id) on delete cascade,
-  name text not null,
-  description text,
-  created_by uuid not null default auth.uid() references auth.users(id) on delete set null,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
-
-create index if not exists idx_asset_locations_org on public.asset_locations(organization_id);
-
-alter table public.asset_locations enable row level security;
-
-drop policy if exists "read asset locations (org)" on public.asset_locations;
-drop policy if exists "write asset locations (org)" on public.asset_locations;
-create policy "read asset locations (org)" on public.asset_locations for select using (
-  public.is_current_org_member(organization_id)
-);
-create policy "write asset locations (org)" on public.asset_locations for all using (
-  public.is_current_org_member(organization_id)
-) with check (
-  public.is_current_org_member(organization_id)
-);
-
--- Touch updated_at on change for asset_locations
-do $$ begin
-  if not exists (select 1 from pg_proc where proname = 'touch_updated_at') then
-    -- touch_updated_at may exist elsewhere; rely on existing function if present
-    perform 1;
-  end if;
-end $$;
-
-drop trigger if exists trg_touch_asset_locations on public.asset_locations;
-create trigger trg_touch_asset_locations
-before update on public.asset_locations
-for each row execute function public.touch_updated_at();
-
-
--- Asset types (global list, can be extended)
-create table if not exists public.asset_types (
-  id uuid primary key default gen_random_uuid(),
-  name text not null unique,
-  description text,
-  created_at timestamptz default now()
-);
-
--- Assets table (reference asset_type_id)
-create table if not exists public.assets (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations(id) on delete cascade,
-  asset_type_id uuid not null references public.asset_types(id) on delete restrict,
-  name text not null,
-  serial_number text,
-  location_id uuid references public.asset_locations(id) on delete set null,
-  status text not null check (status in ('Active','Inactive')) default 'Active',
-  created_by uuid not null default auth.uid() references auth.users(id) on delete set null,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
-
-create index if not exists idx_assets_org on public.assets(organization_id);
-create index if not exists idx_assets_type on public.assets(asset_type_id);
-
-alter table public.assets enable row level security;
-
-drop policy if exists "read assets (org)" on public.assets;
-drop policy if exists "write assets (org)" on public.assets;
-create policy "read assets (org)" on public.assets for select using (
-  public.is_current_org_member(organization_id)
-);
-create policy "write assets (org)" on public.assets for all using (
-  public.is_current_org_member(organization_id)
-) with check (
-  public.is_current_org_member(organization_id)
-);
-
--- Touch updated_at on change
-create or replace function public.touch_assets_updated_at()
-returns trigger language plpgsql security definer set search_path = public as $$
-begin
-  new.updated_at := now();
-  return new;
-end; $$;
-
-drop trigger if exists trg_touch_assets on public.assets;
-create trigger trg_touch_assets
-before update on public.assets
-for each row execute function public.touch_assets_updated_at();
-
--- Seed initial asset types
-insert into public.asset_types (name, description) values
-  ('Laptops', 'Portable computers'),
-  ('Vehicles', 'Cars, trucks, and other vehicles'),
-  ('Plant', 'Heavy machinery and plant equipment'),
-  ('Electrical Equipment', 'Electrical devices and equipment'),
-  ('Structures', 'Buildings and structures'),
-  ('GPS', 'GPS and location devices')
-on conflict (name) do nothing;
-
--- ============================================================
--- Auto-join new users to a shared demo organization
--- Creates a demo organization if missing and adds every new auth user
--- as a member so they can try the app without creating their own org.
--- Idempotent and safe to run multiple times.
--- ============================================================
-do $$
-begin
-  -- Create a shared demo org if it doesn't exist (case-insensitive match on name)
-  if not exists (select 1 from public.organizations where lower(name) = lower('Shared Demo')) then
-    insert into public.organizations (name, owner_id) values ('Shared Demo', null);
-  end if;
-exception when others then
-  -- Swallow errors to keep migration idempotent in restricted environments
-  perform 1;
-end $$;
-
-create or replace function public.on_auth_user_created()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  demo_org_id uuid;
-begin
-  -- Find the demo org
-  select id into demo_org_id from public.organizations where lower(name) = lower('Shared Demo') limit 1;
-  if demo_org_id is null then
-    -- create it if still missing (concurrent safety not critical here)
-    insert into public.organizations (name, owner_id) values ('Shared Demo', null) returning id into demo_org_id;
-  end if;
-
-  -- Add the new user as a member of the demo org. Use on conflict to avoid race issues.
-  insert into public.organization_members (organization_id, user_id, role, added_by)
-  values (demo_org_id, new.id, 'member', null)
-  on conflict do nothing;
-
-  return new;
-end;
-$$;
-
--- Wire the trigger to auth.users so it's executed when a new user signs up.
--- If your Supabase setup restricts triggers on auth.users, run this migration in the SQL editor
--- or handle auto-joining via a server-side webhook instead.
-drop trigger if exists trg_on_auth_user_created on auth.users;
-create trigger trg_on_auth_user_created
-after insert on auth.users
-for each row execute function public.on_auth_user_created();
-
--- ============================================================
--- Scheduler: resources and resource_assignments
--- per-organization resources and day-granular assignments with a DB-level
--- exclusion constraint to prevent overlapping assignments per resource.
--- Idempotent: safe to run multiple times.
--- ============================================================
-
--- Resources (one row per schedulable resource, e.g. drill rig, crew, vehicle)
-create table if not exists public.resources (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations(id) on delete cascade,
-  name text not null,
-  description text,
-  created_by uuid not null default auth.uid() references auth.users(id) on delete set null,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
-
-create unique index if not exists uniq_resources_org_name on public.resources(organization_id, lower(name));
-create index if not exists idx_resources_org on public.resources(organization_id);
-
-alter table public.resources enable row level security;
-
-drop policy if exists "read resources (org)" on public.resources;
-drop policy if exists "write resources (org)" on public.resources;
-create policy "read resources (org)" on public.resources for select using (
-  public.is_current_org_member(organization_id)
-);
-create policy "write resources (org)" on public.resources for all using (
-  public.is_current_org_member(organization_id)
-) with check (
-  public.is_current_org_member(organization_id)
-);
-
-drop trigger if exists trg_touch_resources on public.resources;
-create trigger trg_touch_resources
-before update on public.resources
-for each row execute function public.touch_updated_at();
-
--- Resource assignments (day-granular). start_date inclusive, end_date exclusive by
--- convention; an automatically-generated daterange column is stored for the
--- exclusion constraint.
-create table if not exists public.resource_assignments (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations(id) on delete cascade,
-  resource_id uuid not null references public.resources(id) on delete cascade,
-  title text,
-  details text,
-  start_date date not null,
-  end_date date not null,
-  created_by uuid not null default auth.uid() references auth.users(id) on delete set null,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now(),
-  interval daterange generated always as (daterange(start_date, end_date, '[)')) stored
-);
-
-create index if not exists idx_resource_assignments_org on public.resource_assignments(organization_id);
-create index if not exists idx_resource_assignments_resource on public.resource_assignments(resource_id);
--- gist index used by the exclusion constraint
-create index if not exists idx_resource_assignments_gist on public.resource_assignments using gist (resource_id, interval);
-
-do $$ begin
-  if not exists (
-    select 1 from pg_constraint where conname = 'resource_assignments_no_overlap'
-  ) then
-    alter table public.resource_assignments
-      add constraint resource_assignments_no_overlap exclude using gist (
-        resource_id with =,
-        interval with &&
-      );
-  end if;
-end $$;
-
-alter table public.resource_assignments enable row level security;
-
-drop policy if exists "read resource assignments (org)" on public.resource_assignments;
-drop policy if exists "write resource assignments (org)" on public.resource_assignments;
-create policy "read resource assignments (org)" on public.resource_assignments for select using (
-  public.is_current_org_member(organization_id)
-);
-create policy "write resource assignments (org)" on public.resource_assignments for all using (
-  public.is_current_org_member(organization_id)
-) with check (
-  public.is_current_org_member(organization_id)
-);
-
-drop trigger if exists trg_touch_resource_assignments on public.resource_assignments;
-create trigger trg_touch_resource_assignments
-before update on public.resource_assignments
-for each row execute function public.touch_updated_at();
-
-
-

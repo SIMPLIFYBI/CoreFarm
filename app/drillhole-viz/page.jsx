@@ -1208,35 +1208,54 @@ export default function DrillholeVizPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-64px)] w-full">
-      <div className="h-full flex">
+    <div className="h-[calc(100vh-64px)] w-full flex flex-col">
+      <div className="p-2 md:p-3 border-b border-white/10 flex items-center gap-2 shrink-0">
+        <button
+          type="button"
+          className={[
+            "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
+            "bg-gradient-to-br from-indigo-600 to-purple-600 text-white",
+            "border border-white/20 ring-1 ring-indigo-300/25 shadow-lg",
+            "hover:from-indigo-500 hover:to-purple-500 hover:shadow-xl",
+            "transition-base focus-ring",
+          ].join(" ")}
+          onClick={() => setDrawerOpen((v) => !v)}
+          title={drawerOpen ? "Collapse attributes pane" : "Expand attributes pane"}
+          aria-label={drawerOpen ? "Collapse attributes pane" : "Expand attributes pane"}
+        >
+          <span className="text-sm leading-none">{drawerOpen ? "◀" : "▶"}</span>
+        </button>
+
+        <div className="flex-1 min-w-0">
+          <div className="text-slate-100 font-semibold truncate">
+            {selectedHole ? `Schematic: ${selectedHole.hole_id}` : "Schematic"}
+          </div>
+          <div className="text-[11px] text-slate-400">
+            {selectedHole ? "Unified schematic preview (SVG V1)" : "Select a hole to begin"}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className="btn btn-primary text-xs"
+          onClick={onExportPdf}
+          disabled={!!exportDisabledReason}
+          title={exportDisabledReason || "Export PDF"}
+        >
+          Export PDF
+        </button>
+      </div>
+
+      <div className="flex-1 min-h-0 flex">
         {/* Left drawer */}
         <div
           className={[
-            "h-full border-r border-white/10 bg-slate-950/40 backdrop-blur",
-            drawerOpen ? "w-[460px] xl:w-[520px] max-w-[92vw]" : "w-12",
+            "h-full bg-slate-950/40 backdrop-blur shrink-0",
+            drawerOpen ? "w-[460px] xl:w-[520px] max-w-[92vw] border-r border-white/10" : "w-0 border-r-0",
             "transition-all duration-200 overflow-hidden",
           ].join(" ")}
         >
           <div className="h-full flex flex-col">
-            {/* Drawer header */}
-            <div className="p-3 border-b border-white/10 flex items-center gap-2">
-              <button
-                type="button"
-                className="btn text-xs px-2"
-                onClick={() => setDrawerOpen((v) => !v)}
-                title={drawerOpen ? "Collapse" : "Expand"}
-              >
-                {drawerOpen ? "◀" : "▶"}
-              </button>
-              {drawerOpen && (
-                <div className="flex-1">
-                  <div className="text-slate-100 font-semibold">Drillhole Viz</div>
-                  <div className="text-[11px] text-slate-400">Org role: {myRole || "—"}</div>
-                </div>
-              )}
-            </div>
-
             {/* Tabs */}
             {drawerOpen && (
               <div className="px-3 pt-3">

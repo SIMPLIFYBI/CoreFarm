@@ -22,7 +22,7 @@ export default function UserDashboardPage() {
 	const [user, setUser] = useState(null);
 	const [loading, setLoading] = useState(true);
 	const { orgId } = useOrg();
-	const [tab, setTab] = useState("dashboard"); // 'dashboard' | 'activity' | 'consumables'
+	const [tab, setTab] = useState("dashboard"); // 'dashboard' | 'project' | 'plods' | 'activity' | 'consumables'
 	const [consumableItems, setConsumableItems] = useState([]);
 	const [consumableTrend, setConsumableTrend] = useState([]);
 	const [consumableLoading, setConsumableLoading] = useState(false);
@@ -402,6 +402,9 @@ export default function UserDashboardPage() {
 					)}
 				</div>
 			)}
+
+			{tab === "project" && <div />}
+			{tab === "plods" && <div />}
 
 			{tab === "consumables" && (
 				<div className="space-y-6">

@@ -48,11 +48,11 @@ export default function HomePage() {
         .eq("status", "pending");
       if (error) {
         setCheckingInvites(false);
-  return router.replace("/user");
+  return router.replace("/dashboard");
       }
       if ((invs || []).length === 0) {
         setCheckingInvites(false);
-  return router.replace("/user");
+  return router.replace("/dashboard");
       }
       setInvites(invs || []);
       setCheckingInvites(false);
@@ -113,12 +113,12 @@ export default function HomePage() {
       }
       await supabase.from("organization_invites").update({ status: "accepted" }).eq("id", inv.id);
       toast.success("You’re already a member. Invite accepted");
-  router.replace("/user");
+  router.replace("/dashboard");
       return;
     }
     await supabase.from("organization_invites").update({ status: "accepted" }).eq("id", inv.id);
     toast.success("Joined organization");
-  router.replace("/user");
+  router.replace("/dashboard");
   };
 
   const sendReset = async () => {
@@ -147,20 +147,21 @@ export default function HomePage() {
     toast.success("Password updated");
     setRecoveryMode(false);
     setNewPassword("");
-  router.replace("/user");
+  router.replace("/dashboard");
   };
 
   return (
     <div className="max-w-6xl mx-auto p-6 grid md:grid-cols-2 gap-8">
       <div className="space-y-3">
-        <h1 className="text-3xl font-semibold">CoreFarm Core Logging</h1>
+        <h1 className="text-3xl font-semibold">MinePlod</h1>
         <p className="text-gray-600">
-          Plan intervals, capture actuals, and see progress across your drilling program. Secure, multi-tenant access for your team.
+          Plan, Manage and track your mining operations with ease. MinePlod is designed to help you stay organized, collaborate with your team, and keep your projects on track. With MinePlod, you can:
         </p>
         <ul className="list-disc ml-5 text-gray-700 text-sm space-y-1">
-          <li>Task-based intervals and non-overlapping progress</li>
+          <li>Record Plods for any mining activity</li>
+          <li>Track progress and performance metrics</li>
+          <li>Track consumables and resources</li>
           <li>Invite teammates and manage roles</li>
-          <li>Fast data entry UI designed for the core yard</li>
         </ul>
       </div>
 
@@ -208,7 +209,7 @@ export default function HomePage() {
             </ul>
             <div className="mt-4 flex gap-2">
               <button className="btn text-xs" onClick={goTeam}>Manage in Team</button>
-              <button className="btn text-xs" onClick={() => router.replace('/user')}>Skip for now</button>
+              <button className="btn text-xs" onClick={() => router.replace('/dashboard')}>Skip for now</button>
             </div>
           </div>
         )}

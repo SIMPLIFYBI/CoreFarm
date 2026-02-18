@@ -14,6 +14,7 @@ export default function BoreholeSchematicPreview({
   constructionIntervals,
   constructionById,
   waterLevel,
+  compact = false,
 }) {
   const uid = useId();
 
@@ -29,10 +30,11 @@ export default function BoreholeSchematicPreview({
     return computeMaxDepth({ plannedDepth, actualDepth, minDepth: 30, step: 10 });
   }, [plannedDepth, actualDepth]);
 
-  const W = 980; // fixed => never gets wider
+  const W = compact ? 258 : 980;
   const padTop = DEPTH_PAD_TOP;
   const padBottom = DEPTH_PAD_BOTTOM;
   const H = svgHeightForMaxDepth(maxDepth);
+  const sidePad = compact ? 8 : 20;
 
   const yForDepth = (d) => padTop + Math.max(0, Math.min(maxDepth, d)) * PX_PER_M;
 
@@ -81,24 +83,29 @@ export default function BoreholeSchematicPreview({
       .sort((a, b) => a.from - b.from);
   }, [constructionIntervals]);
 
-  // Layout (keep your current symmetric panel math; just ensure it uses W)
-  const holeX = 420;
-  const holeW = 120;
-  const annulusBandW = 34;
+  const holeW = compact ? 62 : 120;
+  const annulusBandW = compact ? 16 : 34;
+  const spacing = compact ? 8 : 18;
+  const showRightGeology = !compact;
 
-  const leftPanelEndX = holeX - annulusBandW - 18;
-  const rightPanelStartX = holeX + holeW + annulusBandW + 18;
+  const compactLeftPanelW = 130;
+  const compactHoleX = sidePad + compactLeftPanelW + spacing + annulusBandW;
 
-  const maxLeftW = Math.max(0, leftPanelEndX - 20);
-  const maxRightW = Math.max(0, W - 20 - rightPanelStartX);
+  const holeX = compact ? compactHoleX : 420;
 
-  const geologyPanelW = Math.min(380, maxLeftW, maxRightW);
+  const leftPanelEndX = holeX - annulusBandW - spacing;
+  const rightPanelStartX = holeX + holeW + annulusBandW + spacing;
+
+  const maxLeftW = Math.max(0, leftPanelEndX - sidePad);
+  const maxRightW = Math.max(0, W - sidePad - rightPanelStartX);
+
+  const geologyPanelW = compact ? maxLeftW : Math.min(380, maxLeftW, maxRightW);
 
   const geologyLeftX = leftPanelEndX - geologyPanelW;
   const geologyLeftW = geologyPanelW;
 
   const geologyRightX = rightPanelStartX;
-  const geologyRightW = geologyPanelW;
+  const geologyRightW = showRightGeology ? geologyPanelW : 0;
 
   return (
     <div className="shrink-0">
@@ -121,15 +128,17 @@ export default function BoreholeSchematicPreview({
           fill="rgba(2,6,24,0.20)"
           stroke="rgba(255,255,255,0.12)"
         />
-        <rect
-          x={geologyRightX}
-          y={padTop}
-          width={geologyRightW}
-          height={H - padTop - padBottom}
-          rx="10"
-          fill="rgba(2,6,24,0.20)"
-          stroke="rgba(255,255,255,0.12)"
-        />
+        {showRightGeology && (
+          <rect
+            x={geologyRightX}
+            y={padTop}
+            width={geologyRightW}
+            height={H - padTop - padBottom}
+            rx="10"
+            fill="rgba(2,6,24,0.20)"
+            stroke="rgba(255,255,255,0.12)"
+          />
+        )}
 
         {/* hole + annulus bands */}
         <rect
@@ -179,9 +188,15 @@ export default function BoreholeSchematicPreview({
                     {label} · {it.from.toFixed(1)}–{it.to.toFixed(1)}m{it.notes ? ` · ${it.notes}` : ""}
                   </title>
                 </rect>
-                <rect x={geologyRightX + 2} y={y1} width={geologyRightW - 4} height={h} fill={color} fillOpacity="0.75" />
+                {showRightGeology && <rect x={geologyRightX + 2} y={y1} width={geologyRightW - 4} height={h} fill={color} fillOpacity="0.75" />}
                 {h >= 18 && (
-                  <text x={geologyRightX + geologyRightW - 10} y={y1 + Math.min(h - 6, 16)} textAnchor="end" fontSize="11" fill="rgba(15,23,42,0.95)">
+                  <text
+                    x={showRightGeology ? geologyRightX + geologyRightW - 10 : geologyLeftX + 8}
+                    y={y1 + Math.min(h - 6, 16)}
+                    textAnchor={showRightGeology ? "end" : "start"}
+                    fontSize={compact ? "10" : "11"}
+                    fill="rgba(15,23,42,0.95)"
+                  >
                     {label}
                   </text>
                 )}
@@ -243,9 +258,9 @@ export default function BoreholeSchematicPreview({
         {/* markers across the whole schematic */}
         {hasWater && (
           <g>
-            <line x1={20} y1={waterY} x2={W - 20} y2={waterY} stroke="rgba(59,130,246,0.75)" strokeWidth="2" />
+            <line x1={sidePad} y1={waterY} x2={W - sidePad} y2={waterY} stroke="rgba(59,130,246,0.75)" strokeWidth="2" />
             <rect x={holeX + 10} y={waterY - 16} width={holeW - 20} height={22} rx="8" fill="rgba(255,255,255,0.92)" stroke="rgba(15,23,42,0.15)" />
-            <text x={holeX + holeW / 2} y={waterY - 1} textAnchor="middle" fontSize="11" fill="rgba(15,23,42,0.95)">
+            <text x={holeX + holeW / 2} y={waterY - 1} textAnchor="middle" fontSize={compact ? "10" : "11"} fill="rgba(15,23,42,0.95)">
               Water level {water.toFixed(1)}m
             </text>
           </g>
@@ -253,8 +268,8 @@ export default function BoreholeSchematicPreview({
 
         {hasActual && (
           <g>
-            <line x1={20} y1={actualY} x2={W - 20} y2={actualY} stroke="rgba(16,185,129,0.65)" strokeWidth="1.5" />
-            <text x={W - 20} y={actualY - 4} textAnchor="end" fontSize="10" fill="rgba(226,232,240,0.9)">
+            <line x1={sidePad} y1={actualY} x2={W - sidePad} y2={actualY} stroke="rgba(16,185,129,0.65)" strokeWidth="1.5" />
+            <text x={W - sidePad} y={actualY - 4} textAnchor="end" fontSize="10" fill="rgba(226,232,240,0.9)">
               Actual {actual}m
             </text>
           </g>
@@ -262,8 +277,8 @@ export default function BoreholeSchematicPreview({
 
         {hasPlanned && (
           <g>
-            <line x1={20} y1={plannedY} x2={W - 20} y2={plannedY} stroke="rgba(99,102,241,0.65)" strokeWidth="1.5" />
-            <text x={W - 20} y={plannedY - 4} textAnchor="end" fontSize="10" fill="rgba(226,232,240,0.9)">
+            <line x1={sidePad} y1={plannedY} x2={W - sidePad} y2={plannedY} stroke="rgba(99,102,241,0.65)" strokeWidth="1.5" />
+            <text x={W - sidePad} y={plannedY - 4} textAnchor="end" fontSize="10" fill="rgba(226,232,240,0.9)">
               Planned {planned}m
             </text>
           </g>

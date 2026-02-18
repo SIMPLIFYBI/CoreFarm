@@ -12,6 +12,7 @@ export default function DepthAxisBar({
   step = 10,
   tickEvery = 1,
   labelEvery = 5,
+  compact = false,
 }) {
   const planned = Number(plannedDepth);
   const actual = Number(actualDepth);
@@ -25,10 +26,18 @@ export default function DepthAxisBar({
     return computeMaxDepth({ plannedDepth, actualDepth, minDepth, step });
   }, [plannedDepth, actualDepth, minDepth, step]);
 
-  const W = 90;
+  const W = compact ? 58 : 90;
   const padTop = DEPTH_PAD_TOP;
   const padBottom = DEPTH_PAD_BOTTOM;
   const H = svgHeightForMaxDepth(maxDepth);
+
+  const axisX = compact ? 36 : 62;
+  const majorTickX = compact ? 24 : 48;
+  const minorTickX = compact ? 30 : 56;
+  const labelX = compact ? 4 : 10;
+  const markerStartX = axisX + 2;
+  const markerEndX = W - (compact ? 5 : 8);
+  const labelFontSize = compact ? 9 : 10;
 
   const yForDepth = (d) => padTop + Math.max(0, Math.min(maxDepth, d)) * PX_PER_M;
 
@@ -55,18 +64,18 @@ export default function DepthAxisBar({
           stroke="rgba(255,255,255,0.10)"
         />
 
-        <line x1="62" y1={padTop} x2="62" y2={H - padBottom} stroke="rgba(255,255,255,0.25)" strokeWidth={1} />
+        <line x1={axisX} y1={padTop} x2={axisX} y2={H - padBottom} stroke="rgba(255,255,255,0.25)" strokeWidth={1} />
 
         {Array.from({ length: Math.floor(maxDepth / tickEvery) + 1 }, (_, i) => i * tickEvery).map((d) => {
           const y = yForDepth(d);
           const major = d % labelEvery === 0;
-          const x1 = major ? 48 : 56;
+          const x1 = major ? majorTickX : minorTickX;
 
           return (
             <g key={d}>
-              <line x1={x1} y1={y} x2={62} y2={y} stroke="rgba(255,255,255,0.25)" strokeWidth={major ? 1.2 : 1} />
+              <line x1={x1} y1={y} x2={axisX} y2={y} stroke="rgba(255,255,255,0.25)" strokeWidth={major ? 1.2 : 1} />
               {major && (
-                <text x="10" y={y + 4} fontSize="10" fill="rgba(226,232,240,0.85)">
+                <text x={labelX} y={y + 4} fontSize={labelFontSize} fill="rgba(226,232,240,0.85)">
                   {d}m
                 </text>
               )}
@@ -74,9 +83,9 @@ export default function DepthAxisBar({
           );
         })}
 
-        {hasWater && <line x1="64" y1={waterY} x2={W - 8} y2={waterY} stroke="rgba(59,130,246,0.9)" strokeWidth="2" />}
-        {hasActual && <line x1="64" y1={actualY} x2={W - 8} y2={actualY} stroke="rgba(16,185,129,0.9)" strokeWidth="2" />}
-        {hasPlanned && <line x1="64" y1={plannedY} x2={W - 8} y2={plannedY} stroke="rgba(99,102,241,0.9)" strokeWidth="2" />}
+        {hasWater && <line x1={markerStartX} y1={waterY} x2={markerEndX} y2={waterY} stroke="rgba(59,130,246,0.9)" strokeWidth="2" />}
+        {hasActual && <line x1={markerStartX} y1={actualY} x2={markerEndX} y2={actualY} stroke="rgba(16,185,129,0.9)" strokeWidth="2" />}
+        {hasPlanned && <line x1={markerStartX} y1={plannedY} x2={markerEndX} y2={plannedY} stroke="rgba(99,102,241,0.9)" strokeWidth="2" />}
       </svg>
     </div>
   );

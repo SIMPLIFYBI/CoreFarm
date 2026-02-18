@@ -152,7 +152,7 @@ export default function TypesTabs({
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="text-sm font-medium text-slate-100">Types</div>
-          <div className="text-[11px] text-slate-400 truncate">Org role: {myRole || "—"} · Section: {header.title}</div>
+          <div className="text-[11px] text-slate-400 truncate">Section: {header.title}</div>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">

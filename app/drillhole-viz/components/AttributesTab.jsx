@@ -20,13 +20,6 @@ export default function AttributesTab({
         <div className="text-sm text-slate-300">Select a hole.</div>
       ) : (
         <div className="card p-3 space-y-4">
-          <div>
-            <div className="text-sm font-medium text-slate-100">Attributes</div>
-            <div className="text-[11px] text-slate-400 truncate">
-              Hole: <span className="text-slate-200">{selectedHole.hole_id}</span>
-            </div>
-          </div>
-
           {/* Planned depth (existing) */}
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3 space-y-2">
             <div className="text-xs text-slate-300 font-medium">Planned depth (m)</div>
