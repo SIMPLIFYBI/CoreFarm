@@ -32,13 +32,11 @@ export default function ConsumablesPage() {
   const [assigning, setAssigning] = useState({}); // id->loading
   const [poLoading, setPoLoading] = useState(false);
   const [creatingPo, setCreatingPo] = useState(false);
+  const [createPoModal, setCreatePoModal] = useState({ open: false, name: "" });
   const [expandedHistory, setExpandedHistory] = useState({}); // poId -> bool for accordion
   const [marking, setMarking] = useState({}); // itemId -> loading
   const [receiveModal, setReceiveModal] = useState({ open: false, poId: null, date: "" });
   const [receiveSubmitting, setReceiveSubmitting] = useState(false);
-  const [historyEditing, setHistoryEditing] = useState({}); // poId -> bool
-  const [historyDraft, setHistoryDraft] = useState({}); // poId -> {po_number, ordered_date, received_date}
-  const [savingHistory, setSavingHistory] = useState({}); // poId -> bool
 
   // Load user and orgs
   useEffect(() => {
@@ -256,13 +254,15 @@ export default function ConsumablesPage() {
     return items;
   }, [poItems, filteredPoIds, statusFilter]);
 
-  // History section: ordered and received POs
-  const historyPos = useMemo(
-    () => poList.filter((p) => p.status === "ordered" || p.status === "received"),
-    [poList]
-  );
   const toggleHistoryPo = (poId) =>
     setExpandedHistory((m) => ({ ...m, [poId]: !m[poId] }));
+
+  const visibleOrderPos = useMemo(() => {
+    const ids = poFilter ? filteredPoIds : poList.map((p) => p.id);
+    return ids
+      .map((id) => poList.find((p) => p.id === id))
+      .filter(Boolean);
+  }, [poFilter, filteredPoIds, poList]);
 
   // no longer auto-creating POs on assign; POs are created explicitly and selected by name
 
@@ -285,18 +285,28 @@ export default function ConsumablesPage() {
     }
   };
 
+  const openCreatePoModal = () => setCreatePoModal({ open: true, name: "" });
+  const closeCreatePoModal = () => {
+    if (creatingPo) return;
+    setCreatePoModal({ open: false, name: "" });
+  };
+
   const createNewPo = async () => {
-    const name = prompt('Enter a name for the new PO');
-    if (!name) return;
+    const name = (createPoModal.name || "").trim();
+    if (!name) {
+      toast.error("Enter a PO name");
+      return;
+    }
     setCreatingPo(true);
     try {
       const { data, error } = await supabase
         .from('purchase_orders')
-        .insert({ organization_id: orgId, name: name.trim(), status: 'not_ordered' })
+        .insert({ organization_id: orgId, name, status: 'not_ordered' })
         .select('id')
         .single();
       if (error) throw error;
-      setPoList((arr) => [{ id: data.id, name: name.trim(), status: 'not_ordered' }, ...arr]);
+      setPoList((arr) => [{ id: data.id, name, status: 'not_ordered' }, ...arr]);
+      setCreatePoModal({ open: false, name: "" });
       toast.success('PO created');
     } catch {
       toast.error('Failed to create PO');
@@ -348,6 +358,17 @@ export default function ConsumablesPage() {
   };
 
   const orderedStatuses = ["not_ordered", "ordered", "received"];
+  const getPoStatusLabel = (status) => {
+    if (status === 'not_ordered') return 'In Progress';
+    if (status === 'ordered') return 'Ordered';
+    if (status === 'received') return 'Received';
+    return (status || '').replace('_', ' ');
+  };
+  const getPoStatusBadge = (status) => {
+    if (status === 'received') return 'badge-green';
+    if (status === 'ordered') return 'badge-blue';
+    return 'badge-amber';
+  };
 
   const openReceiveModal = (poId) => {
     setReceiveModal({ open: true, poId, date: new Date().toISOString().slice(0, 10) });
@@ -367,41 +388,140 @@ export default function ConsumablesPage() {
     }
   };
 
-  const startEditHistory = (po) => {
-    setHistoryEditing((m) => ({ ...m, [po.id]: true }));
-    setHistoryDraft((m) => ({
-      ...m,
-      [po.id]: {
-        po_number: po.po_number || "",
-        ordered_date: po.ordered_date || "",
-        received_date: po.received_date || "",
-      },
-    }));
-  };
-  const cancelEditHistory = (poId) => {
-    setHistoryEditing((m) => ({ ...m, [poId]: false }));
-    setHistoryDraft((m) => {
-      const { [poId]: _, ...rest } = m;
-      return rest;
-    });
-  };
-  const saveEditHistory = async (poId) => {
-    const draft = historyDraft[poId] || {};
-    setSavingHistory((m) => ({ ...m, [poId]: true }));
-    try {
-      await updatePoMeta(poId, {
-        po_number: (draft.po_number || null),
-        ordered_date: (draft.ordered_date || null),
-        received_date: (draft.received_date || null),
-      });
-      toast.success('PO updated');
-      setHistoryEditing((m) => ({ ...m, [poId]: false }));
-    } catch (e) {
-      toast.error('Failed to update PO');
-    } finally {
-      setSavingHistory((m) => ({ ...m, [poId]: false }));
-    }
-  };
+  const renderPoExpandedBody = (pid, po, items) => (
+    <div className="space-y-3">
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">PO Name</span>
+            <input
+              className="input input-sm w-56"
+              placeholder="Enter PO name"
+              defaultValue={po.name || ""}
+              onBlur={(e) => updatePoMeta(pid, { name: e.target.value || null })}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">PO #</span>
+            <input
+              className="input input-sm w-40"
+              placeholder="Enter PO number"
+              defaultValue={po.po_number || ""}
+              onBlur={(e) => assignPoNumber(pid, e.target.value.trim())}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">Status</span>
+            <select
+              className="select-gradient-sm w-auto"
+              value={po.status || "not_ordered"}
+              onChange={(e) => updatePoMeta(pid, { status: e.target.value })}
+            >
+              {orderedStatuses.map((s) => (
+                <option key={s} value={s}>{getPoStatusLabel(s)}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            className="btn btn-3d-primary text-xs"
+            onClick={async () => {
+              let num = po.po_number;
+              if (!num) {
+                num = prompt('Enter PO number before marking as ordered');
+              }
+              if (!num) return;
+              await updatePoMeta(pid, { po_number: num, status: 'ordered', ordered_date: new Date().toISOString().slice(0,10) });
+            }}
+          >
+            PO Submitted
+          </button>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">Ordered</span>
+            <input
+              type="date"
+              className="input input-sm w-44"
+              defaultValue={po.ordered_date || ""}
+              onBlur={(e) => updatePoMeta(pid, { ordered_date: e.target.value || null })}
+            />
+          </div>
+
+          <button
+            className="btn btn-3d-glass text-xs"
+            onClick={() => openReceiveModal(pid)}
+          >
+            PO received
+          </button>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">Received</span>
+            <input
+              type="date"
+              className="input input-sm w-44"
+              defaultValue={po.received_date || ""}
+              onBlur={(e) => updatePoMeta(pid, { received_date: e.target.value || null })}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="table-container">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th className="w-20 text-right">Qty</th>
+              <th className="w-40">Mark</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((it) => (
+              <tr key={it.id}>
+                <td>{it.label}</td>
+                <td className="text-right">{it.quantity}</td>
+                <td>
+                  <div className="flex gap-2">
+                    <button
+                      className={`btn text-xs ${it.status === 'outstanding' ? 'btn-warning' : ''}`}
+                      title="Mark item as outstanding"
+                      disabled={!!marking[it.id]}
+                      onClick={() => markItemStatus(it.id, 'outstanding')}
+                    >
+                      Outstanding
+                    </button>
+                    <button
+                      className={`btn text-xs ${it.status === 'received' ? 'btn-success' : ''}`}
+                      title="Mark item as received"
+                      disabled={!!marking[it.id]}
+                      onClick={() => markItemStatus(it.id, 'received')}
+                    >
+                      {marking[it.id] ? 'Saving…' : 'Received'}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {items.length === 0 && (
+              <tr>
+                <td colSpan={3} className="text-sm text-gray-500 text-center">No items on this PO.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div>
+        <textarea
+          className="textarea"
+          rows={2}
+          placeholder="PO comments"
+          defaultValue={po.comments || ""}
+          onBlur={(e) => updatePoMeta(pid, { comments: e.target.value })}
+        />
+      </div>
+    </div>
+  );
 
   return (
   <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-6">
@@ -552,7 +672,12 @@ export default function ConsumablesPage() {
         <div className="space-y-4">
           {/* Requested items not yet assigned to a PO */}
           <div className="card p-4">
-            <h3 className="font-medium mb-3">Requested items</h3>
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <h3 className="font-medium">Requested items</h3>
+              <button className="btn text-xs" disabled={creatingPo} onClick={openCreatePoModal}>
+                {creatingPo ? 'Creating…' : 'Create New PO'}
+              </button>
+            </div>
             {unassignedItems.length === 0 ? (
               <div className="text-sm text-gray-500">No requested items yet.</div>
             ) : (
@@ -613,8 +738,8 @@ export default function ConsumablesPage() {
       {tab === "orders" && (
         <div className="space-y-4">
           <div className="flex items-center gap-3">
-            <button className="btn" disabled={creatingPo} onClick={createNewPo}>{creatingPo ? 'Creating…' : 'Create New PO'}</button>
-            <span className="text-sm text-gray-600">Active POs (not yet ordered)</span>
+            <button className="btn" disabled={creatingPo} onClick={openCreatePoModal}>{creatingPo ? 'Creating…' : 'Create New PO'}</button>
+            <span className="text-sm text-gray-600">All purchase orders</span>
           </div>
           <div className="card p-4">
             <div className="flex flex-wrap items-center gap-3">
@@ -637,304 +762,138 @@ export default function ConsumablesPage() {
             </div>
           </div>
 
-          {(() => {
-            const baseIds = poFilter
-              ? filteredPoIds
-              : poList.filter((p) => p.status === 'not_ordered').map((p) => p.id);
-            return baseIds;
-          })().length === 0 ? (
+          {visibleOrderPos.length === 0 ? (
             <div className="card p-4 text-sm text-gray-500">No purchase orders to show.</div>
           ) : (
-            (() => {
-              const baseIds = poFilter
-                ? filteredPoIds
-                : poList.filter((p) => p.status === 'not_ordered').map((p) => p.id);
-              return baseIds;
-            })().map((pid) => {
-              const po = poList.find((p) => p.id === pid) || {};
-              const items = visiblePoItems.filter((i) => i.po_id === pid);
-              return (
-                <div key={pid} className="card p-4">
-                  <div className="flex flex-wrap items-center gap-3 mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-600">PO Name</span>
-                      <input
-                        className="input input-sm w-56"
-                        placeholder="Enter PO name"
-                        defaultValue={po.name || ""}
-                        onBlur={(e) => updatePoMeta(pid, { name: e.target.value || null })}
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-600">PO #</span>
-                      <input
-                        className="input input-sm w-40"
-                        placeholder="Enter PO number"
-                        defaultValue={po.po_number || ""}
-                        onBlur={(e) => assignPoNumber(pid, e.target.value.trim())}
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-600">Status</span>
-                      <select
-                        className="select-gradient-sm w-auto"
-                        value={po.status || "not_ordered"}
-                        onChange={(e) => updatePoMeta(pid, { status: e.target.value })}
-                      >
-                        {orderedStatuses.map((s) => (
-                          <option key={s} value={s}>{s.replace('_', ' ')}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-600">Ordered</span>
-                      <input
-                        type="date"
-                        className="input input-sm w-44"
-                        defaultValue={po.ordered_date || ""}
-                        onBlur={(e) => updatePoMeta(pid, { ordered_date: e.target.value || null })}
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-600">Received</span>
-                      <input
-                        type="date"
-                        className="input input-sm w-44"
-                        defaultValue={po.received_date || ""}
-                        onBlur={(e) => updatePoMeta(pid, { received_date: e.target.value || null })}
-                      />
-                    </div>
-                    <div className="flex items-center gap-2 ml-auto">
-                      <button
-                        className="btn text-xs"
-                        onClick={async () => {
-                          let num = po.po_number;
-                          if (!num) {
-                            num = prompt('Enter PO number before marking as ordered');
-                          }
-                          if (!num) return;
-                          await updatePoMeta(pid, { po_number: num, status: 'ordered', ordered_date: new Date().toISOString().slice(0,10) });
-                        }}
-                      >
-                        Order placed
-                      </button>
-                      <button
-                        className="btn text-xs"
-                        onClick={() => openReceiveModal(pid)}
-                      >
-                        PO received
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="table-container">
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>Item</th>
-                          <th className="w-20 text-right">Qty</th>
-                          <th className="w-40">Mark</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {items.map((it) => (
-                          <tr key={it.id}>
-                            <td>{it.label}</td>
-                            <td className="text-right">{it.quantity}</td>
-                            <td>
-                              <div className="flex gap-2">
+            <>
+              <div className="card p-4 hidden md:block">
+                <div className="table-container">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th className="w-10" aria-label="expand" />
+                        <th>PO Name</th>
+                        <th className="w-40">PO #</th>
+                        <th className="w-32">Status</th>
+                        <th className="w-32">Ordered</th>
+                        <th className="w-32">Received</th>
+                        <th className="w-24 text-right">Items</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleOrderPos.map((po) => {
+                        const isOpen = !!expandedHistory[po.id];
+                        const items = visiblePoItems.filter((i) => i.po_id === po.id);
+                        const statusBadge = getPoStatusBadge(po.status || 'not_ordered');
+                        return (
+                          <Fragment key={po.id}>
+                            <tr>
+                              <td>
                                 <button
-                                  className={`btn text-xs ${it.status === 'outstanding' ? 'btn-warning' : ''}`}
-                                  title="Mark item as outstanding"
-                                  disabled={!!marking[it.id]}
-                                  onClick={() => markItemStatus(it.id, 'outstanding')}
+                                  className="btn text-xs w-11 h-11 p-0 rounded-full"
+                                  onClick={() => toggleHistoryPo(po.id)}
+                                  aria-expanded={isOpen}
+                                  aria-controls={`po-details-${po.id}`}
                                 >
-                                  Outstanding
+                                  {isOpen ? '-' : '+'}
                                 </button>
-                                <button
-                                  className={`btn text-xs ${it.status === 'received' ? 'btn-success' : ''}`}
-                                  title="Mark item as received"
-                                  disabled={!!marking[it.id]}
-                                  onClick={() => markItemStatus(it.id, 'received')}
-                                >
-                                  {marking[it.id] ? 'Saving…' : 'Received'}
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                        {items.length === 0 && (
-                          <tr>
-                            <td colSpan={3} className="text-sm text-gray-500 text-center">No items on this PO.</td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="mt-3">
-                    <textarea
-                      className="textarea"
-                      rows={2}
-                      placeholder="PO comments"
-                      defaultValue={po.comments || ""}
-                      onBlur={(e) => updatePoMeta(pid, { comments: e.target.value })}
-                    />
-                  </div>
-                </div>
-              );
-            })
-          )}
-
-          {/* History accordion: ordered and received POs */}
-          <div className="card p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-medium">In-progress and received POs</h3>
-              <span className="text-xs text-gray-500">{historyPos.length} total</span>
-            </div>
-            {historyPos.length === 0 ? (
-              <div className="text-sm text-gray-500">No ordered or received POs yet.</div>
-            ) : (
-              <div className="table-container">
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th className="w-10" aria-label="expand" />
-                      <th>PO Name</th>
-                      <th className="w-40">PO #</th>
-                      <th className="w-32">Status</th>
-                      <th className="w-32">Ordered</th>
-                      <th className="w-32">Received</th>
-                      <th className="w-24 text-right">Items</th>
-                      <th className="w-28" aria-label="actions" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {historyPos.map((p) => {
-                      const isOpen = !!expandedHistory[p.id];
-                      const items = poItems.filter((i) => i.po_id === p.id);
-                      return (
-                        <Fragment key={p.id}>
-                          <tr>
-                            <td>
-                              <button
-                                className="btn text-xs"
-                                onClick={() => toggleHistoryPo(p.id)}
-                                aria-expanded={isOpen}
-                                aria-controls={`po-details-${p.id}`}
-                              >
-                                {isOpen ? "-" : "+"}
-                              </button>
-                            </td>
-                            <td>{p.name || "(unnamed PO)"}</td>
-                            <td>{p.po_number || "—"}</td>
-                            <td>
-                              <span className={`badge ${p.status === 'received' ? 'badge-green' : p.status === 'ordered' ? 'badge-blue' : 'badge-gray'} capitalize`}>
-                                {p.status?.replace('_', ' ')}
-                              </span>
-                            </td>
-                            <td>{p.ordered_date || ""}</td>
-                            <td>{p.received_date || ""}</td>
-                            <td className="text-right">{items.length}</td>
-                            <td className="w-28 text-right">
-                              {p.status !== 'not_ordered' && (
-                                <button className="btn text-xs" onClick={() => startEditHistory(p)}>
-                                  Edit
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                          {isOpen && (
-                            <tr key={`${p.id}-details`}>
-                              <td colSpan={8} id={`po-details-${p.id}`}>
-                                <div className="p-3 bg-gray-50 rounded border border-gray-200">
-                                  {historyEditing[p.id] ? (
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm mb-3">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-gray-600">PO #</span>
-                                        <input
-                                          className="input input-sm w-44"
-                                          value={historyDraft[p.id]?.po_number || ''}
-                                          onChange={(e) => setHistoryDraft((m) => ({ ...m, [p.id]: { ...m[p.id], po_number: e.target.value } }))}
-                                        />
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-gray-600">Ordered</span>
-                                        <input
-                                          type="date"
-                                          className="input input-sm w-44"
-                                          value={historyDraft[p.id]?.ordered_date || ''}
-                                          onChange={(e) => setHistoryDraft((m) => ({ ...m, [p.id]: { ...m[p.id], ordered_date: e.target.value } }))}
-                                        />
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-gray-600">Received</span>
-                                        <input
-                                          type="date"
-                                          className="input input-sm w-44"
-                                          value={historyDraft[p.id]?.received_date || ''}
-                                          onChange={(e) => setHistoryDraft((m) => ({ ...m, [p.id]: { ...m[p.id], received_date: e.target.value } }))}
-                                        />
-                                      </div>
-                                      <div className="md:col-span-3 flex justify-end gap-2">
-                                        <button className="btn text-xs" onClick={() => cancelEditHistory(p.id)} disabled={!!savingHistory[p.id]}>Cancel</button>
-                                        <button className="btn btn-primary text-xs" onClick={() => saveEditHistory(p.id)} disabled={!!savingHistory[p.id]}>
-                                          {savingHistory[p.id] ? 'Saving…' : 'Save'}
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm mb-3">
-                                      <div><span className="text-gray-600">PO Name:</span> {p.name || "(unnamed PO)"}</div>
-                                      <div><span className="text-gray-600">PO #:</span> {p.po_number || "—"}</div>
-                                      <div><span className="text-gray-600">Status:</span> {p.status}</div>
-                                      <div><span className="text-gray-600">Ordered:</span> {p.ordered_date || ""}</div>
-                                      <div><span className="text-gray-600">Received:</span> {p.received_date || ""}</div>
-                                    </div>
-                                  )}
-                                  <div className="table-container">
-                                    <table className="table">
-                                      <thead>
-                                        <tr>
-                                          <th>Item</th>
-                                          <th className="w-24 text-right">Qty</th>
-                                          <th className="w-32">Status</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {items.map((it) => (
-                                          <tr key={it.id}>
-                                            <td>{it.label}</td>
-                                            <td className="text-right">{it.quantity}</td>
-                                            <td>
-                                              <span className={`badge ${it.status === 'received' ? 'badge-green' : it.status === 'outstanding' ? 'badge-amber' : it.status === 'ordered' ? 'badge-blue' : 'badge-gray'} capitalize`}>
-                                                {it.status.replace('_', ' ')}
-                                              </span>
-                                            </td>
-                                          </tr>
-                                        ))}
-                                        {items.length === 0 && (
-                                          <tr>
-                                            <td colSpan={3} className="text-sm text-gray-500 text-center">No items on this PO.</td>
-                                          </tr>
-                                        )}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                  {p.comments && (
-                                    <div className="mt-3 text-sm"><span className="text-gray-600">Comments:</span> {p.comments}</div>
-                                  )}
-                                </div>
                               </td>
-              </tr>
-                          )}
-            </Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                              <td>{po.name || '(unnamed PO)'}</td>
+                              <td>{po.po_number || '—'}</td>
+                              <td>
+                                <span className={`badge ${statusBadge} capitalize`}>
+                                  {getPoStatusLabel(po.status || 'not_ordered')}
+                                </span>
+                              </td>
+                              <td>{po.ordered_date || ''}</td>
+                              <td>{po.received_date || ''}</td>
+                              <td className="text-right">{items.length}</td>
+                            </tr>
+                            {isOpen && (
+                              <tr>
+                                <td colSpan={7} id={`po-details-${po.id}`}>
+                                  <div className="p-3">
+                                    {renderPoExpandedBody(po.id, po, items)}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            )}
+
+              <div className="md:hidden space-y-3">
+                {visibleOrderPos.map((po) => {
+                  const isOpen = !!expandedHistory[po.id];
+                  const items = visiblePoItems.filter((i) => i.po_id === po.id);
+                  const statusBadge = getPoStatusBadge(po.status || 'not_ordered');
+                  return (
+                    <div key={po.id} className="card p-3">
+                      <button
+                        className="w-full flex items-start justify-between gap-3 text-left"
+                        onClick={() => toggleHistoryPo(po.id)}
+                        aria-expanded={isOpen}
+                        aria-controls={`po-mobile-details-${po.id}`}
+                      >
+                        <div className="space-y-1 min-w-0">
+                          <div className="font-medium truncate">{po.name || '(unnamed PO)'}</div>
+                          <div className="text-xs text-gray-400">PO # {po.po_number || '—'}</div>
+                          <div className="text-xs text-gray-400">Ordered {po.ordered_date || '—'} · Received {po.received_date || '—'}</div>
+                          <div className="text-xs text-gray-400">Items {items.length}</div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`badge ${statusBadge} capitalize`}>
+                            {getPoStatusLabel(po.status || 'not_ordered')}
+                          </span>
+                          <span className="btn text-xs w-11 h-11 p-0 rounded-full" aria-hidden="true">{isOpen ? '-' : '+'}</span>
+                        </div>
+                      </button>
+                      {isOpen && (
+                        <div id={`po-mobile-details-${po.id}`} className="mt-3 border-t border-slate-600/40 pt-3">
+                          {renderPoExpandedBody(po.id, po, items)}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+      {createPoModal.open && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="create-po-title">
+          <div className="card p-4 w-full max-w-md mx-auto">
+            <h3 id="create-po-title" className="font-medium mb-3">Create New PO</h3>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                createNewPo();
+              }}
+              className="space-y-4"
+            >
+              <div className="flex flex-col gap-1">
+                <label className="text-sm text-gray-700" htmlFor="create-po-name">PO name</label>
+                <input
+                  id="create-po-name"
+                  className="input input-sm"
+                  placeholder="Enter a name for the new PO"
+                  value={createPoModal.name}
+                  onChange={(e) => setCreatePoModal((m) => ({ ...m, name: e.target.value }))}
+                  autoFocus
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button type="button" className="btn text-xs" onClick={closeCreatePoModal} disabled={creatingPo}>Cancel</button>
+                <button type="submit" className="btn btn-primary text-xs" disabled={creatingPo || !createPoModal.name.trim()}>
+                  {creatingPo ? 'Creating…' : 'Create PO'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -1005,8 +964,8 @@ function AssignToPoRow({ item, poList, onAssign, assigning }) {
           <option key={p.id} value={p.id}>{p.name || '(unnamed PO)'}{p.po_number ? ` — ${p.po_number}` : ''}</option>
         ))}
       </select>
-      <button className="btn text-xs" disabled={assigning[item.id] || !sel} onClick={() => onAssign(item.id, sel)}>
-        {assigning[item.id] ? 'Adding…' : 'Add to PO'}
+      <button className="btn btn-3d-primary text-xs" disabled={assigning[item.id] || !sel} onClick={() => onAssign(item.id, sel)}>
+        {assigning[item.id] ? 'Adding…' : 'Add'}
       </button>
     </div>
   );
