@@ -1,5 +1,0 @@
-import DrillholesPage from "../drillholes/DrillholesPage";
-
-export default function Page() {
-  return <DrillholesPage />;
-}

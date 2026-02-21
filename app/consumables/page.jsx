@@ -32,6 +32,7 @@ export default function ConsumablesPage() {
   const [assigning, setAssigning] = useState({}); // id->loading
   const [poLoading, setPoLoading] = useState(false);
   const [creatingPo, setCreatingPo] = useState(false);
+  const [deletingPo, setDeletingPo] = useState({}); // poId -> loading
   const [createPoModal, setCreatePoModal] = useState({ open: false, name: "" });
   const [expandedHistory, setExpandedHistory] = useState({}); // poId -> bool for accordion
   const [marking, setMarking] = useState({}); // itemId -> loading
@@ -357,6 +358,40 @@ export default function ConsumablesPage() {
     await updatePoMeta(poId, { po_number });
   };
 
+  const deletePo = async (poId) => {
+    if (!poId) return;
+    if (!confirm('Delete this PO? Linked items will be moved back to Purchase Requests.')) return;
+    setDeletingPo((m) => ({ ...m, [poId]: true }));
+    try {
+      const { error: moveErr } = await supabase
+        .from("purchase_order_items")
+        .update({ po_id: null, status: "outstanding" })
+        .eq("organization_id", orgId)
+        .eq("po_id", poId);
+      if (moveErr) throw moveErr;
+
+      const { error: delErr } = await supabase
+        .from("purchase_orders")
+        .delete()
+        .eq("organization_id", orgId)
+        .eq("id", poId);
+      if (delErr) throw delErr;
+
+      setPoList((arr) => arr.filter((p) => p.id !== poId));
+      setPoItems((arr) => arr.map((it) => (it.po_id === poId ? { ...it, po_id: null, status: 'outstanding' } : it)));
+      setExpandedHistory((m) => {
+        const next = { ...m };
+        delete next[poId];
+        return next;
+      });
+      toast.success('PO deleted');
+    } catch (e) {
+      toast.error('Failed to delete PO');
+    } finally {
+      setDeletingPo((m) => ({ ...m, [poId]: false }));
+    }
+  };
+
   const orderedStatuses = ["not_ordered", "ordered", "received"];
   const getPoStatusLabel = (status) => {
     if (status === 'not_ordered') return 'In Progress';
@@ -389,7 +424,7 @@ export default function ConsumablesPage() {
   };
 
   const renderPoExpandedBody = (pid, po, items) => (
-    <div className="space-y-3">
+    <div className="space-y-3 rounded-xl border border-slate-500/30 bg-slate-800/25 p-3 md:p-4">
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
@@ -520,6 +555,16 @@ export default function ConsumablesPage() {
           onBlur={(e) => updatePoMeta(pid, { comments: e.target.value })}
         />
       </div>
+
+      <div className="pt-1 flex justify-end">
+        <button
+          className="btn btn-danger text-xs"
+          disabled={!!deletingPo[pid]}
+          onClick={() => deletePo(pid)}
+        >
+          {deletingPo[pid] ? 'Deleting…' : 'Delete PO'}
+        </button>
+      </div>
     </div>
   );
 
@@ -551,7 +596,7 @@ export default function ConsumablesPage() {
           <div className="flex items-center mb-3 gap-3">
             <h2 className="font-medium">Inventory</h2>
             {isAdmin && (
-              <button className="btn btn-primary text-xs" onClick={addConsumableItem}>Add Item</button>
+              <button className="btn btn-3d-primary text-xs" onClick={addConsumableItem}>Add Item</button>
             )}
           </div>
           {loadingItems ? (
@@ -812,7 +857,7 @@ export default function ConsumablesPage() {
                             {isOpen && (
                               <tr>
                                 <td colSpan={7} id={`po-details-${po.id}`}>
-                                  <div className="p-3">
+                                  <div className="p-2">
                                     {renderPoExpandedBody(po.id, po, items)}
                                   </div>
                                 </td>

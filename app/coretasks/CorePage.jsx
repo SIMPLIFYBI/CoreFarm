@@ -102,6 +102,13 @@ export default function CorePage() {
     .map(s => s === 'complete' ? 'Completed' : s === 'in_progress' ? 'In progress' : 'Not started')
     .join(', ');
 
+  const getStatusMeta = (holeId) => {
+    const s = holeStatus[holeId] || {};
+    if (s.hasPlanned && s.complete) return { label: 'Completed', cls: 'badge badge-green' };
+    if (s.hasPlanned || s.hasProgress) return { label: 'In Progress', cls: 'badge badge-amber' };
+    return { label: 'Not Started', cls: 'badge badge-gray' };
+  };
+
   useEffect(() => {
     if (!orgId) return;
     (async () => {
@@ -332,17 +339,24 @@ export default function CorePage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-4 md:p-6">
-      <h1 className="text-2xl font-semibold mb-2 text-slate-100">Core Logging</h1>
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <label className="text-sm text-slate-200">Entering actuals for the date of</label>
-        <input
-          type="date"
-          className="input input-sm w-auto"
-          value={loggedOn}
-          onChange={(e) => setLoggedOn(e.target.value)}
-        />
-        <div className="ml-auto flex flex-wrap items-center gap-2">
+    <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-5">
+      <div className="card p-4 md:p-5">
+        <h1 className="text-2xl font-semibold text-slate-100">Core Logging</h1>
+        <p className="text-sm text-slate-300 mt-1">Record task progress against planned intervals by hole.</p>
+      </div>
+
+      <div className="card p-4 md:p-5">
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="text-sm text-slate-200">Entering actuals for the date of</label>
+            <input
+              type="date"
+              className="input input-sm w-auto"
+              value={loggedOn}
+              onChange={(e) => setLoggedOn(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
           <div className="relative" ref={projectMenuRef}>
             <button
               type="button"
@@ -456,7 +470,7 @@ export default function CorePage() {
             )}
           </div>
         </div>
-      </div>
+        </div>
       {loading ? (
         <p>Loading…</p>
       ) : holes.length === 0 ? (
@@ -479,18 +493,14 @@ export default function CorePage() {
                 <Fragment key={h.id}>
                   <tr>
                     <td className="p-2 border align-top">
-                      <button className="btn text-xs" onClick={() => toggleHole(h.id)}>
+                      <button className="btn btn-3d-glass text-xs" onClick={() => toggleHole(h.id)}>
                         {expandedHole[h.id] ? "−" : "+"}
                       </button>
                     </td>
                     <td className="p-2 border">
                       <div className="flex items-center gap-2">
                         <span>{h.hole_id}</span>
-                        {(holeStatus[h.id]?.hasPlanned && holeStatus[h.id]?.complete) ? (
-                          <span className="text-[10px] px-2 py-0.5 rounded bg-green-100 text-green-700">Complete</span>
-                        ) : (holeStatus[h.id]?.hasPlanned) ? (
-                          <span className="text-[10px] px-2 py-0.5 rounded bg-amber-100 text-amber-700">In progress</span>
-                        ) : null}
+                        <span className={getStatusMeta(h.id).cls}>{getStatusMeta(h.id).label}</span>
                       </div>
                     </td>
                     <td className="p-2 border align-top">{h?.depth ?? "-"}</td>
@@ -518,7 +528,7 @@ export default function CorePage() {
                                     <tr className="hover:bg-white">
                                       <td className="p-2 border align-top">
                                         <button
-                                          className="btn text-[10px]"
+                                          className="btn btn-3d-glass text-[10px]"
                                           onClick={() => toggleTask(h.id, task)}
                                         >
                                           {expandedTask[holeKey(h.id, task)] ? "−" : "+"}
@@ -593,7 +603,7 @@ export default function CorePage() {
                                                             />
                                                             <button
                                                               type="button"
-                                className="btn btn-primary text-[10px] md:text-xs shrink-0 whitespace-nowrap px-2"
+                                className="btn btn-3d-primary text-[10px] md:text-xs shrink-0 whitespace-nowrap px-2"
                                                               onClick={() => saveInterval(h.id, task, pi.from_m, pi.to_m)}
                                                               disabled={savingKey === key}
                                                             >
@@ -601,7 +611,7 @@ export default function CorePage() {
                                                             </button>
                                                             <button
                                                               type="button"
-                                className="btn text-[10px] md:text-xs shrink-0 whitespace-nowrap px-2"
+                                className="btn btn-3d-glass text-[10px] md:text-xs shrink-0 whitespace-nowrap px-2"
                                                               onClick={() => saveInterval(h.id, task, pi.from_m, pi.to_m, state.from_m, pi.to_m)}
                                                               disabled={savingKey === key}
                                                             >
@@ -645,14 +655,10 @@ export default function CorePage() {
                     <span className="text-gray-700">Hole ID: {h.hole_id}</span>
                     <span className="text-gray-500">· Depth {h?.depth ?? "-"} m</span>
                   </div>
-                  {(holeStatus[h.id]?.hasPlanned && holeStatus[h.id]?.complete) ? (
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-green-100 text-green-700">Complete</span>
-                  ) : (holeStatus[h.id]?.hasPlanned) ? (
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-amber-100 text-amber-700">In progress</span>
-                  ) : null}
+                  <span className={getStatusMeta(h.id).cls}>{getStatusMeta(h.id).label}</span>
                 </div>
                 <button
-                  className="mt-2 w-full btn btn-primary text-xs"
+                  className="mt-2 w-full btn btn-3d-primary text-xs"
                   onClick={() => toggleHole(h.id)}
                 >
                   {expandedHole[h.id] ? "Hide tasks" : "Show tasks"}
@@ -666,7 +672,7 @@ export default function CorePage() {
                     ) : (
                       <div className="space-y-2">
                         {details[h.id].order.map((task) => (
-                          <div key={task} className="border rounded">
+                          <div key={task} className="glass rounded-xl">
                             <button
                               className="w-full p-2 text-xs flex items-center justify-between"
                               onClick={() => toggleTask(h.id, task)}
@@ -674,7 +680,7 @@ export default function CorePage() {
                               aria-controls={`task-${h.id}-${task}`}
                             >
                               <span>{task.replace(/_/g, " ")}</span>
-                              <span className="ml-2 inline-flex items-center justify-center w-4 h-4 rounded bg-gray-100 text-gray-600 text-[11px]">
+                              <span className="ml-2 inline-flex items-center justify-center w-4 h-4 rounded bg-slate-900/70 text-slate-200 text-[11px]">
                                 {expandedTask[holeKey(h.id, task)] ? '−' : '+'}
                               </span>
                             </button>
@@ -724,7 +730,7 @@ export default function CorePage() {
                                           disabled={state.disabled}
                                         />
                                         <button
-                                          className="btn btn-primary text-[10px] md:text-xs px-2"
+                                          className="btn btn-3d-primary text-[10px] md:text-xs px-2"
                                           onClick={() => saveInterval(h.id, task, pi.from_m, pi.to_m)}
                                           disabled={state.disabled || savingKey === key}
                                         >
@@ -760,6 +766,7 @@ export default function CorePage() {
           onChange={onNewHoleChange}
         />
       </label>
+    </div>
     </div>
   );
 }

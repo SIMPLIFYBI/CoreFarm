@@ -1,1 +1,1 @@
-export { default } from "../admin/page";
+export { default } from "../coretasks/page";

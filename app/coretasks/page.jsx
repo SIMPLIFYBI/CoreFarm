@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
-import CorePage from "../core/page";
-import AdminPage from "../admin/page";
+import CorePage from "./CorePage";
+import { AdminPage } from "./AdminPage";
+import SampleDispatchPage from "./SampleDispatchPage";
 
 const TABS = [
   { key: "logging", label: "Logging" },
@@ -34,11 +35,10 @@ export default function CoreTasksPage() {
         </button>
       </div>
       <div className="card overflow-hidden">
-        {tab === "logging" ? <CorePage /> : tab === "addcore" ? <AdminPage /> : (
-          <div className="flex flex-col items-center justify-center h-40 text-slate-300">
-            <span className="text-lg font-semibold text-slate-100">Coming soon</span>
-            <span className="mt-2">Sample Dispatch will be available in a future update.</span>
-          </div>
+        {tab === "logging" ? <CorePage /> : tab === "addcore" ? (
+          <AdminPage />
+        ) : (
+          <SampleDispatchPage />
         )}
       </div>
     </div>
