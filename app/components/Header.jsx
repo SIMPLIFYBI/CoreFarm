@@ -131,6 +131,7 @@ export default function Header() {
 
   const navTabs = [
     { href: "/dashboard", label: "Dashboard", icon: IconReport },
+    { href: "/activity", label: "Activity", icon: IconClipboard },
     { href: "/coretasks", label: "Core Tasks", icon: IconCoreTasks },
     { href: "/drillhole-viz", label: "Drillhole Viz", icon: IconCore },
     { href: "/consumables", label: "Consumables", icon: IconCore },

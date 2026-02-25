@@ -5,6 +5,7 @@ import { IconCore, IconAdmin, IconTeam, IconUser, IconReport, IconClipboard, Ico
 
 const tabs = [
   { href: "/dashboard", label: "Dashboard", icon: IconReport },
+  { href: "/activity", label: "Activity", icon: IconClipboard },
   { href: "/plods", label: "Plods", icon: IconPlods },
   { href: "/coretasks", label: "Core Tasks", icon: IconCoreTasks },
   { href: "/drillhole-viz", label: "Drillhole Viz", icon: IconCore },

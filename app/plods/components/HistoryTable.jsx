@@ -14,6 +14,7 @@ export function HistoryTable({
   dateRange,
   onDateChange,
   onRefresh,
+  onSelectPlod,
 }) {
   return (
     <div className="space-y-4">
@@ -48,19 +49,26 @@ export function HistoryTable({
               <thead>
                 <tr>
                   <th>Date</th>
+                  <th>Shift Date</th>
                   <th>Type</th>
                   <th>Vendor</th>
+                  <th>Activities</th>
                   <th>Notes</th>
                 </tr>
               </thead>
               <tbody>
                 {plods.map((p) => (
-                  <tr key={p.id}>
+                  <tr
+                    key={p.id}
+                    className="cursor-pointer transition-colors hover:bg-white/5"
+                    onClick={() => onSelectPlod?.(p)}
+                  >
                     <td>{formatDateFromStartedAt(p.started_at)}</td>
+                    <td>{p.shift_date ?? "—"}</td>
                     <td>{p.plod_types?.name ?? p.plod_type ?? p.plod_type_id ?? "—"}</td>
                     <td>{p.vendors?.name ?? p.vendor_name ?? p.vendor_id ?? "—"}</td>
-                    <td>{p.notes}</td>
-                    <td>{p.shift_date ?? "—"}</td>
+                    <td>{Array.isArray(p.plod_activities) ? p.plod_activities.length : 0}</td>
+                    <td>{p.notes || "—"}</td>
                   </tr>
                 ))}
               </tbody>

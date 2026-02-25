@@ -153,9 +153,9 @@ export default function HomePage() {
   return (
     <div className="max-w-6xl mx-auto p-6 grid md:grid-cols-2 gap-8">
       <div className="space-y-3">
-        <h1 className="text-3xl font-semibold">MinePlod</h1>
+        <h1 className="text-3xl font-semibold">WorkMine</h1>
         <p className="text-gray-600">
-          Plan, Manage and track your mining operations with ease. MinePlod is designed to help you stay organized, collaborate with your team, and keep your projects on track. With MinePlod, you can:
+          Plan, Manage and track your mining operations with ease. WorkMine is designed to help you stay organized, collaborate with your team, and keep your projects on track. With WorkMine, you can:
         </p>
         <ul className="list-disc ml-5 text-gray-700 text-sm space-y-1">
           <li>Record Plods for any mining activity</li>

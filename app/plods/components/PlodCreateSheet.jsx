@@ -11,6 +11,145 @@ function toISOFromDateAndTime(dateStr, timeStr) {
   return `${dateStr}T${timeStr.length === 5 ? `${timeStr}:00` : timeStr}`;
 }
 
+function snapTimeToQuarter(timeStr) {
+  if (!timeStr || !/^\d{2}:\d{2}$/.test(timeStr)) return timeStr;
+  const [h, m] = timeStr.split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return timeStr;
+
+  const totalMinutes = h * 60 + m;
+  const snapped = Math.round(totalMinutes / 15) * 15;
+  const safe = Math.max(0, Math.min(23 * 60 + 59, snapped));
+  const outH = String(Math.floor(safe / 60)).padStart(2, "0");
+  const outM = String(safe % 60).padStart(2, "0");
+  return `${outH}:${outM}`;
+}
+
+function getTimeParts(timeStr) {
+  if (!timeStr || !/^\d{2}:\d{2}$/.test(timeStr)) {
+    return { hour12: "12", minute: "00", period: "AM" };
+  }
+
+  const [hourRaw, minute] = timeStr.split(":");
+  const hour24 = Number(hourRaw);
+  if (!Number.isFinite(hour24)) {
+    return { hour12: "12", minute: "00", period: "AM" };
+  }
+
+  const period = hour24 >= 12 ? "PM" : "AM";
+  const hour12Num = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return { hour12: String(hour12Num).padStart(2, "0"), minute, period };
+}
+
+function build24HourTime(hour12, minute, period) {
+  const parsedHour = Number(hour12);
+  if (!Number.isFinite(parsedHour) || parsedHour < 1 || parsedHour > 12) return "";
+  if (!["00", "15", "30", "45"].includes(minute)) return "";
+
+  let hour24 = parsedHour % 12;
+  if (period === "PM") hour24 += 12;
+  return `${String(hour24).padStart(2, "0")}:${minute}`;
+}
+
+function format12HourLabel(timeStr) {
+  if (!timeStr || !/^\d{2}:\d{2}$/.test(timeStr)) return "--:--";
+  const [hourRaw, minute] = timeStr.split(":");
+  const hour24 = Number(hourRaw);
+  if (!Number.isFinite(hour24)) return "--:--";
+  const period = hour24 >= 12 ? "PM" : "AM";
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${String(hour12).padStart(2, "0")}:${minute} ${period}`;
+}
+
+const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"));
+const MINUTE_OPTIONS = ["00", "15", "30", "45"];
+
+function QuarterHourPicker({ label, value, onChange, disabled }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(value || "00:00");
+
+  useEffect(() => {
+    if (!open) return;
+    setDraft(value || "00:00");
+  }, [open, value]);
+
+  const parts = getTimeParts(draft);
+
+  const setPart = (part, next) => {
+    const hour12 = part === "hour12" ? next : parts.hour12;
+    const minute = part === "minute" ? next : parts.minute;
+    const period = part === "period" ? next : parts.period;
+    setDraft(build24HourTime(hour12, minute, period));
+  };
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-slate-200">{label}</label>
+      <button
+        type="button"
+        className="input mt-1 text-left"
+        onClick={() => setOpen(true)}
+        disabled={disabled}
+      >
+        {value ? format12HourLabel(value) : "Select time…"}
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
+          <div className="card w-full max-w-xs p-5">
+            <div className="text-[11px] tracking-widest uppercase text-slate-300">Select Time</div>
+            <div className="mt-2 text-5xl font-light text-slate-100">{format12HourLabel(draft)}</div>
+
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <select className="select" value={parts.hour12} onChange={(e) => setPart("hour12", e.target.value)}>
+                {HOUR_OPTIONS.map((h) => (
+                  <option key={h} value={h}>{h}</option>
+                ))}
+              </select>
+              <select className="select" value={parts.minute} onChange={(e) => setPart("minute", e.target.value)}>
+                {MINUTE_OPTIONS.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+              <div className="grid grid-cols-1 gap-1">
+                <button
+                  type="button"
+                  className={`btn !min-h-0 py-1 text-xs ${parts.period === "AM" ? "btn-3d-primary" : "btn-3d-glass"}`}
+                  onClick={() => setPart("period", "AM")}
+                >
+                  AM
+                </button>
+                <button
+                  type="button"
+                  className={`btn !min-h-0 py-1 text-xs ${parts.period === "PM" ? "btn-3d-primary" : "btn-3d-glass"}`}
+                  onClick={() => setPart("period", "PM")}
+                >
+                  PM
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" className="btn btn-3d-glass" onClick={() => setOpen(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-3d-primary"
+                onClick={() => {
+                  onChange(snapTimeToQuarter(draft));
+                  setOpen(false);
+                }}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [], holes = [], activityTypes = [], onCreated }) {
   const [step, setStep] = useState(1);
 
@@ -146,13 +285,16 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
   const addOrUpdateActivity = () => {
     setMsg(null);
 
-    if (!activityForm.activity_type_id || !activityForm.start_time || !activityForm.end_time) {
+    const snappedStartTime = snapTimeToQuarter(activityForm.start_time);
+    const snappedEndTime = snapTimeToQuarter(activityForm.end_time);
+
+    if (!activityForm.activity_type_id || !snappedStartTime || !snappedEndTime) {
       setMsg({ type: "error", text: "Select an activity type and enter start/end times." });
       return;
     }
 
-    const startISO = toISOFromDateAndTime(shiftDate, activityForm.start_time);
-    let endISO = toISOFromDateAndTime(shiftDate, activityForm.end_time);
+    const startISO = toISOFromDateAndTime(shiftDate, snappedStartTime);
+    let endISO = toISOFromDateAndTime(shiftDate, snappedEndTime);
 
     const startMs = new Date(startISO).getTime();
     const endMsSameDay = new Date(endISO).getTime();
@@ -160,7 +302,7 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
       const next = new Date(shiftDate);
       next.setDate(next.getDate() + 1);
       const nextDay = next.toISOString().slice(0, 10);
-      endISO = toISOFromDateAndTime(nextDay, activityForm.end_time);
+      endISO = toISOFromDateAndTime(nextDay, snappedEndTime);
     }
 
     const row = {
@@ -171,6 +313,8 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
       notes: activityForm.notes || null,
     };
 
+    const nextStartTime = snappedEndTime || "";
+
     if (editingIdx !== null) {
       setActivities((cur) => cur.map((x, i) => (i === editingIdx ? row : x)));
       setEditingIdx(null);
@@ -178,13 +322,13 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
       setActivities((cur) => [...cur, row]);
     }
 
-    setActivityForm({ activity_type_id: "", hole_id: "", start_time: "", end_time: "", notes: "" });
+    setActivityForm({ activity_type_id: "", hole_id: "", start_time: nextStartTime, end_time: "", notes: "" });
   };
 
   const beginEdit = (idx) => {
     const a = activities[idx];
-    const startTime = new Date(a.started_at).toISOString().slice(11, 16);
-    const endTime = new Date(a.finished_at).toISOString().slice(11, 16);
+    const startTime = snapTimeToQuarter(new Date(a.started_at).toISOString().slice(11, 16));
+    const endTime = snapTimeToQuarter(new Date(a.finished_at).toISOString().slice(11, 16));
     setActivityForm({
       activity_type_id: a.activity_type_id,
       hole_id: a.hole_id || "",
@@ -229,7 +373,6 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
         started_at: earliestStart,
         finished_at: latestEnd,
         notes: notes || null,
-        entered_by: enteredBy || null,
       };
 
       const { data: plod, error: plodError } = await sb.from("plods").insert(plodPayload).select("id").single();
@@ -246,6 +389,13 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
 
       const { error: actError } = await sb.from("plod_activities").insert(activitiesPayload);
       if (actError) throw actError;
+
+      const { error: pricingError } = await sb.rpc("lock_plod_pricing_snapshot", {
+        p_plod_id: plod.id,
+        p_rounding_mode: "nearest",
+        p_block_minutes: 15,
+      });
+      if (pricingError) throw pricingError;
 
       setMsg({ type: "success", text: "Plod created." });
       onCreated?.();
@@ -417,24 +567,18 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-sm font-medium text-slate-200">Start *</label>
-                        <input
-                          type="time"
-                          className="input mt-1"
-                          value={activityForm.start_time}
-                          onChange={(e) => setActivityForm((s) => ({ ...s, start_time: e.target.value }))}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-200">End *</label>
-                        <input
-                          type="time"
-                          className="input mt-1"
-                          value={activityForm.end_time}
-                          onChange={(e) => setActivityForm((s) => ({ ...s, end_time: e.target.value }))}
-                        />
-                      </div>
+                      <QuarterHourPicker
+                        label="Start *"
+                        value={activityForm.start_time}
+                        onChange={(nextTime) => setActivityForm((s) => ({ ...s, start_time: nextTime }))}
+                        disabled={saving}
+                      />
+                      <QuarterHourPicker
+                        label="End *"
+                        value={activityForm.end_time}
+                        onChange={(nextTime) => setActivityForm((s) => ({ ...s, end_time: nextTime }))}
+                        disabled={saving}
+                      />
                     </div>
 
                     <div>

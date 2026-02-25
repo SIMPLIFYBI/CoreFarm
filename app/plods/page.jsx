@@ -6,6 +6,7 @@ import { useOrg } from "@/lib/OrgContext";
 import { IconPlods } from "../components/icons";
 import { HistoryTable } from "./components/HistoryTable";
 import { PlodCreateSheet } from "./components/PlodCreateSheet";
+import { PlodDetailsModal } from "./components/PlodDetailsModal";
 
 export default function Page() {
   const supabase = useMemo(() => supabaseBrowser(), []);
@@ -21,6 +22,7 @@ export default function Page() {
 
   const [plods, setPlods] = useState([]);
   const [plodsLoading, setPlodsLoading] = useState(false);
+  const [selectedPlod, setSelectedPlod] = useState(null);
   const [dateRange, setDateRange] = useState({
     from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
     to: new Date().toISOString().split("T")[0],
@@ -160,6 +162,7 @@ export default function Page() {
             dateRange={dateRange}
             onDateChange={(k, v) => setDateRange((s) => ({ ...s, [k]: v }))}
             onRefresh={loadPlods}
+            onSelectPlod={setSelectedPlod}
           />
         </section>
       </div>
@@ -175,6 +178,8 @@ export default function Page() {
         onCreated={loadPlods}
         orgLoading={orgLoadingCtx}
       />
+
+      <PlodDetailsModal plod={selectedPlod} onClose={() => setSelectedPlod(null)} />
     </div>
   );
 }

@@ -10,8 +10,7 @@ export default function VendorModal({ orgId, onClose, onCreated }) {
 
   const [form, setForm] = useState({
     name: "",
-    email: "",
-    phone: "",
+    contact: "",
   });
 
   const createVendor = async () => {
@@ -24,8 +23,7 @@ export default function VendorModal({ orgId, onClose, onCreated }) {
       const payload = {
         organization_id: orgId,
         name: form.name.trim(),
-        email: form.email.trim() || null,
-        phone: form.phone.trim() || null,
+        contact: form.contact.trim() || null,
       };
 
       const { data, error } = await supabase.from("vendors").insert(payload).select("*").single();
@@ -69,20 +67,11 @@ export default function VendorModal({ orgId, onClose, onCreated }) {
           </label>
 
           <label className="block text-sm">
-            Email (optional)
+            Contact (optional)
             <input
               className="input w-full"
-              value={form.email}
-              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-            />
-          </label>
-
-          <label className="block text-sm">
-            Phone (optional)
-            <input
-              className="input w-full"
-              value={form.phone}
-              onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+              value={form.contact}
+              onChange={(e) => setForm((f) => ({ ...f, contact: e.target.value }))}
             />
           </label>
 

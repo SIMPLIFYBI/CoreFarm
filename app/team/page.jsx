@@ -28,6 +28,10 @@ export default function TeamPage() {
   const [modalInviting, setModalInviting] = useState(false);
   const [sessionInvites, setSessionInvites] = useState([]); // [{email,status,message,role}]
 
+  const [orgCurrency, setOrgCurrency] = useState("");
+  const [orgTaxRate, setOrgTaxRate] = useState("");
+  const [savingOrgBilling, setSavingOrgBilling] = useState(false);
+
   const myRole = useMemo(() => {
     const m = memberships.find((m) => m.organization_id === selectedOrgId);
     return m?.role || null;
@@ -253,6 +257,7 @@ export default function TeamPage() {
               <span className="ml-2 text-xs text-gray-600">Your role: {myRole || '—'}</span>
             </div>
           )}
+
           <form onSubmit={createOrg} className="card p-4">
             <h2 className="font-medium mb-2">Create organization</h2>
             <div className="flex gap-2 items-center">
@@ -261,6 +266,59 @@ export default function TeamPage() {
             </div>
             <p className="text-xs text-gray-500 mt-2">You become the admin and can invite your team.</p>
           </form>
+
+          {selectedOrgId && (
+            <form onSubmit={saveOrgBillingDefaults} className="card p-4">
+              <h2 className="font-medium mb-2">Billing defaults (optional)</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label className="text-sm">
+                  Currency
+                  <select
+                    className="select-gradient-sm mt-1"
+                    value={orgCurrency}
+                    onChange={(e) => setOrgCurrency(e.target.value)}
+                    disabled={myRole !== "admin"}
+                  >
+                    <option value="">Not set</option>
+                    <option value="AUD">AUD</option>
+                    <option value="USD">USD</option>
+                    <option value="CAD">CAD</option>
+                    <option value="EUR">EUR</option>
+                    <option value="GBP">GBP</option>
+                    <option value="NZD">NZD</option>
+                  </select>
+                </label>
+
+                <label className="text-sm">
+                  Tax rate (%)
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    className="input mt-1"
+                    placeholder="e.g. 10"
+                    value={orgTaxRate}
+                    onChange={(e) => setOrgTaxRate(e.target.value)}
+                    disabled={myRole !== "admin"}
+                  />
+                </label>
+              </div>
+
+              <div className="mt-3 flex items-center justify-between">
+                <p className="text-xs text-gray-500">
+                  Applied as default costing settings. Leave blank to keep unset.
+                </p>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={myRole !== "admin" || savingOrgBilling}
+                >
+                  {savingOrgBilling ? "Saving..." : "Save defaults"}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       )}
 
