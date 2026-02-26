@@ -31,7 +31,17 @@ export default function Header() {
   const { orgId, memberships } = useOrg();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerMounted, setDrawerMounted] = useState(false);
   const [isAppAdmin, setIsAppAdmin] = useState(false);
+
+  const openDrawer = () => {
+    setDrawerMounted(true);
+    window.requestAnimationFrame(() => setDrawerOpen(true));
+  };
+
+  const closeDrawer = () => {
+    setDrawerOpen(false);
+  };
 
   // Close menu when navigating (including query string changes like /projects?tab=...)
   useEffect(() => {
@@ -57,14 +67,24 @@ export default function Header() {
 
   useEffect(() => {
     // Close menu when navigating
-    setDrawerOpen(false);
+    closeDrawer();
   }, [pathname]);
 
   useEffect(() => {
-    if (!drawerOpen) return;
+    if (drawerOpen || !drawerMounted) return;
+
+    const timer = window.setTimeout(() => {
+      setDrawerMounted(false);
+    }, 280);
+
+    return () => window.clearTimeout(timer);
+  }, [drawerOpen, drawerMounted]);
+
+  useEffect(() => {
+    if (!drawerMounted) return;
 
     const onKeyDown = (e) => {
-      if (e.key === "Escape") setDrawerOpen(false);
+      if (e.key === "Escape") closeDrawer();
     };
 
     document.addEventListener("keydown", onKeyDown);
@@ -75,7 +95,7 @@ export default function Header() {
       document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = prevOverflow;
     };
-  }, [drawerOpen]);
+  }, [drawerMounted]);
 
   useEffect(() => {
     let mounted = true;
@@ -155,11 +175,11 @@ export default function Header() {
           {/* Burger */}
           <button
             type="button"
-            className="inline-flex items-center justify-center h-10 w-10 rounded-full border border-white/15 bg-white/5 hover:bg-white/10 transition-base text-slate-100 focus-ring"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 backdrop-blur-xl shadow-lg shadow-black/30 text-slate-100 hover:border-white/30 hover:bg-white/15 active:scale-95 transition-base focus-ring"
             aria-label="Open menu"
             aria-expanded={drawerOpen}
             aria-controls="app-nav-drawer"
-            onClick={() => setDrawerOpen(true)}
+            onClick={openDrawer}
           >
             {/* hamburger icon (3 lines only) */}
             <span aria-hidden="true" className="flex flex-col justify-center gap-1.5">
@@ -173,11 +193,11 @@ export default function Header() {
           <div className="flex-shrink-0 flex items-center">
             <Link className="flex items-center" href="/home">
               <Image
-                src="/demo/GeoFarm.png"
-                alt="GeoFarm Logo"
-                width={120}
-                height={40}
-                className="h-8 w-auto"
+                src="/demo/SimplifyBI2.png"
+                alt="SimplifyBI Logo"
+                width={140}
+                height={46}
+                className="h-9 w-auto"
                 priority
               />
             </Link>
@@ -205,30 +225,41 @@ export default function Header() {
       </div>
 
       {/* Drawer + overlay (fresh rebuild) */}
-      {drawerOpen && (
+      {drawerMounted && (
         <div className="fixed inset-0 z-[999]">
-          <div className="fixed inset-0 bg-black/70" onClick={() => setDrawerOpen(false)} aria-hidden="true" />
+          <div
+            className={[
+              "fixed inset-0 bg-black/70 transition-opacity duration-300",
+              drawerOpen ? "opacity-100" : "opacity-0 pointer-events-none",
+            ].join(" ")}
+            onClick={closeDrawer}
+            aria-hidden="true"
+          />
 
           <aside
             id="app-nav-drawer"
-            className="fixed left-0 top-0 z-10 h-dvh w-[320px] max-w-[85vw] border-r border-white/10 shadow-2xl bg-slate-950"
+            className={[
+              "fixed left-0 top-0 z-10 h-dvh w-[320px] max-w-[85vw] border-r border-white/10 shadow-2xl bg-slate-950",
+              "transform transition-transform duration-300 ease-out will-change-transform",
+              drawerOpen ? "translate-x-0" : "-translate-x-full",
+            ].join(" ")}
             style={{ backgroundColor: "#020617" }}
             role="dialog"
             aria-modal="true"
           >
             <div className="p-4 border-b border-white/10 flex items-center justify-between">
               <Image
-                src="/demo/GeoFarm.png"
-                alt="GeoFarm Logo"
-                width={120}
-                height={40}
-                className="h-7 w-auto"
+                src="/demo/SimplifyBI2.png"
+                alt="SimplifyBI Logo"
+                width={136}
+                height={44}
+                className="h-8 w-auto"
               />
               <button
                 type="button"
                 className="h-10 w-10 inline-flex items-center justify-center rounded-full text-slate-100 hover:bg-white/10 transition-base focus-ring"
                 aria-label="Close menu"
-                onClick={() => setDrawerOpen(false)}
+                onClick={closeDrawer}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
@@ -309,7 +340,7 @@ export default function Header() {
                                     ? "bg-white/10 text-white"
                                     : "text-slate-200 hover:bg-white/5 hover:text-white",
                                 ].join(" ")}
-                                onClick={() => setDrawerOpen(false)}
+                                onClick={closeDrawer}
                               >
                                 {c.label}
                               </Link>
