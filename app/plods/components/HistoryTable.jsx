@@ -1,11 +1,35 @@
 import React from "react";
 import { Spinner } from "./Spinner";
 
-function formatDateFromStartedAt(startedAt) {
-  if (!startedAt) return "—";
-  const d = new Date(startedAt);
-  if (Number.isNaN(d.getTime())) return String(startedAt).slice(0, 10);
-  return d.toISOString().slice(0, 10);
+function StatusBadge({ status }) {
+  const value = (status || "submitted").toLowerCase();
+  const classes =
+    value === "approved"
+      ? "bg-emerald-500/15 text-emerald-200 border-emerald-500/25"
+      : value === "rejected"
+      ? "bg-rose-500/15 text-rose-200 border-rose-500/25"
+      : "bg-amber-500/15 text-amber-200 border-amber-500/25";
+
+  return (
+    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize ${classes}`}>
+      {value}
+    </span>
+  );
+}
+
+function formatPlodForDate(row) {
+  const v = row.shift_date || row.started_at;
+  if (!v) return "—";
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString();
+}
+
+function formatSubmitter(row) {
+  if (row.submitted_by_profile?.full_name) return row.submitted_by_profile.full_name;
+  if (row.submitted_by_profile?.email) return row.submitted_by_profile.email;
+  if (row.submitted_by) return String(row.submitted_by).slice(0, 8);
+  return "—";
 }
 
 export function HistoryTable({
@@ -48,12 +72,11 @@ export function HistoryTable({
             <table className="table">
               <thead>
                 <tr>
-                  <th>Date</th>
-                  <th>Shift Date</th>
+                  <th>Plod Date</th>
                   <th>Type</th>
                   <th>Vendor</th>
-                  <th>Activities</th>
-                  <th>Notes</th>
+                  <th>Submitter</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -63,12 +86,13 @@ export function HistoryTable({
                     className="cursor-pointer transition-colors hover:bg-white/5"
                     onClick={() => onSelectPlod?.(p)}
                   >
-                    <td>{formatDateFromStartedAt(p.started_at)}</td>
-                    <td>{p.shift_date ?? "—"}</td>
+                    <td>{formatPlodForDate(p)}</td>
                     <td>{p.plod_types?.name ?? p.plod_type ?? p.plod_type_id ?? "—"}</td>
                     <td>{p.vendors?.name ?? p.vendor_name ?? p.vendor_id ?? "—"}</td>
-                    <td>{Array.isArray(p.plod_activities) ? p.plod_activities.length : 0}</td>
-                    <td>{p.notes || "—"}</td>
+                    <td>{formatSubmitter(p)}</td>
+                    <td>
+                      <StatusBadge status={p.approval_status} />
+                    </td>
                   </tr>
                 ))}
               </tbody>

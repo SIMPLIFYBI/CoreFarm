@@ -22,7 +22,23 @@ function formatDuration(startedAt, finishedAt) {
   return `${hours}h ${minutes}m`;
 }
 
-export function PlodDetailsModal({ plod, onClose }) {
+function getStatusStyle(status) {
+  const value = (status || "submitted").toLowerCase();
+  if (value === "approved") return "bg-emerald-500/15 text-emerald-200 border-emerald-500/25";
+  if (value === "rejected") return "bg-rose-500/15 text-rose-200 border-rose-500/25";
+  return "bg-amber-500/15 text-amber-200 border-amber-500/25";
+}
+
+function getUserLabel(profile, fallbackId) {
+  if (profile?.full_name) return profile.full_name;
+  if (profile?.email) return profile.email;
+  if (fallbackId) return String(fallbackId).slice(0, 8);
+  return "—";
+}
+
+export function PlodDetailsModal({ plod, onClose, onDecision, decisionSaving = false }) {
+  const [comment, setComment] = React.useState("");
+
   useEffect(() => {
     if (!plod) return;
 
@@ -34,9 +50,19 @@ export function PlodDetailsModal({ plod, onClose }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [plod, onClose]);
 
+  useEffect(() => {
+    setComment(plod?.decision_comment || "");
+  }, [plod]);
+
   if (!plod) return null;
 
   const activities = Array.isArray(plod.plod_activities) ? plod.plod_activities : [];
+  const status = (plod.approval_status || "submitted").toLowerCase();
+  const canDecide = status === "submitted";
+
+  const submitDecision = async (action) => {
+    await onDecision?.(plod.id, action, comment);
+  };
 
   return (
     <div className="fixed inset-0 z-[60]">
@@ -59,6 +85,76 @@ export function PlodDetailsModal({ plod, onClose }) {
         </div>
 
         <div className="max-h-[78vh] overflow-y-auto p-5 space-y-4">
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-medium text-slate-100">Approval</h3>
+              <span
+                className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize ${getStatusStyle(
+                  status
+                )}`}
+              >
+                {status}
+              </span>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2.5">
+                <p className="text-[11px] uppercase tracking-wide text-slate-400">Submitted By</p>
+                <p className="mt-1 text-sm text-slate-100">
+                  {getUserLabel(plod.submitted_by_profile, plod.submitted_by)}
+                </p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2.5">
+                <p className="text-[11px] uppercase tracking-wide text-slate-400">Submitted At</p>
+                <p className="mt-1 text-sm text-slate-100">{formatDate(plod.submitted_at)}</p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2.5">
+                <p className="text-[11px] uppercase tracking-wide text-slate-400">Decision By</p>
+                <p className="mt-1 text-sm text-slate-100">{getUserLabel(plod.decision_by_profile, plod.decision_by)}</p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2.5">
+                <p className="text-[11px] uppercase tracking-wide text-slate-400">Decision At</p>
+                <p className="mt-1 text-sm text-slate-100">{formatDate(plod.decision_at)}</p>
+              </div>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              <label className="text-[11px] uppercase tracking-wide text-slate-400">Approval Comment</label>
+              <textarea
+                className="input min-h-[84px]"
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Add a comment for approval/rejection"
+                disabled={!canDecide || decisionSaving}
+              />
+            </div>
+
+            {canDecide && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => submitDecision("approve")}
+                  disabled={decisionSaving}
+                >
+                  {decisionSaving ? "Saving..." : "Approve"}
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => submitDecision("reject")}
+                  disabled={decisionSaving}
+                >
+                  {decisionSaving ? "Saving..." : "Reject"}
+                </button>
+              </div>
+            )}
+
+            {!canDecide && (
+              <p className="mt-3 text-xs text-slate-300">This plod has already been finalized.</p>
+            )}
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
               <p className="text-[11px] uppercase tracking-wide text-slate-400">Type</p>

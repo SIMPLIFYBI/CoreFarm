@@ -23,6 +23,7 @@ export default function Page() {
   const [plods, setPlods] = useState([]);
   const [plodsLoading, setPlodsLoading] = useState(false);
   const [selectedPlod, setSelectedPlod] = useState(null);
+  const [decisionSaving, setDecisionSaving] = useState(false);
   const [dateRange, setDateRange] = useState({
     from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
     to: new Date().toISOString().split("T")[0],
@@ -45,6 +46,12 @@ export default function Page() {
           started_at,
           finished_at,
           notes,
+          approval_status,
+          submitted_at,
+          submitted_by,
+          decision_at,
+          decision_by,
+          decision_comment,
           vendors:vendor_id(name),
           plod_types:plod_type_id(name),
           plod_activities(
@@ -68,12 +75,71 @@ export default function Page() {
 
       const { data, error } = await q;
 
-      if (error) setMessage({ type: "error", text: error.message });
-      else setPlods(data || []);
+      if (error) {
+        setMessage({ type: "error", text: error.message });
+        return [];
+      }
+
+      const rows = data || [];
+      const userIds = Array.from(
+        new Set(rows.flatMap((p) => [p.submitted_by, p.decision_by]).filter(Boolean))
+      );
+
+      let profileById = {};
+      if (userIds.length > 0) {
+        const { data: profiles } = await sb
+          .from("profiles")
+          .select("id,full_name,email")
+          .in("id", userIds);
+
+        profileById = (profiles || []).reduce((acc, profile) => {
+          acc[profile.id] = profile;
+          return acc;
+        }, {});
+      }
+
+      const enriched = rows.map((row) => ({
+        ...row,
+        submitted_by_profile: row.submitted_by ? profileById[row.submitted_by] ?? null : null,
+        decision_by_profile: row.decision_by ? profileById[row.decision_by] ?? null : null,
+      }));
+
+      setPlods(enriched);
+      return enriched;
     } catch (_err) {
       setMessage({ type: "error", text: "Failed to load plods history" });
+      return [];
     } finally {
       setPlodsLoading(false);
+    }
+  };
+
+  const handleDecision = async (plodId, action, comment) => {
+    if (!plodId || decisionSaving) return;
+
+    setDecisionSaving(true);
+    setMessage(null);
+
+    try {
+      const rpcName = action === "approve" ? "approve_plod" : "reject_plod";
+      const { error } = await supabase.rpc(rpcName, {
+        p_plod_id: plodId,
+        p_comment: comment || null,
+      });
+
+      if (error) {
+        setMessage({ type: "error", text: error.message || `Failed to ${action} plod` });
+        return;
+      }
+
+      const refreshed = await loadPlods();
+      const updated = refreshed.find((p) => p.id === plodId) || null;
+      setSelectedPlod(updated);
+      setMessage({ type: "success", text: `Plod ${action === "approve" ? "approved" : "rejected"}.` });
+    } catch (_err) {
+      setMessage({ type: "error", text: `Failed to ${action} plod` });
+    } finally {
+      setDecisionSaving(false);
     }
   };
 
@@ -179,7 +245,12 @@ export default function Page() {
         orgLoading={orgLoadingCtx}
       />
 
-      <PlodDetailsModal plod={selectedPlod} onClose={() => setSelectedPlod(null)} />
+      <PlodDetailsModal
+        plod={selectedPlod}
+        onClose={() => setSelectedPlod(null)}
+        onDecision={handleDecision}
+        decisionSaving={decisionSaving}
+      />
     </div>
   );
 }
