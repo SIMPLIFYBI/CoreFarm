@@ -1,4 +1,3 @@
-// filepath: c:\Users\james\supa-CoreYard\supa-coreyard\app\assets\components\AssetsTable.jsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -13,41 +12,69 @@ export default function AssetsTable({
   const PAGE_SIZE = 30;
 
   const [assets, setAssets] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  // pagination + sorting
-  const [page, setPage] = useState(1);
-  const [sort, setSort] = useState({ key: "name", dir: "asc" }); // key: name|type|location|status
-
-  const [showModal, setShowModal] = useState(false);
-  const [editAsset, setEditAsset] = useState(null);
-  const [form, setForm] = useState({ name: "", asset_type_id: "", location_id: "", status: "Active" });
   const [locations, setLocations] = useState([]);
   const [assetTypes, setAssetTypes] = useState([]);
 
+  const [loading, setLoading] = useState(true);
+
+  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState({ key: "name", dir: "asc" }); // name|type|location|status
+
+  const [assetTypeFilter, setAssetTypeFilter] = useState("");
+  const [locationFilter, setLocationFilter] = useState("");
+
+  const [showModal, setShowModal] = useState(false);
+  const [editAsset, setEditAsset] = useState(null);
+  const [form, setForm] = useState({
+    name: "",
+    asset_type_id: "",
+    location_id: "",
+    status: "Active",
+  });
+
   useEffect(() => {
     const supabase = supabaseBrowser();
-    setLoading(true);
+    let mounted = true;
 
-    Promise.all([
-      supabase
-        .from("assets")
-        .select("id, name, asset_type_id, location_id, status, asset_types(name), asset_locations(name)"),
-      supabase.from("asset_locations").select("id, name"),
-      supabase.from("asset_types").select("id, name"),
-    ]).then(([assetsRes, locRes, typesRes]) => {
+    async function load() {
+      setLoading(true);
+
+      const [assetsRes, locRes, typesRes] = await Promise.all([
+        supabase
+          .from("assets")
+          .select("id, name, asset_type_id, location_id, status, asset_types(name), asset_locations(name)")
+          .order("name", { ascending: true }),
+        supabase.from("asset_locations").select("id, name").order("name", { ascending: true }),
+        supabase.from("asset_types").select("id, name").order("name", { ascending: true }),
+      ]);
+
+      if (!mounted) return;
+
       setAssets(assetsRes.data || []);
       setLocations(locRes.data || []);
       setAssetTypes(typesRes.data || []);
       setLoading(false);
-    });
+    }
+
+    load();
+    return () => {
+      mounted = false;
+    };
   }, [showModal]);
 
-  // keep page valid if data size changes
+  const filteredAssets = useMemo(() => {
+    return (assets || []).filter((asset) => {
+      if (assetTypeFilter && asset.asset_type_id !== assetTypeFilter) return false;
+      if (locationFilter && asset.location_id !== locationFilter) return false;
+      return true;
+    });
+  }, [assets, assetTypeFilter, locationFilter]);
+
+  // keep page valid when filtered size changes
   useEffect(() => {
-    const totalPages = Math.max(1, Math.ceil((assets?.length || 0) / PAGE_SIZE));
+    const totalPages = Math.max(1, Math.ceil((filteredAssets.length || 0) / PAGE_SIZE));
     setPage((p) => Math.min(Math.max(1, p), totalPages));
-  }, [assets, PAGE_SIZE]);
+  }, [filteredAssets.length]);
 
   const getSortValue = (asset, key) => {
     switch (key) {
@@ -66,33 +93,29 @@ export default function AssetsTable({
 
   const sortedAssets = useMemo(() => {
     const dir = sort.dir === "desc" ? -1 : 1;
-    const arr = [...(assets || [])];
+    const arr = [...filteredAssets];
 
     arr.sort((a, b) => {
-      const av = getSortValue(a, sort.key);
-      const bv = getSortValue(b, sort.key);
+      const av = String(getSortValue(a, sort.key)).toLowerCase();
+      const bv = String(getSortValue(b, sort.key)).toLowerCase();
 
-      // string compare (case-insensitive)
-      const as = String(av ?? "").toLowerCase();
-      const bs = String(bv ?? "").toLowerCase();
-
-      if (as < bs) return -1 * dir;
-      if (as > bs) return 1 * dir;
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
       return 0;
     });
 
     return arr;
-  }, [assets, sort]);
+  }, [filteredAssets, sort]);
 
   const totalPages = useMemo(
-    () => Math.max(1, Math.ceil((sortedAssets?.length || 0) / PAGE_SIZE)),
-    [sortedAssets, PAGE_SIZE]
+    () => Math.max(1, Math.ceil((sortedAssets.length || 0) / PAGE_SIZE)),
+    [sortedAssets.length]
   );
 
   const pagedAssets = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
     return sortedAssets.slice(start, start + PAGE_SIZE);
-  }, [sortedAssets, page, PAGE_SIZE]);
+  }, [sortedAssets, page]);
 
   const toggleSort = (key) => {
     setPage(1);
@@ -112,23 +135,30 @@ export default function AssetsTable({
     setForm(
       asset
         ? {
-            name: asset.name,
+            name: asset.name || "",
             asset_type_id: asset.asset_type_id || "",
-            location_id: asset.location_id,
-            status: asset.status,
+            location_id: asset.location_id || "",
+            status: asset.status || "Active",
           }
-        : { name: "", asset_type_id: "", location_id: "", status: "Active" }
+        : {
+            name: "",
+            asset_type_id: "",
+            location_id: "",
+            status: "Active",
+          }
     );
     setShowModal(true);
   };
 
   const handleSave = async () => {
     const supabase = supabaseBrowser();
+
     if (editAsset) {
       await supabase.from("assets").update(form).eq("id", editAsset.id);
     } else {
       await supabase.from("assets").insert([form]);
     }
+
     setShowModal(false);
   };
 
@@ -139,12 +169,76 @@ export default function AssetsTable({
   };
 
   return (
-    <div className="card p-4">
+    <div>
       <div className="flex justify-between items-center mb-4 gap-3">
         <h2 className="text-lg font-semibold text-slate-100">{title}</h2>
         <button className="btn btn-primary" onClick={() => openModal()} type="button">
           {addButtonLabel}
         </button>
+      </div>
+
+      <div className="glass rounded-xl border border-white/10 p-3 mb-4">
+        <div className="flex flex-wrap md:flex-nowrap items-end gap-3">
+          <label className="text-xs text-slate-300 min-w-[180px] flex-1">
+            Asset Type
+            <select
+              className="select-gradient-sm mt-1"
+              value={assetTypeFilter}
+              onChange={(e) => {
+                setAssetTypeFilter(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">All asset types</option>
+              {assetTypes.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="text-xs text-slate-300 min-w-[180px] flex-1">
+            Location
+            <select
+              className="select-gradient-sm mt-1"
+              value={locationFilter}
+              onChange={(e) => {
+                setLocationFilter(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">All locations</option>
+              {locations.map((loc) => (
+                <option key={loc.id} value={loc.id}>
+                  {loc.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="ml-auto flex items-center gap-2">
+            <div className="hidden sm:block text-xs text-slate-300/80 whitespace-nowrap">
+            Showing <span className="text-slate-100 font-medium">{sortedAssets.length}</span> assets
+            </div>
+            <button
+              type="button"
+              className="btn btn-xs inline-flex items-center gap-1.5"
+              aria-label="Clear filters"
+              title="Clear filters"
+              onClick={() => {
+                setAssetTypeFilter("");
+                setLocationFilter("");
+                setPage(1);
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+              <span className="hidden md:inline">Clear</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="overflow-x-auto -mx-2 md:mx-0">
@@ -174,6 +268,7 @@ export default function AssetsTable({
               <th className="p-2 font-medium text-right">Actions</th>
             </tr>
           </thead>
+
           <tbody>
             {loading ? (
               <tr>
@@ -213,7 +308,6 @@ export default function AssetsTable({
         </table>
       </div>
 
-      {/* Pagination */}
       {!loading && sortedAssets.length > 0 && (
         <div className="flex items-center justify-between gap-3 mt-4 flex-wrap">
           <div className="text-xs text-slate-300/70">

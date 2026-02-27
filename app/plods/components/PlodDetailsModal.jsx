@@ -204,6 +204,7 @@ export function PlodDetailsModal({ plod, onClose, onDecision, decisionSaving = f
                       <th>Start</th>
                       <th>Finish</th>
                       <th>Duration</th>
+                      <th>Machine Hours</th>
                       <th>Notes</th>
                     </tr>
                   </thead>
@@ -215,6 +216,7 @@ export function PlodDetailsModal({ plod, onClose, onDecision, decisionSaving = f
                         <td>{formatDate(activity.started_at)}</td>
                         <td>{formatDate(activity.finished_at)}</td>
                         <td>{formatDuration(activity.started_at, activity.finished_at)}</td>
+                        <td>{activity.machine_hours ?? "—"}</td>
                         <td>{activity.notes || "—"}</td>
                       </tr>
                     ))}

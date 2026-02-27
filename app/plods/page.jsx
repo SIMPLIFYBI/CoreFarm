@@ -60,6 +60,7 @@ export default function Page() {
             hole_id,
             started_at,
             finished_at,
+            machine_hours,
             notes,
             activity_types:activity_type_id(activity_type),
             holes:hole_id(hole_id)

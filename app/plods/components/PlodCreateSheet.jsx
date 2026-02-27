@@ -168,6 +168,7 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
     hole_id: "",
     start_time: "",
     end_time: "",
+    machine_hours: "",
     notes: "",
   });
 
@@ -271,7 +272,7 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
     setNotes("");
     setActivities([]);
     setEditingIdx(null);
-    setActivityForm({ activity_type_id: "", hole_id: "", start_time: "", end_time: "", notes: "" });
+    setActivityForm({ activity_type_id: "", hole_id: "", start_time: "", end_time: "", machine_hours: "", notes: "" });
     setMsg(null);
     setAllowedActivityTypeIds(null);
   };
@@ -310,6 +311,10 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
       hole_id: activityForm.hole_id || null,
       started_at: startISO,
       finished_at: endISO,
+      machine_hours:
+        activityForm.machine_hours === "" || activityForm.machine_hours === null
+          ? null
+          : Number(activityForm.machine_hours),
       notes: activityForm.notes || null,
     };
 
@@ -322,7 +327,14 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
       setActivities((cur) => [...cur, row]);
     }
 
-    setActivityForm({ activity_type_id: "", hole_id: "", start_time: nextStartTime, end_time: "", notes: "" });
+    setActivityForm({
+      activity_type_id: "",
+      hole_id: "",
+      start_time: nextStartTime,
+      end_time: "",
+      machine_hours: "",
+      notes: "",
+    });
   };
 
   const beginEdit = (idx) => {
@@ -334,6 +346,7 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
       hole_id: a.hole_id || "",
       start_time: startTime,
       end_time: endTime,
+      machine_hours: a.machine_hours ?? "",
       notes: a.notes || "",
     });
     setEditingIdx(idx);
@@ -344,7 +357,7 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
     setActivities((cur) => cur.filter((_, i) => i !== idx));
     if (editingIdx === idx) {
       setEditingIdx(null);
-      setActivityForm({ activity_type_id: "", hole_id: "", start_time: "", end_time: "", notes: "" });
+      setActivityForm({ activity_type_id: "", hole_id: "", start_time: "", end_time: "", machine_hours: "", notes: "" });
     }
   };
 
@@ -384,6 +397,7 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
         hole_id: a.hole_id || null,
         started_at: a.started_at,
         finished_at: a.finished_at,
+        machine_hours: a.machine_hours ?? null,
         notes: a.notes || null,
       }));
 
@@ -582,6 +596,19 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
                     </div>
 
                     <div>
+                      <label className="block text-sm font-medium text-slate-200">Machine hours (optional)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.25"
+                        className="input mt-1"
+                        value={activityForm.machine_hours}
+                        onChange={(e) => setActivityForm((s) => ({ ...s, machine_hours: e.target.value }))}
+                        placeholder="0.00"
+                      />
+                    </div>
+
+                    <div>
                       <label className="block text-sm font-medium text-slate-200">Notes (optional)</label>
                       <input
                         className="input mt-1"
@@ -605,7 +632,7 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
                           type="button"
                           onClick={() => {
                             setEditingIdx(null);
-                            setActivityForm({ activity_type_id: "", hole_id: "", start_time: "", end_time: "", notes: "" });
+                            setActivityForm({ activity_type_id: "", hole_id: "", start_time: "", end_time: "", machine_hours: "", notes: "" });
                           }}
                           className="btn"
                           disabled={saving}
@@ -632,6 +659,9 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
                               <div className="text-sm text-slate-300">
                                 {new Date(a.started_at).toLocaleString()} → {new Date(a.finished_at).toLocaleString()}
                               </div>
+                              {a.machine_hours !== null && a.machine_hours !== undefined && a.machine_hours !== "" && (
+                                <div className="text-sm text-slate-300 mt-1">Machine hours: {a.machine_hours}</div>
+                              )}
                               {a.notes && <div className="text-sm text-slate-300 mt-1">{a.notes}</div>}
                             </div>
                             <div className="flex gap-2">
