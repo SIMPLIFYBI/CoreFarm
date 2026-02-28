@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import toast from "react-hot-toast";
+import { EditIconButton } from "@/app/components/ActionIconButton";
 
 function toInt(v, fallback = 0) {
   const n = Number(v);
@@ -243,14 +244,9 @@ export default function PlodTypesAdminPanel({ orgId }) {
                   <td className="p-2">{t.sort_order ?? 0}</td>
                   <td className="p-2">{t.is_active ? "Yes" : "No"}</td>
                   <td className="p-2 text-right whitespace-nowrap">
-                    <button
-                      type="button"
-                      className="text-xs px-2 py-1 rounded border border-white/10 hover:bg-white/5 mr-2"
-                      onClick={() => openEdit(t)}
-                      disabled={saving}
-                    >
-                      Edit
-                    </button>
+                    <span className="inline-flex mr-2 align-middle">
+                      <EditIconButton onClick={() => openEdit(t)} disabled={saving} />
+                    </span>
                     <button
                       type="button"
                       className="text-xs px-2 py-1 rounded border border-white/10 hover:bg-white/5"

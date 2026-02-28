@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import { parseTable } from "@/lib/parseTable";
+import { EditIconButton, DeleteIconButton } from "@/app/components/ActionIconButton";
 
 export default function DrillholesPage() {
   const TASK_TYPES = [
@@ -416,9 +417,7 @@ export default function DrillholesPage() {
                       <td className="hidden md:table-cell">{h.drilling_contractor}</td>
                       <td className="hidden md:table-cell">
                         <div className="flex gap-2">
-                          <button
-                            type="button"
-                            className="btn btn-xs"
+                          <EditIconButton
                             onClick={() => {
                               setEditingId(h.id);
                               setSingle({
@@ -431,12 +430,8 @@ export default function DrillholesPage() {
                               });
                               setShowHoleModal(true);
                             }}
-                          >
-                            Edit
-                          </button>
-                          <button type="button" className="btn btn-xs btn-danger" onClick={() => deleteHole(h.id)}>
-                            Del
-                          </button>
+                          />
+                          <DeleteIconButton onClick={() => deleteHole(h.id)} />
                         </div>
                       </td>
                     </tr>

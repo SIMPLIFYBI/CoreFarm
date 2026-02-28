@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { supabaseBrowser } from "@/lib/supabaseClient";
+import { EditIconButton } from "@/app/components/ActionIconButton";
 
 function money(n) {
   if (n === null || n === undefined || n === "") return "—";
@@ -343,9 +344,7 @@ export default function ContractDetailsModal({ contract, orgId, onClose, onSave,
           <div className="flex gap-2">
             {isOwner ? (
               mode === "view" ? (
-                <button type="button" className="btn btn-primary" onClick={() => setMode("edit")}>
-                  Edit
-                </button>
+                  <EditIconButton onClick={() => setMode("edit")} label="Edit contract" />
               ) : (
                 <>
                   <button type="button" className="btn" onClick={() => setMode("view")} disabled={saving}>

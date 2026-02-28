@@ -4,6 +4,7 @@ import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import { redirectTo } from "@/lib/siteUrl";
 import toast from "react-hot-toast";
+import { DeleteIconButton } from "@/app/components/ActionIconButton";
 
 export default function TeamPage() {
   const supabase = supabaseBrowser();
@@ -74,6 +75,31 @@ export default function TeamPage() {
     })();
   }, [selectedOrgId, inviteStatusFilter, supabase]);
 
+  useEffect(() => {
+    if (!selectedOrgId) {
+      setOrgCurrency("");
+      setOrgTaxRate("");
+      return;
+    }
+
+    (async () => {
+      const { data, error } = await supabase
+        .from("organizations")
+        .select("currency,tax_rate")
+        .eq("id", selectedOrgId)
+        .maybeSingle();
+
+      if (error) {
+        setOrgCurrency("");
+        setOrgTaxRate("");
+        return;
+      }
+
+      setOrgCurrency(data?.currency || "");
+      setOrgTaxRate(data?.tax_rate == null ? "" : String(data.tax_rate));
+    })();
+  }, [selectedOrgId, supabase]);
+
   // Create organisation
   const createOrg = async (e) => {
     e?.preventDefault?.();
@@ -94,6 +120,39 @@ export default function TeamPage() {
     await refreshMemberships();
     setSelectedOrgId(org.id);
     setShowPostCreateModal(true);
+  };
+
+  const saveOrgBillingDefaults = async (e) => {
+    e?.preventDefault?.();
+    if (!selectedOrgId) return toast.error("Select an organization first");
+    if (myRole !== "admin") return toast.error("Admins only");
+
+    const trimmedCurrency = (orgCurrency || "").trim().toUpperCase();
+    const trimmedTaxRate = String(orgTaxRate || "").trim();
+
+    let parsedTaxRate = null;
+    if (trimmedTaxRate !== "") {
+      parsedTaxRate = Number(trimmedTaxRate);
+      if (!Number.isFinite(parsedTaxRate) || parsedTaxRate < 0 || parsedTaxRate > 100) {
+        return toast.error("Tax rate must be between 0 and 100");
+      }
+    }
+
+    setSavingOrgBilling(true);
+    const { error } = await supabase
+      .from("organizations")
+      .update({
+        currency: trimmedCurrency || null,
+        tax_rate: parsedTaxRate,
+      })
+      .eq("id", selectedOrgId);
+    setSavingOrgBilling(false);
+
+    if (error) return toast.error(error.message || "Could not save billing defaults");
+
+    setOrgCurrency(trimmedCurrency);
+    setOrgTaxRate(parsedTaxRate == null ? "" : String(parsedTaxRate));
+    toast.success("Billing defaults saved");
   };
 
   // Single invite
@@ -183,6 +242,8 @@ export default function TeamPage() {
   };
 
   const changeRole = async (userId, role) => {
+    if (myRole !== 'admin') return toast.error('Admins only');
+    if (!['admin', 'member', 'contractor'].includes(role)) return toast.error('Invalid role');
     const { error } = await supabase
       .from("organization_members")
       .update({ role })
@@ -331,6 +392,7 @@ export default function TeamPage() {
                 <input type="email" className="input w-72" placeholder="email@example.com" value={emailToInvite} onChange={(e)=>setEmailToInvite(e.target.value)} />
                 <select className="select-gradient-sm" value={inviteRole} onChange={(e)=>setInviteRole(e.target.value)}>
                   <option value="member">General user</option>
+                  <option value="contractor">Contractor</option>
                   <option value="admin">Admin</option>
                 </select>
                 <button type="submit" className="btn btn-primary">Send invite</button>
@@ -378,7 +440,7 @@ export default function TeamPage() {
                         <td>{i.status}</td>
                         <td className="space-x-2">
                           {deleteMode ? (
-                            <button className="btn text-xs" onClick={()=>deleteInvite(i.id)}>Delete</button>
+                            <DeleteIconButton onClick={() => deleteInvite(i.id)} />
                           ) : (
                             i.status === 'pending' && <button className="btn text-xs" onClick={()=>revokeInvite(i.id)}>Revoke</button>
                           )}
@@ -466,6 +528,7 @@ export default function TeamPage() {
                         <td>
                           <select className="select-gradient-sm" value={m.role} onChange={(e)=>changeRole(m.user_id, e.target.value)}>
                             <option value="member">General user</option>
+                            <option value="contractor">Contractor</option>
                             <option value="admin">Admin</option>
                           </select>
                         </td>
@@ -600,6 +663,7 @@ export default function TeamPage() {
                   />
                   <select className="select-gradient-sm" value={modalInviteRole} onChange={(e)=>setModalInviteRole(e.target.value)}>
                     <option value="member">General user</option>
+                    <option value="contractor">Contractor</option>
                     <option value="admin">Admin</option>
                   </select>
                   <button type="submit" className="btn btn-primary text-xs" disabled={modalInviting}>{modalInviting ? 'Adding...' : 'Add'}</button>

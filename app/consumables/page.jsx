@@ -21,7 +21,16 @@ export default function ConsumablesPage() {
   const [loadingItems, setLoadingItems] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [savingItem, setSavingItem] = useState(false);
+  const [deletingItem, setDeletingItem] = useState(false);
   const [editDraft, setEditDraft] = useState({ label: '', reorder_value: 0, cost_per_unit: 0, unit_size: 1 });
+  const [addItemModal, setAddItemModal] = useState({
+    open: false,
+    label: "",
+    reorder_value: 0,
+    unit_size: 1,
+    cost_per_unit: 0,
+  });
+  const [addingItem, setAddingItem] = useState(false);
   // No order number captured at inventory level anymore
 
   // Purchase requests
@@ -115,10 +124,27 @@ export default function ConsumablesPage() {
 
   // include_in_report toggle removed; dashboard derives low/reorder automatically.
 
+  const formatMoney = (value) => {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "—";
+    return new Intl.NumberFormat(undefined, { style: "currency", currency: "AUD" }).format(n);
+  };
+
   const addConsumableItem = async () => {
     if (!isAdmin) return;
-    const label = prompt('New item label?');
+    setAddItemModal({ open: true, label: "", reorder_value: 0, unit_size: 1, cost_per_unit: 0 });
+  };
+
+  const closeAddItemModal = () => {
+    if (addingItem) return;
+    setAddItemModal({ open: false, label: "", reorder_value: 0, unit_size: 1, cost_per_unit: 0 });
+  };
+
+  const submitAddConsumableItem = async () => {
+    if (!isAdmin) return;
+    const label = (addItemModal.label || "").trim();
     if (!label) return;
+
     let baseKey = label.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40) || 'item';
     let key = baseKey;
     const existingKeys = new Set(items.map(i => i.key));
@@ -126,12 +152,34 @@ export default function ConsumablesPage() {
     while (existingKeys.has(key)) {
       key = `${baseKey}_${i++}`;
     }
+
+    const reorderValue = Math.max(0, parseInt(addItemModal.reorder_value, 10) || 0);
+    const unitSize = Math.max(1, parseInt(addItemModal.unit_size, 10) || 1);
+    const costPerUnit = Math.max(0, parseFloat(addItemModal.cost_per_unit) || 0);
+
+    setAddingItem(true);
     try {
-  const { data, error } = await supabase.from('consumable_items').insert({ organization_id: orgId, key, label, count: 0, reorder_value: 0 }).select('id, key, label, count, include_in_report, reorder_value, cost_per_unit, unit_size').single();
+      const { data, error } = await supabase
+        .from('consumable_items')
+        .insert({
+          organization_id: orgId,
+          key,
+          label,
+          count: 0,
+          reorder_value: reorderValue,
+          cost_per_unit: costPerUnit,
+          unit_size: unitSize,
+        })
+        .select('id, key, label, count, include_in_report, reorder_value, cost_per_unit, unit_size')
+        .single();
       if (error) throw error;
       setItems(arr => [...arr, data]);
+      toast.success('Item added');
+      closeAddItemModal();
     } catch (e) {
       toast.error('Failed to add item');
+    } finally {
+      setAddingItem(false);
     }
   };
 
@@ -148,6 +196,10 @@ export default function ConsumablesPage() {
   };
 
   const saveEditItem = async () => {
+    if (!isAdmin) {
+      toast.error('Admins only');
+      return;
+    }
     if (!editItem || !orgId) return;
     setSavingItem(true);
     try {
@@ -175,16 +227,24 @@ export default function ConsumablesPage() {
   };
 
   const deleteConsumableItem = async (id, key) => {
-    if (!isAdmin) return;
+    if (!isAdmin) {
+      toast.error('Admins only');
+      return;
+    }
     if (!confirm('Delete this item? This cannot be undone.')) return;
     const prev = items;
     setItems(arr => arr.filter(i => i.id !== id));
+    setDeletingItem(true);
     try {
       const { error } = await supabase.from('consumable_items').delete().eq('organization_id', orgId).eq('key', key);
       if (error) throw error;
+      if (editItem?.id === id) setEditItem(null);
+      toast.success('Item deleted');
     } catch (e) {
       toast.error('Failed to delete item');
       setItems(prev); // revert
+    } finally {
+      setDeletingItem(false);
     }
   };
 
@@ -609,9 +669,10 @@ export default function ConsumablesPage() {
                     <th className="text-xs md:text-sm">Item</th>
                     <th className="w-24 text-center text-[10px] md:text-xs hidden md:table-cell">Reorder @</th>
                     <th className="md:w-28 text-xs md:text-sm">Count</th>
-                      <th className="md:w-24 text-xs md:text-sm">Status</th>
-                      <th className="md:w-40 text-xs md:text-sm">Actions</th>
-                    {isAdmin && <th className="w-10 hidden md:table-cell" />}
+                    <th className="md:w-28 text-xs md:text-sm text-right hidden md:table-cell">Cost / Unit</th>
+                    <th className="md:w-32 text-xs md:text-sm text-right hidden md:table-cell">Stock Value</th>
+                    <th className="md:w-24 text-xs md:text-sm">Status</th>
+                    <th className="md:w-40 text-xs md:text-sm">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -654,7 +715,7 @@ export default function ConsumablesPage() {
                           type="number"
                           min={0}
                           step={1}
-                          className="input input-sm text-right text-[11px] md:text-sm w-16 md:w-20"
+                          className="input input-sm no-spinner text-right text-[11px] md:text-sm w-16 md:w-20"
                           value={it.count}
                           onFocus={(e) => e.target.select()}
                           onChange={(e) => {
@@ -668,6 +729,12 @@ export default function ConsumablesPage() {
                           }}
                           onBlur={(e) => { if (e.target.value === "") saveItemCount(it.key, 0); }}
                         />
+                      </td>
+                      <td className="align-middle py-1 text-right hidden md:table-cell">
+                        {formatMoney(it.cost_per_unit || 0)}
+                      </td>
+                      <td className="align-middle py-1 text-right hidden md:table-cell">
+                        {formatMoney((Number(it.count) || 0) * (Number(it.cost_per_unit) || 0))}
                       </td>
                       <td className="align-middle py-1">
                         {(() => {
@@ -686,22 +753,25 @@ export default function ConsumablesPage() {
                       <td className="align-middle py-1">
                         <div className="flex gap-2 flex-wrap items-center">
                           <button
-                            className="btn btn-xs md:btn-sm text-[10px] md:text-xs bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 border-0 shadow-sm"
+                            type="button"
+                            aria-label={`Order more ${it.label}`}
+                            title={`Order more ${it.label}`}
                             onClick={() => addToPurchaseRequest(it.key)}
-                          >Order More</button>
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-indigo-300/40 bg-gradient-to-br from-indigo-500/70 to-violet-500/70 text-white shadow-[0_0_0_1px_rgba(99,102,241,0.3),0_10px_24px_rgba(79,70,229,0.35)] transition-base hover:from-indigo-400/80 hover:to-violet-400/80"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" className="h-4 w-4">
+                              <path d="M12 5v14" />
+                              <path d="M5 12h14" />
+                            </svg>
+                          </button>
                           {/* Edit via clicking item name now; button removed */}
                         </div>
                       </td>
-                      {isAdmin && (
-                        <td className="hidden md:table-cell">
-                          <button className="btn text-xs" title="Delete item" onClick={() => deleteConsumableItem(it.id, it.key)}>✕</button>
-                        </td>
-                      )}
                     </tr>
                   ))}
                   {items.length === 0 && (
                     <tr>
-                      <td colSpan={isAdmin ? 8 : 7} className="text-xs md:text-sm text-gray-500 text-center py-4">
+                      <td colSpan={7} className="text-xs md:text-sm text-gray-500 text-center py-4">
                         {isAdmin ? 'No items yet. Add your first item.' : 'No consumable items configured. Ask an admin to add items.'}
                       </td>
                     </tr>
@@ -710,6 +780,82 @@ export default function ConsumablesPage() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {addItemModal.open && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="add-item-title">
+          <div className="card p-4 w-full max-w-md mx-auto">
+            <h3 id="add-item-title" className="font-medium mb-4">Add Consumable Item</h3>
+            <form
+              className="space-y-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitAddConsumableItem();
+              }}
+            >
+              <div className="flex flex-col gap-1">
+                <label className="text-sm text-gray-700">Item label</label>
+                <input
+                  className="input input-sm"
+                  placeholder="e.g. Core Tray"
+                  value={addItemModal.label}
+                  onChange={(e) => setAddItemModal((m) => ({ ...m, label: e.target.value }))}
+                  autoFocus
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm text-gray-700">Reorder threshold</label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="input input-sm"
+                    value={addItemModal.reorder_value}
+                    onChange={(e) => setAddItemModal((m) => ({ ...m, reorder_value: e.target.value }))}
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm text-gray-700">Unit size</label>
+                  <input
+                    type="number"
+                    min={1}
+                    className="input input-sm"
+                    value={addItemModal.unit_size}
+                    onChange={(e) => setAddItemModal((m) => ({ ...m, unit_size: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-sm text-gray-700">Cost per unit</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  className="input input-sm"
+                  placeholder="0.00"
+                  value={addItemModal.cost_per_unit}
+                  onChange={(e) => setAddItemModal((m) => ({ ...m, cost_per_unit: e.target.value }))}
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" className="btn text-xs" onClick={closeAddItemModal} disabled={addingItem}>
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary text-xs"
+                  disabled={addingItem || !(addItemModal.label || "").trim()}
+                >
+                  {addingItem ? 'Adding…' : 'Add Item'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
@@ -965,7 +1111,7 @@ export default function ConsumablesPage() {
           </div>
         </div>
       )}
-      {editItem && (
+      {editItem && isAdmin && (
         <div className="modal-overlay hidden md:flex" role="dialog" aria-modal="true" aria-labelledby="edit-item-title">
           <div className="card p-4 w-full max-w-md mx-auto">
             <h3 id="edit-item-title" className="font-medium mb-4">Edit Item</h3>
@@ -988,8 +1134,15 @@ export default function ConsumablesPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              <button className="btn text-xs" disabled={savingItem} onClick={() => setEditItem(null)}>Cancel</button>
-              <button className="btn btn-primary text-xs" disabled={savingItem} onClick={saveEditItem}>{savingItem ? 'Saving…' : 'Save'}</button>
+              <button
+                className="btn btn-danger text-xs mr-auto"
+                disabled={savingItem || deletingItem}
+                onClick={() => deleteConsumableItem(editItem.id, editItem.key)}
+              >
+                {deletingItem ? 'Deleting…' : 'Delete item'}
+              </button>
+              <button className="btn text-xs" disabled={savingItem || deletingItem} onClick={() => setEditItem(null)}>Cancel</button>
+              <button className="btn btn-primary text-xs" disabled={savingItem || deletingItem} onClick={saveEditItem}>{savingItem ? 'Saving…' : 'Save'}</button>
             </div>
           </div>
         </div>

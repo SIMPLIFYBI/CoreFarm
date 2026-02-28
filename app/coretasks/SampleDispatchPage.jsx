@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
+import { EditIconButton } from "@/app/components/ActionIconButton";
 
 function toNum(value) {
   const n = Number(value);
@@ -716,9 +717,7 @@ export default function SampleDispatchPage() {
                       <td className="text-xs">{dispatch.prepared_by_user_id?.slice?.(0, 8) || "—"}</td>
                       <td>{count}</td>
                       <td>
-                        <button type="button" className="btn btn-3d-glass btn-xs" onClick={() => loadDispatchForEdit(dispatch.id)}>
-                          Edit
-                        </button>
+                        <EditIconButton onClick={() => loadDispatchForEdit(dispatch.id)} />
                       </td>
                     </tr>
                   );

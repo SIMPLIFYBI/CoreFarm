@@ -177,6 +177,16 @@ button, a {
 }
 .input-sm { padding: 0.375rem 0.5rem; font-size: 0.8125rem; border-radius: 0.625rem; }
 
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.no-spinner {
+  -moz-appearance: textfield;
+}
+
 /* Improve visibility of native time-picker icon on dark inputs */
 .time-input-light-icon::-webkit-calendar-picker-indicator {
   filter: invert(1) brightness(1.2);

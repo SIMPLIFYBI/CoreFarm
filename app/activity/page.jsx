@@ -383,17 +383,17 @@ export default function ActivityPage() {
 
       <section className="glass rounded-2xl border border-white/10 p-4 md:p-5 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3">
-          <label className="text-xs text-slate-300 xl:col-span-1">
+          <label className="block text-xs text-slate-300 xl:col-span-1">
             Date From
-            <input className="input mt-1" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+            <input className="input mt-1 h-10 text-[11px]" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
           </label>
-          <label className="text-xs text-slate-300 xl:col-span-1">
+          <label className="block text-xs text-slate-300 xl:col-span-1">
             Date To
-            <input className="input mt-1" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+            <input className="input mt-1 h-10 text-[11px]" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
           </label>
-          <label className="text-xs text-slate-300 xl:col-span-1">
+          <label className="block text-xs text-slate-300 xl:col-span-1">
             Vendor
-            <select className="select-gradient-sm mt-1" value={vendorFilter} onChange={(event) => setVendorFilter(event.target.value)}>
+            <select className="select-gradient-sm mt-1 h-10 block w-full" value={vendorFilter} onChange={(event) => setVendorFilter(event.target.value)}>
               <option value="">All vendors</option>
               {vendorOptions.map((vendor) => (
                 <option key={vendor} value={vendor}>
@@ -402,9 +402,9 @@ export default function ActivityPage() {
               ))}
             </select>
           </label>
-          <label className="text-xs text-slate-300 xl:col-span-1">
+          <label className="block text-xs text-slate-300 xl:col-span-1">
             Asset
-            <select className="select-gradient-sm mt-1" value={assetFilter} onChange={(event) => setAssetFilter(event.target.value)}>
+            <select className="select-gradient-sm mt-1 h-10 block w-full" value={assetFilter} onChange={(event) => setAssetFilter(event.target.value)}>
               <option value="">All assets</option>
               {assetOptions.map((asset) => (
                 <option key={asset} value={asset}>
@@ -413,9 +413,9 @@ export default function ActivityPage() {
               ))}
             </select>
           </label>
-          <label className="text-xs text-slate-300 xl:col-span-1">
+          <label className="block text-xs text-slate-300 xl:col-span-1">
             Activity
-            <select className="select-gradient-sm mt-1" value={activityFilter} onChange={(event) => setActivityFilter(event.target.value)}>
+            <select className="select-gradient-sm mt-1 h-10 block w-full" value={activityFilter} onChange={(event) => setActivityFilter(event.target.value)}>
               <option value="">All activities</option>
               {activityOptions.map((activity) => (
                 <option key={activity} value={activity}>
@@ -424,10 +424,10 @@ export default function ActivityPage() {
               ))}
             </select>
           </label>
-          <label className="text-xs text-slate-300 xl:col-span-1">
+          <label className="block text-xs text-slate-300 xl:col-span-1">
             Search
             <input
-              className="input mt-1"
+              className="input mt-1 h-10 text-[11px]"
               type="text"
               placeholder="Vendor, asset, notes..."
               value={query}

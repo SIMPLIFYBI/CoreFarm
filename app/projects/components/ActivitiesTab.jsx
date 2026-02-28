@@ -44,11 +44,8 @@ export default function ActivitiesTab({ orgId: orgIdProp, orgLoading: orgLoading
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap">
         <div className="text-sm text-slate-300/70">Manage activity types for plods (org-wide).</div>
-        <button type="button" className="btn" onClick={load} disabled={!orgId || loading}>
-          {loading ? "Refreshing…" : "Refresh"}
-        </button>
       </div>
 
       <ActivityTypesAdminPanel

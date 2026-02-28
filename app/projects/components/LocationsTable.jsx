@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
+import { EditIconButton, DeleteIconButton } from "@/app/components/ActionIconButton";
 
 export default function LocationsTable({ TABLE_HEAD_ROW, TABLE_ROW }) {
   const [locations, setLocations] = useState([]);
@@ -99,12 +100,10 @@ export default function LocationsTable({ TABLE_HEAD_ROW, TABLE_ROW }) {
                   <td className="p-2 font-medium">{loc.name}</td>
                   <td className="p-2">{loc.description}</td>
                   <td className="p-2 text-right">
-                    <button className="btn btn-xs" onClick={() => openModal(loc)} type="button">
-                      Edit
-                    </button>
-                    <button className="btn btn-xs btn-danger ml-2" onClick={() => handleDelete(loc.id)} type="button">
-                      Delete
-                    </button>
+                    <div className="inline-flex items-center gap-2">
+                      <EditIconButton onClick={() => openModal(loc)} />
+                      <DeleteIconButton onClick={() => handleDelete(loc.id)} />
+                    </div>
                   </td>
                 </tr>
               ))

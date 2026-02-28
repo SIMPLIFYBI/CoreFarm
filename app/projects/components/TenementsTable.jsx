@@ -1,5 +1,7 @@
 "use client";
 
+import { EditIconButton, DeleteIconButton } from "@/app/components/ActionIconButton";
+
 export default function TenementsTable({ loading, tenements, onEdit, onDelete }) {
   return (
     <div className="card p-4">
@@ -38,12 +40,8 @@ export default function TenementsTable({ loading, tenements, onEdit, onDelete })
                   </td>
                   <td className="p-2 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <button className="btn btn-xs" onClick={() => onEdit(t)}>
-                        Edit
-                      </button>
-                      <button className="btn btn-xs btn-danger" onClick={() => onDelete(t)}>
-                        Del
-                      </button>
+                      <EditIconButton onClick={() => onEdit(t)} />
+                      <DeleteIconButton onClick={() => onDelete(t)} />
                     </div>
                   </td>
                 </tr>

@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import { parseTable } from "@/lib/parseTable";
+import { EditIconButton, DeleteIconButton } from "@/app/components/ActionIconButton";
 
 const TASK_TYPES = [
   "orientation",
@@ -584,36 +585,7 @@ export function AdminPage() {
 
           </div>
 
-          <div className="flex items-start justify-end gap-3 lg:ml-3">
-            <button
-              type="button"
-              onClick={() => {
-                setShowBulk(true);
-                setParsed([]);
-              }}
-              className="btn btn-3d-glass hidden md:inline-flex"
-            >
-              Open bulk uploader
-            </button>
-            <button
-              type="button"
-              className="btn btn-3d-primary"
-              onClick={() => {
-                setEditingId(null);
-                setSingle({
-                  hole_id: "",
-                  depth: "",
-                  planned_depth: "",
-                  drilling_diameter: "",
-                  project_id: "",
-                  drilling_contractor: "",
-                });
-                setShowHoleModal(true);
-              }}
-            >
-              Add New Core
-            </button>
-          </div>
+          <div className="flex items-start justify-end gap-3 lg:ml-3" />
         </div>
 
         {loading ? (
@@ -662,9 +634,7 @@ export function AdminPage() {
                       <td className="hidden md:table-cell">{h.drilling_contractor}</td>
                       <td className="hidden md:table-cell">
                         <div className="flex gap-2">
-                          <button
-                            type="button"
-                            className="btn btn-3d-glass btn-xs"
+                          <EditIconButton
                             onClick={() => {
                               setEditingId(h.id);
                               setSingle({
@@ -677,12 +647,8 @@ export function AdminPage() {
                               });
                               setShowHoleModal(true);
                             }}
-                          >
-                            Edit
-                          </button>
-                          <button type="button" className="btn btn-xs btn-danger" onClick={() => deleteHole(h.id)}>
-                            Del
-                          </button>
+                          />
+                          <DeleteIconButton onClick={() => deleteHole(h.id)} />
                         </div>
                       </td>
                     </tr>

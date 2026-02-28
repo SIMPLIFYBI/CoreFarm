@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "../../../lib/supabaseClient";
+import { EditIconButton } from "@/app/components/ActionIconButton";
 
 function classNames(...xs) {
   return xs.filter(Boolean).join(" ");
@@ -665,9 +666,7 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
                               {a.notes && <div className="text-sm text-slate-300 mt-1">{a.notes}</div>}
                             </div>
                             <div className="flex gap-2">
-                              <button type="button" className="text-sm rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-slate-100 hover:bg-slate-900 transition-base !min-h-0" onClick={() => beginEdit(idx)}>
-                                Edit
-                              </button>
+                              <EditIconButton onClick={() => beginEdit(idx)} />
                               <button type="button" className="text-sm rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-slate-100 hover:bg-slate-900 transition-base !min-h-0" onClick={() => removeActivity(idx)}>
                                 Remove
                               </button>

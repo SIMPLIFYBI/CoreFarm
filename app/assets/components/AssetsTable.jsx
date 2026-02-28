@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
+import { EditIconButton, DeleteIconButton } from "@/app/components/ActionIconButton";
 
 export default function AssetsTable({
   TABLE_HEAD_ROW,
@@ -290,16 +291,10 @@ export default function AssetsTable({
                   <td className="p-2">{asset.asset_locations?.name || "-"}</td>
                   <td className="p-2">{asset.status}</td>
                   <td className="p-2 text-right">
-                    <button className="btn btn-xs" onClick={() => openModal(asset)} type="button">
-                      Edit
-                    </button>
-                    <button
-                      className="btn btn-xs btn-danger ml-2"
-                      onClick={() => handleDelete(asset.id)}
-                      type="button"
-                    >
-                      Delete
-                    </button>
+                    <div className="inline-flex items-center gap-2">
+                      <EditIconButton onClick={() => openModal(asset)} />
+                      <DeleteIconButton onClick={() => handleDelete(asset.id)} />
+                    </div>
                   </td>
                 </tr>
               ))

@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import toast from "react-hot-toast";
+import { EditIconButton } from "@/app/components/ActionIconButton";
 
 function formatMoney(value) {
   if (value === null || value === undefined || value === "") return "—";
@@ -428,13 +429,7 @@ export function ActivityTypesAdminPanel({ activityTypes, setActivityTypes, orgLo
                   <td className="p-2">{t.billable ? formatRatePeriod(t.rate_period) : "—"}</td>
                   <td className="p-2">{t.description || "—"}</td>
                   <td className="p-2 text-right">
-                    <button
-                      type="button"
-                      className="text-xs px-2 py-1 rounded border border-white/10 hover:bg-white/5"
-                      onClick={() => handleEditClick(t)}
-                    >
-                      Edit
-                    </button>
+                    <EditIconButton onClick={() => handleEditClick(t)} />
                   </td>
                 </tr>
               ))}
