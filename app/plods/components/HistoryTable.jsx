@@ -26,6 +26,7 @@ function formatPlodForDate(row) {
 }
 
 function formatSubmitter(row) {
+  if (row.submitted_by_profile?.display_name) return row.submitted_by_profile.display_name;
   if (row.submitted_by_profile?.full_name) return row.submitted_by_profile.full_name;
   if (row.submitted_by_profile?.email) return row.submitted_by_profile.email;
   if (row.submitted_by) return String(row.submitted_by).slice(0, 8);
@@ -35,14 +36,32 @@ function formatSubmitter(row) {
 export function HistoryTable({
   plods = [],
   plodsLoading = false,
+  plodScope = "my",
+  onPlodScopeChange,
   dateRange,
   onDateChange,
-  onRefresh,
   onSelectPlod,
 }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-lg border border-white/10 bg-slate-900/40 p-1 gap-1">
+          <button
+            type="button"
+            className={`px-3 py-1.5 text-xs rounded-md transition-base ${plodScope === "my" ? "bg-indigo-600 text-white" : "text-slate-200 hover:bg-white/10"}`}
+            onClick={() => onPlodScopeChange?.("my")}
+          >
+            My Plods
+          </button>
+          <button
+            type="button"
+            className={`px-3 py-1.5 text-xs rounded-md transition-base ${plodScope === "client" ? "bg-indigo-600 text-white" : "text-slate-200 hover:bg-white/10"}`}
+            onClick={() => onPlodScopeChange?.("client")}
+          >
+            Client Plods
+          </button>
+        </div>
+
         <input
           type="date"
           className="input input-sm !w-auto"
@@ -55,9 +74,6 @@ export function HistoryTable({
           value={dateRange?.to || ""}
           onChange={(e) => onDateChange?.("to", e.target.value)}
         />
-        <button onClick={onRefresh} className="btn">
-          Refresh
-        </button>
       </div>
 
       <div className="table-container p-3">
@@ -66,7 +82,9 @@ export function HistoryTable({
             <Spinner size={16} /> Loading…
           </div>
         ) : plods.length === 0 ? (
-          <div className="text-sm text-slate-300">No plods in range.</div>
+          <div className="text-sm text-slate-300">
+            {plodScope === "client" ? "No client plods in range." : "No plods in range."}
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="table">

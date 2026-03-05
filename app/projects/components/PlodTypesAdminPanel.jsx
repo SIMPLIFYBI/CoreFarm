@@ -5,11 +5,6 @@ import { supabaseBrowser } from "@/lib/supabaseClient";
 import toast from "react-hot-toast";
 import { EditIconButton } from "@/app/components/ActionIconButton";
 
-function toInt(v, fallback = 0) {
-  const n = Number(v);
-  return Number.isFinite(n) ? Math.trunc(n) : fallback;
-}
-
 function PlodTypeModal({ open, onClose, onSave, saving, form, setForm, isEditing }) {
   if (!open) return null;
 
@@ -52,18 +47,7 @@ function PlodTypeModal({ open, onClose, onSave, saving, form, setForm, isEditing
             />
           </label>
 
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block text-sm">
-              Sort order
-              <input
-                className="input w-full"
-                type="number"
-                step="1"
-                value={form.sort_order}
-                onChange={(e) => setForm((f) => ({ ...f, sort_order: e.target.value }))}
-              />
-            </label>
-
+          <div className="grid grid-cols-1 gap-3">
             <label className="block text-sm">
               Active
               <select
@@ -101,7 +85,7 @@ export default function PlodTypesAdminPanel({ orgId }) {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState(null);
 
-  const emptyForm = { name: "", description: "", sort_order: 0, is_active: true };
+  const emptyForm = { name: "", description: "", is_active: true };
   const [form, setForm] = useState(emptyForm);
 
   const load = async () => {
@@ -145,7 +129,6 @@ export default function PlodTypesAdminPanel({ orgId }) {
     setForm({
       name: row.name || "",
       description: row.description || "",
-      sort_order: row.sort_order ?? 0,
       is_active: !!row.is_active,
     });
     setShowModal(true);
@@ -167,7 +150,6 @@ export default function PlodTypesAdminPanel({ orgId }) {
         organization_id: orgId,
         name: form.name.trim(),
         description: form.description?.trim() || null,
-        sort_order: toInt(form.sort_order, 0),
         is_active: !!form.is_active,
       };
 
@@ -230,7 +212,6 @@ export default function PlodTypesAdminPanel({ orgId }) {
               <tr className="text-left bg-slate-900/40 text-slate-200 border-b border-white/10">
                 <th className="p-2 font-medium">Name</th>
                 <th className="p-2 font-medium">Description</th>
-                <th className="p-2 font-medium">Sort</th>
                 <th className="p-2 font-medium">Active</th>
                 <th className="p-2 font-medium w-[1%]"></th>
               </tr>
@@ -241,7 +222,6 @@ export default function PlodTypesAdminPanel({ orgId }) {
                 <tr key={t.id} className="border-b border-white/10 last:border-b-0 hover:bg-white/5">
                   <td className="p-2 font-medium">{t.name}</td>
                   <td className="p-2">{t.description || "—"}</td>
-                  <td className="p-2">{t.sort_order ?? 0}</td>
                   <td className="p-2">{t.is_active ? "Yes" : "No"}</td>
                   <td className="p-2 text-right whitespace-nowrap">
                     <span className="inline-flex mr-2 align-middle">
@@ -261,7 +241,7 @@ export default function PlodTypesAdminPanel({ orgId }) {
 
               {!loading && plodTypes.length === 0 && (
                 <tr>
-                  <td className="p-2 text-slate-300/70" colSpan={5}>
+                  <td className="p-2 text-slate-300/70" colSpan={4}>
                     No plod types yet.
                   </td>
                 </tr>

@@ -22,7 +22,7 @@ export default function ActivitiesTab({ orgId: orgIdProp, orgLoading: orgLoading
     try {
       const { data, error } = await supabase
         .from("plod_activity_types")
-        .select('id, organization_id, activity_type, description, "group", label, plod_type_scope, billable, rate, rate_period')
+        .select('id, organization_id, activity_type, description, "group", label, plod_type_scope, billable, rate, rate_mode, rate_period, rate_unit_name, rate_unit_interval')
         .eq("organization_id", orgId)
         .order("activity_type", { ascending: true });
 

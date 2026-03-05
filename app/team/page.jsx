@@ -5,6 +5,7 @@ import { useOrg } from "@/lib/OrgContext";
 import { redirectTo } from "@/lib/siteUrl";
 import toast from "react-hot-toast";
 import { DeleteIconButton } from "@/app/components/ActionIconButton";
+import OrganizationConnectionsTab from "@/app/components/OrganizationConnectionsTab";
 
 export default function TeamPage() {
   const supabase = supabaseBrowser();
@@ -21,7 +22,7 @@ export default function TeamPage() {
   const [inviteStatusFilter, setInviteStatusFilter] = useState("pending"); // 'pending' | 'accepted' | 'revoked' | 'all'
   const [deleteMode, setDeleteMode] = useState(false);
   const pendingMyInvite = useMemo(() => (myInvites || []).find((i) => i.status === "pending") || null, [myInvites]);
-  const [tab, setTab] = useState('members'); // 'members' | 'invites' | 'org'
+  const [tab, setTab] = useState('members'); // 'members' | 'invites' | 'connections' | 'org'
   // Post-create organisation onboarding + iterative single invites
   const [showPostCreateModal, setShowPostCreateModal] = useState(false);
   const [modalInviteEmail, setModalInviteEmail] = useState("");
@@ -282,7 +283,7 @@ export default function TeamPage() {
       <h1 className="text-2xl font-semibold mb-4">Team Management</h1>
       {/* Tabs */}
       <div className="mb-6 flex gap-2 border-b">
-        {[{k:'members',label:'Team Members'},{k:'invites',label:'Invites'},{k:'org',label:'Organisation'}].map(t => (
+        {[{k:'members',label:'Team Members'},{k:'invites',label:'Invites'},{k:'connections',label:'Connections'},{k:'org',label:'Organisation'}].map(t => (
           <button
             key={t.k}
             onClick={() => setTab(t.k)}
@@ -482,6 +483,10 @@ export default function TeamPage() {
             )
           )}
         </div>
+      )}
+
+      {tab === 'connections' && memberships.length > 0 && (
+        <OrganizationConnectionsTab orgId={selectedOrgId} canManageSharedProjects={myRole === 'admin'} />
       )}
 
       {tab === 'members' && memberships.length > 0 && (

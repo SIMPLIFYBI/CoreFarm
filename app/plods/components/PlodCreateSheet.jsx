@@ -151,7 +151,7 @@ function QuarterHourPicker({ label, value, onChange, disabled }) {
   );
 }
 
-export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [], holes = [], activityTypes = [], onCreated }) {
+export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [], holes = [], projects = [], activityTypes = [], onCreated }) {
   const [step, setStep] = useState(1);
 
   const [plodTypes, setPlodTypes] = useState([]);
@@ -166,10 +166,13 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
 
   const [activityForm, setActivityForm] = useState({
     activity_type_id: "",
+    project_source: "own",
+    project_id: "",
     hole_id: "",
     start_time: "",
     end_time: "",
     machine_hours: "",
+    unit_quantity: "",
     notes: "",
   });
 
@@ -244,6 +247,36 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
     return (activityTypes || []).filter((t) => allowedActivityTypeIds.has(t.id));
   }, [activityTypes, plodTypeId, allowedActivityTypeIds]);
 
+  const selectedActivityType = useMemo(
+    () => (filteredActivityTypes || []).find((t) => t.id === activityForm.activity_type_id) || null,
+    [filteredActivityTypes, activityForm.activity_type_id]
+  );
+
+  const projectNameById = useMemo(() => {
+    const map = {};
+    (projects || []).forEach((p) => {
+      if (p?.id) map[p.id] = p.name || "(unnamed project)";
+    });
+    return map;
+  }, [projects]);
+
+  const ownProjects = useMemo(() => (projects || []).filter((p) => (p.source || "own") === "own"), [projects]);
+  const sharedProjects = useMemo(() => (projects || []).filter((p) => p.source === "shared"), [projects]);
+  const visibleProjects = activityForm.project_source === "shared" ? sharedProjects : ownProjects;
+  const visibleProjectIdSet = useMemo(() => new Set((visibleProjects || []).map((p) => p.id)), [visibleProjects]);
+
+  const filteredHoles = useMemo(() => {
+    if (!activityForm.project_id) return holes || [];
+    return (holes || []).filter((h) => h.project_id === activityForm.project_id);
+  }, [holes, activityForm.project_id]);
+
+  const scopedHoles = useMemo(() => {
+    if (activityForm.project_id) return filteredHoles;
+    return (holes || []).filter((h) => visibleProjectIdSet.has(h.project_id));
+  }, [holes, filteredHoles, activityForm.project_id, visibleProjectIdSet]);
+
+  const isSelectedUnitMode = !!selectedActivityType && selectedActivityType.billable && (selectedActivityType.rate_mode || "time") === "unit";
+
   const canGoNextFromType = !!plodTypeId;
   const canGoNextFromHeader = !!shiftDate;
 
@@ -273,7 +306,7 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
     setNotes("");
     setActivities([]);
     setEditingIdx(null);
-    setActivityForm({ activity_type_id: "", hole_id: "", start_time: "", end_time: "", machine_hours: "", notes: "" });
+    setActivityForm({ activity_type_id: "", project_source: "own", project_id: "", hole_id: "", start_time: "", end_time: "", machine_hours: "", unit_quantity: "", notes: "" });
     setMsg(null);
     setAllowedActivityTypeIds(null);
   };
@@ -295,8 +328,25 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
       return;
     }
 
+    if (isSelectedUnitMode) {
+      const qty = Number(activityForm.unit_quantity);
+      if (!Number.isFinite(qty) || qty <= 0) {
+        const unitLabel = selectedActivityType?.rate_unit_name?.trim() || "unit";
+        setMsg({ type: "error", text: `Enter a valid ${unitLabel} quantity greater than 0.` });
+        return;
+      }
+    }
+
     const startISO = toISOFromDateAndTime(shiftDate, snappedStartTime);
     let endISO = toISOFromDateAndTime(shiftDate, snappedEndTime);
+
+    const selectedHole = (holes || []).find((h) => h.id === activityForm.hole_id) || null;
+    const derivedProjectId = activityForm.project_id || selectedHole?.project_id || null;
+
+    if (selectedHole?.project_id && derivedProjectId && selectedHole.project_id !== derivedProjectId) {
+      setMsg({ type: "error", text: "Selected hole does not belong to the selected project." });
+      return;
+    }
 
     const startMs = new Date(startISO).getTime();
     const endMsSameDay = new Date(endISO).getTime();
@@ -309,6 +359,7 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
 
     const row = {
       activity_type_id: activityForm.activity_type_id,
+      project_id: derivedProjectId,
       hole_id: activityForm.hole_id || null,
       started_at: startISO,
       finished_at: endISO,
@@ -316,6 +367,10 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
         activityForm.machine_hours === "" || activityForm.machine_hours === null
           ? null
           : Number(activityForm.machine_hours),
+      unit_quantity:
+        activityForm.unit_quantity === "" || activityForm.unit_quantity === null
+          ? null
+          : Number(activityForm.unit_quantity),
       notes: activityForm.notes || null,
     };
 
@@ -330,10 +385,13 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
 
     setActivityForm({
       activity_type_id: "",
+      project_source: "own",
+      project_id: "",
       hole_id: "",
       start_time: nextStartTime,
       end_time: "",
       machine_hours: "",
+      unit_quantity: "",
       notes: "",
     });
   };
@@ -344,10 +402,13 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
     const endTime = snapTimeToQuarter(new Date(a.finished_at).toISOString().slice(11, 16));
     setActivityForm({
       activity_type_id: a.activity_type_id,
+      project_source: ((projects || []).find((p) => p.id === a.project_id)?.source || "own"),
+      project_id: a.project_id || ((holes || []).find((h) => h.id === a.hole_id)?.project_id || ""),
       hole_id: a.hole_id || "",
       start_time: startTime,
       end_time: endTime,
       machine_hours: a.machine_hours ?? "",
+      unit_quantity: a.unit_quantity ?? "",
       notes: a.notes || "",
     });
     setEditingIdx(idx);
@@ -358,7 +419,7 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
     setActivities((cur) => cur.filter((_, i) => i !== idx));
     if (editingIdx === idx) {
       setEditingIdx(null);
-      setActivityForm({ activity_type_id: "", hole_id: "", start_time: "", end_time: "", machine_hours: "", notes: "" });
+      setActivityForm({ activity_type_id: "", project_source: "own", project_id: "", hole_id: "", start_time: "", end_time: "", machine_hours: "", unit_quantity: "", notes: "" });
     }
   };
 
@@ -395,10 +456,12 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
       const activitiesPayload = activities.map((a) => ({
         plod_id: plod.id,
         activity_type_id: a.activity_type_id,
+        project_id: a.project_id || null,
         hole_id: a.hole_id || null,
         started_at: a.started_at,
         finished_at: a.finished_at,
         machine_hours: a.machine_hours ?? null,
+        unit_quantity: a.unit_quantity ?? null,
         notes: a.notes || null,
       }));
 
@@ -554,7 +617,16 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
                       <select
                         className="select mt-1"
                         value={activityForm.activity_type_id || ""}
-                        onChange={(e) => setActivityForm((f) => ({ ...f, activity_type_id: e.target.value }))}
+                        onChange={(e) =>
+                          setActivityForm((f) => ({
+                            ...f,
+                            activity_type_id: e.target.value,
+                            project_source: "own",
+                            project_id: "",
+                            hole_id: "",
+                            unit_quantity: "",
+                          }))
+                        }
                       >
                         <option value="">Select…</option>
                         {filteredActivityTypes.map((t) => (
@@ -566,14 +638,84 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
                     </div>
 
                     <div>
+                      <label className="block text-sm font-medium text-slate-200">Project source</label>
+                      <div className="mt-1 inline-flex rounded-lg border border-white/10 bg-slate-900/40 p-1 gap-1">
+                        <button
+                          type="button"
+                          className={`px-3 py-1.5 text-xs rounded-md transition-base ${activityForm.project_source === "own" ? "bg-indigo-600 text-white" : "text-slate-200 hover:bg-white/10"}`}
+                          onClick={() =>
+                            setActivityForm((s) => ({
+                              ...s,
+                              project_source: "own",
+                              project_id: "",
+                              hole_id: "",
+                            }))
+                          }
+                        >
+                          My projects
+                        </button>
+                        <button
+                          type="button"
+                          className={`px-3 py-1.5 text-xs rounded-md transition-base ${activityForm.project_source === "shared" ? "bg-indigo-600 text-white" : "text-slate-200 hover:bg-white/10"}`}
+                          onClick={() =>
+                            setActivityForm((s) => ({
+                              ...s,
+                              project_source: "shared",
+                              project_id: "",
+                              hole_id: "",
+                            }))
+                          }
+                          disabled={sharedProjects.length === 0}
+                        >
+                          Client shared
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-200">Project (optional)</label>
+                      <select
+                        className="select mt-1"
+                        value={activityForm.project_id}
+                        onChange={(e) => {
+                          const nextProjectId = e.target.value;
+                          setActivityForm((s) => {
+                            const selectedHole = (holes || []).find((h) => h.id === s.hole_id);
+                            const keepHole = !nextProjectId || !selectedHole?.project_id || selectedHole.project_id === nextProjectId;
+                            return {
+                              ...s,
+                              project_id: nextProjectId,
+                              hole_id: keepHole ? s.hole_id : "",
+                            };
+                          });
+                        }}
+                      >
+                        <option value="">—</option>
+                        {visibleProjects.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name || "(unnamed project)"}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
                       <label className="block text-sm font-medium text-slate-200">Hole (optional)</label>
                       <select
                         className="select mt-1"
                         value={activityForm.hole_id}
-                        onChange={(e) => setActivityForm((s) => ({ ...s, hole_id: e.target.value }))}
+                        onChange={(e) => {
+                          const nextHoleId = e.target.value;
+                          const selectedHole = (holes || []).find((h) => h.id === nextHoleId) || null;
+                          setActivityForm((s) => ({
+                            ...s,
+                            hole_id: nextHoleId,
+                            project_id: selectedHole?.project_id || s.project_id,
+                          }));
+                        }}
                       >
                         <option value="">—</option>
-                        {holes.map((h) => (
+                        {scopedHoles.map((h) => (
                           <option key={h.id} value={h.id}>
                             {h.hole_id}
                           </option>
@@ -609,6 +751,26 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
                       />
                     </div>
 
+                    {isSelectedUnitMode && (
+                      <div>
+                        <label className="block text-sm font-medium text-slate-200">
+                          {`${selectedActivityType?.rate_unit_name?.trim() || "Unit"} quantity *`}
+                        </label>
+                        <input
+                          type="number"
+                          min="0.0001"
+                          step="0.0001"
+                          className="input mt-1"
+                          value={activityForm.unit_quantity}
+                          onChange={(e) => setActivityForm((s) => ({ ...s, unit_quantity: e.target.value }))}
+                          placeholder="1"
+                        />
+                        <div className="mt-1 text-xs text-slate-400">
+                          Rate applies per {selectedActivityType?.rate_unit_interval || 1} {selectedActivityType?.rate_unit_name?.trim() || "unit"}.
+                        </div>
+                      </div>
+                    )}
+
                     <div>
                       <label className="block text-sm font-medium text-slate-200">Notes (optional)</label>
                       <input
@@ -633,7 +795,7 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
                           type="button"
                           onClick={() => {
                             setEditingIdx(null);
-                            setActivityForm({ activity_type_id: "", hole_id: "", start_time: "", end_time: "", machine_hours: "", notes: "" });
+                            setActivityForm({ activity_type_id: "", project_source: "own", project_id: "", hole_id: "", start_time: "", end_time: "", machine_hours: "", unit_quantity: "", notes: "" });
                           }}
                           className="btn"
                           disabled={saving}
@@ -660,8 +822,14 @@ export function PlodCreateSheet({ open, onClose, orgId, enteredBy, vendors = [],
                               <div className="text-sm text-slate-300">
                                 {new Date(a.started_at).toLocaleString()} → {new Date(a.finished_at).toLocaleString()}
                               </div>
+                              {a.project_id && (
+                                <div className="text-sm text-slate-300 mt-1">Project: {projectNameById[a.project_id] || "(unnamed project)"}</div>
+                              )}
                               {a.machine_hours !== null && a.machine_hours !== undefined && a.machine_hours !== "" && (
                                 <div className="text-sm text-slate-300 mt-1">Machine hours: {a.machine_hours}</div>
+                              )}
+                              {a.unit_quantity !== null && a.unit_quantity !== undefined && a.unit_quantity !== "" && (
+                                <div className="text-sm text-slate-300 mt-1">Unit quantity: {a.unit_quantity}</div>
                               )}
                               {a.notes && <div className="text-sm text-slate-300 mt-1">{a.notes}</div>}
                             </div>

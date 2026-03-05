@@ -30,6 +30,7 @@ function getStatusStyle(status) {
 }
 
 function getUserLabel(profile, fallbackId) {
+  if (profile?.display_name) return profile.display_name;
   if (profile?.full_name) return profile.full_name;
   if (profile?.email) return profile.email;
   if (fallbackId) return String(fallbackId).slice(0, 8);
@@ -205,6 +206,7 @@ export function PlodDetailsModal({ plod, onClose, onDecision, decisionSaving = f
                       <th>Finish</th>
                       <th>Duration</th>
                       <th>Machine Hours</th>
+                      <th>Unit Qty</th>
                       <th>Notes</th>
                     </tr>
                   </thead>
@@ -217,6 +219,7 @@ export function PlodDetailsModal({ plod, onClose, onDecision, decisionSaving = f
                         <td>{formatDate(activity.finished_at)}</td>
                         <td>{formatDuration(activity.started_at, activity.finished_at)}</td>
                         <td>{activity.machine_hours ?? "—"}</td>
+                        <td>{activity.unit_quantity ?? "—"}</td>
                         <td>{activity.notes || "—"}</td>
                       </tr>
                     ))}

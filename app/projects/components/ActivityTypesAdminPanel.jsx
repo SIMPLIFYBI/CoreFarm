@@ -18,8 +18,16 @@ function formatRatePeriod(p) {
   return map[p] || p;
 }
 
+function formatRateBasis(row) {
+  if (!row?.billable) return "—";
+  const mode = row?.rate_mode || "time";
+  if (mode === "unit") return row?.rate_unit_name?.trim() || "Unit";
+  return "Time";
+}
+
 function ActivityTypeModal({ form, setForm, saving, onClose, onSave, isEditing, plodTypes }) {
   const billable = !!form.billable;
+  const timeBasedRate = (form.rate_mode || "time") === "time";
 
   const selected = useMemo(() => new Set(form.plod_type_ids || []), [form.plod_type_ids]);
 
@@ -110,7 +118,10 @@ function ActivityTypeModal({ form, setForm, saving, onClose, onSave, isEditing, 
                   ...f,
                   billable: nextBillable,
                   rate: nextBillable ? f.rate : "",
+                  rate_mode: nextBillable ? f.rate_mode || "time" : "time",
                   rate_period: nextBillable ? f.rate_period || "hourly" : "",
+                  rate_unit_name: nextBillable ? f.rate_unit_name || "" : "",
+                  rate_unit_interval: nextBillable ? f.rate_unit_interval || 1 : "",
                 }));
               }}
             >
@@ -136,10 +147,33 @@ function ActivityTypeModal({ form, setForm, saving, onClose, onSave, isEditing, 
             </label>
 
             <label className="block text-sm">
-              Rate Period
+              Time based rate
               <select
                 className="input w-full"
                 disabled={!billable}
+                value={timeBasedRate ? "yes" : "no"}
+                onChange={(e) => {
+                  const isTimeBased = e.target.value === "yes";
+                  setForm((f) => ({
+                    ...f,
+                    rate_mode: isTimeBased ? "time" : "unit",
+                    rate_period: isTimeBased ? f.rate_period || "hourly" : "",
+                    rate_unit_name: isTimeBased ? "" : f.rate_unit_name || "",
+                    rate_unit_interval: isTimeBased ? "" : f.rate_unit_interval || 1,
+                  }));
+                }}
+              >
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </label>
+          </div>
+
+          {billable && timeBasedRate && (
+            <label className="block text-sm">
+              Rate Period
+              <select
+                className="input w-full"
                 value={form.rate_period || "hourly"}
                 onChange={(e) => setForm((f) => ({ ...f, rate_period: e.target.value }))}
               >
@@ -149,7 +183,35 @@ function ActivityTypeModal({ form, setForm, saving, onClose, onSave, isEditing, 
                 <option value="monthly">Monthly</option>
               </select>
             </label>
-          </div>
+          )}
+
+          {billable && !timeBasedRate && (
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block text-sm">
+                Unit name
+                <input
+                  className="input w-full"
+                  value={form.rate_unit_name ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, rate_unit_name: e.target.value }))}
+                  placeholder="e.g. metre"
+                />
+              </label>
+
+              <label className="block text-sm">
+                Unit interval
+                <input
+                  className="input w-full"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.0001"
+                  min="0.0001"
+                  value={form.rate_unit_interval ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, rate_unit_interval: e.target.value }))}
+                  placeholder="1"
+                />
+              </label>
+            </div>
+          )}
 
           <label className="block text-sm">
             Description (optional)
@@ -196,6 +258,9 @@ export function ActivityTypesAdminPanel({ activityTypes, setActivityTypes, orgLo
     billable: false,
     rate: "",
     rate_period: "",
+    rate_mode: "time",
+    rate_unit_name: "",
+    rate_unit_interval: "",
     plod_type_ids: [], // <-- NEW
   };
 
@@ -298,6 +363,9 @@ export function ActivityTypesAdminPanel({ activityTypes, setActivityTypes, orgLo
       billable: !!row.billable,
       rate: row.rate ?? "",
       rate_period: row.rate_period ?? (row.billable ? "hourly" : ""),
+      rate_mode: row.rate_mode || "time",
+      rate_unit_name: row.rate_unit_name ?? "",
+      rate_unit_interval: row.rate_unit_interval ?? "",
       plod_type_ids: (links || []).map((x) => x.plod_type_id).filter(Boolean),
     });
 
@@ -324,6 +392,15 @@ export function ActivityTypesAdminPanel({ activityTypes, setActivityTypes, orgLo
           ? null
           : Number(newActivityType.rate);
 
+      const unitIntervalNum =
+        newActivityType.rate_unit_interval === "" ||
+        newActivityType.rate_unit_interval === null ||
+        newActivityType.rate_unit_interval === undefined
+          ? null
+          : Number(newActivityType.rate_unit_interval);
+
+      const rateMode = billable ? newActivityType.rate_mode || "time" : "time";
+
       // keep legacy column harmless (do not depend on it). Leave as ['all'] to avoid older constraints.
       const payload = {
         organization_id: orgId,
@@ -334,11 +411,32 @@ export function ActivityTypesAdminPanel({ activityTypes, setActivityTypes, orgLo
         plod_type_scope: ["all"],
         billable,
         rate: billable && Number.isFinite(rateNum) ? rateNum : null,
-        rate_period: billable ? (newActivityType.rate_period || "hourly") : null,
+        rate_mode: rateMode,
+        rate_period: billable && rateMode === "time" ? newActivityType.rate_period || "hourly" : null,
+        rate_unit_name: billable && rateMode === "unit" ? newActivityType.rate_unit_name?.trim() || null : null,
+        rate_unit_interval:
+          billable &&
+          rateMode === "unit" &&
+          Number.isFinite(unitIntervalNum) &&
+          unitIntervalNum > 0
+            ? unitIntervalNum
+            : null,
       };
 
+      if (billable && rateMode === "unit" && !(payload.rate_unit_name || "").trim()) {
+        toast.error("Enter a unit name for non-time-based rates");
+        setSaving(false);
+        return;
+      }
+
+      if (billable && rateMode === "unit" && !payload.rate_unit_interval) {
+        toast.error("Enter a valid unit interval greater than 0");
+        setSaving(false);
+        return;
+      }
+
       const returning =
-        'id, organization_id, activity_type, description, "group", label, plod_type_scope, billable, rate, rate_period';
+        'id, organization_id, activity_type, description, "group", label, plod_type_scope, billable, rate, rate_mode, rate_period, rate_unit_name, rate_unit_interval';
 
       let saved;
 
@@ -413,7 +511,8 @@ export function ActivityTypesAdminPanel({ activityTypes, setActivityTypes, orgLo
                 <th className="p-2 font-medium">Plod Types</th>
                 <th className="p-2 font-medium">Billable</th>
                 <th className="p-2 font-medium">Rate</th>
-                <th className="p-2 font-medium">Rate Period</th>
+                <th className="p-2 font-medium">Rate Basis</th>
+                <th className="p-2 font-medium">Interval</th>
                 <th className="p-2 font-medium">Description</th>
                 <th className="p-2 font-medium w-[1%]"></th>
               </tr>
@@ -426,7 +525,20 @@ export function ActivityTypesAdminPanel({ activityTypes, setActivityTypes, orgLo
                   <td className="p-2">{formatPlodTypes(activityPlodTypeNames[t.id])}</td>
                   <td className="p-2">{t.billable ? "Yes" : "No"}</td>
                   <td className="p-2">{t.billable ? formatMoney(t.rate) : "—"}</td>
-                  <td className="p-2">{t.billable ? formatRatePeriod(t.rate_period) : "—"}</td>
+                  <td className="p-2">
+                    {!t.billable
+                      ? "—"
+                      : (t.rate_mode || "time") === "time"
+                      ? formatRatePeriod(t.rate_period)
+                      : formatRateBasis(t)}
+                  </td>
+                  <td className="p-2">
+                    {!t.billable
+                      ? "—"
+                      : (t.rate_mode || "time") === "unit"
+                      ? Number(t.rate_unit_interval) || "—"
+                      : "—"}
+                  </td>
                   <td className="p-2">{t.description || "—"}</td>
                   <td className="p-2 text-right">
                     <EditIconButton onClick={() => handleEditClick(t)} />
