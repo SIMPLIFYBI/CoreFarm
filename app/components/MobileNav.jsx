@@ -1,6 +1,8 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { supabaseBrowser } from "@/lib/supabaseClient";
 import { IconCore, IconAdmin, IconTeam, IconUser, IconReport, IconClipboard, IconCoreTasks, AssetIcon, IconPlods } from "./icons";
 
 const tabs = [
@@ -16,14 +18,41 @@ const tabs = [
 ];
 
 export default function MobileNav() {
+  const supabase = useMemo(() => supabaseBrowser(), []);
   const pathname = usePathname();
+  const [isAppAdmin, setIsAppAdmin] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc("is_app_admin_rpc");
+        if (!alive) return;
+        if (error) {
+          setIsAppAdmin(false);
+          return;
+        }
+        setIsAppAdmin(Boolean(data));
+      } catch {
+        if (!alive) return;
+        setIsAppAdmin(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [supabase]);
+
+  const visibleTabs = isAppAdmin ? [...tabs, { href: "/admin", label: "AppAdmin", icon: IconAdmin }] : tabs;
+
   return (
     <nav
       className="md:hidden fixed bottom-0 left-0 right-0 border-t bg-white"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <ul className="flex gap-1 overflow-x-auto no-scrollbar px-1" style={{ WebkitOverflowScrolling: "touch" }}>
-        {tabs.map((t) => {
+        {visibleTabs.map((t) => {
           const active = pathname?.startsWith(t.href);
           const Icon = t.icon;
           return (

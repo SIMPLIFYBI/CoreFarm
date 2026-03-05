@@ -159,7 +159,7 @@ export default function Header() {
     { href: "/assets", label: "Assets", icon: AssetIcon },
     { href: "/plods", label: "Plods", icon: IconPlods },
     { href: "/team", label: "Team", icon: IconTeam },
-    ...(isAppAdmin ? [{ href: "/admin/subscriptions", label: "Subscriptions", icon: IconAdmin }] : []),
+    ...(isAppAdmin ? [{ href: "/admin", label: "AppAdmin", icon: IconAdmin }] : []),
   ];
 
   const activeProjectsChildHref = useMemo(() => {

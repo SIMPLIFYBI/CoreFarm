@@ -14,9 +14,13 @@ import SchematicArea from "./components/SchematicArea";
 import TypesTabs from "./components/TypesTabs";
 import { exportSchematicPdf } from "./utils/exportSchematicPdf";
 
-export default function DrillholeVizPage() {
+const PROJECT_SCOPE_STORAGE_KEY = "coretasks:projectScope";
+
+export default function DrillholeVizPage({ projectScope: externalProjectScope }) {
   const supabase = supabaseBrowser();
   const { orgId: selectedOrgId, memberships } = useOrg();
+  const [localProjectScope, setLocalProjectScope] = useState("own");
+  const projectScope = externalProjectScope ?? localProjectScope;
 
   const myRole = useMemo(() => {
     const m = (memberships || []).find((m) => m.organization_id === selectedOrgId);
@@ -68,12 +72,30 @@ export default function DrillholeVizPage() {
   const [annulusLoading, setAnnulusLoading] = useState(false);
   const [annulusSaving, setAnnulusSaving] = useState(false);
 
-  // Roles in schema are admin/member (no editor). Keep this permissive; RLS will enforce actual rights.
-  const canEdit = myRole === "admin" || myRole === "member";
+  const isSharedScope = projectScope === "shared";
+  // Shared drillholes are view-only in this screen.
+  const canEdit = !isSharedScope && (myRole === "admin" || myRole === "member");
 
   const selectedHole = useMemo(() => {
     return (holes || []).find((h) => h.id === selectedHoleId) || null;
   }, [holes, selectedHoleId]);
+
+  const selectedHoleOrgId = selectedHole?.organization_id || selectedOrgId;
+
+  useEffect(() => {
+    if (externalProjectScope) return;
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem(PROJECT_SCOPE_STORAGE_KEY);
+    if (stored === "own" || stored === "shared") {
+      setLocalProjectScope(stored);
+    }
+  }, [externalProjectScope]);
+
+  useEffect(() => {
+    if (externalProjectScope) return;
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(PROJECT_SCOPE_STORAGE_KEY, localProjectScope);
+  }, [externalProjectScope, localProjectScope]);
 
   // Keep the planned depth editor in sync with the selected hole
   useEffect(() => {
@@ -272,8 +294,8 @@ export default function DrillholeVizPage() {
     return { ok: true, rows: sorted };
   };
 
-  const reloadLithologyTypes = async () => {
-    if (!selectedOrgId) {
+  const reloadLithologyTypes = async (organizationId = selectedHoleOrgId) => {
+    if (!organizationId) {
       setLithologyTypesAll([]);
       return;
     }
@@ -282,7 +304,7 @@ export default function DrillholeVizPage() {
     const { data, error } = await supabase
       .from("drillhole_lithology_types")
       .select("id, name, color, sort_order, is_active, created_at")
-      .eq("organization_id", selectedOrgId)
+      .eq("organization_id", organizationId)
       .order("sort_order", { ascending: true })
       .order("name", { ascending: true });
 
@@ -306,8 +328,8 @@ export default function DrillholeVizPage() {
     );
   };
 
-  const reloadConstructionTypes = async () => {
-    if (!selectedOrgId) {
+  const reloadConstructionTypes = async (organizationId = selectedHoleOrgId) => {
+    if (!organizationId) {
       setConstructionTypesAll([]);
       return;
     }
@@ -316,7 +338,7 @@ export default function DrillholeVizPage() {
     const { data, error } = await supabase
       .from("drillhole_construction_types")
       .select("id, name, color, sort_order, is_active, created_at")
-      .eq("organization_id", selectedOrgId)
+      .eq("organization_id", organizationId)
       .order("sort_order", { ascending: true })
       .order("name", { ascending: true });
 
@@ -341,8 +363,8 @@ export default function DrillholeVizPage() {
   };
 
   // --- NEW: load annulus types
-  const reloadAnnulusTypes = async () => {
-    if (!selectedOrgId) {
+  const reloadAnnulusTypes = async (organizationId = selectedHoleOrgId) => {
+    if (!organizationId) {
       setAnnulusTypesAll([]);
       return;
     }
@@ -351,7 +373,7 @@ export default function DrillholeVizPage() {
     const { data, error } = await supabase
       .from("drillhole_annulus_types")
       .select("id, name, color, sort_order, is_active, created_at")
-      .eq("organization_id", selectedOrgId)
+      .eq("organization_id", organizationId)
       .order("sort_order", { ascending: true })
       .order("name", { ascending: true });
 
@@ -376,11 +398,11 @@ export default function DrillholeVizPage() {
   };
 
   useEffect(() => {
-    reloadLithologyTypes();
-    reloadConstructionTypes();
-    reloadAnnulusTypes();
+    reloadLithologyTypes(selectedHoleOrgId);
+    reloadConstructionTypes(selectedHoleOrgId);
+    reloadAnnulusTypes(selectedHoleOrgId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedOrgId]);
+  }, [selectedHoleOrgId]);
 
   // Lithology types CRUD (existing)
   const addLithologyTypeRow = () => {
@@ -666,7 +688,7 @@ export default function DrillholeVizPage() {
 
   // Load geology intervals when hole changes (existing)
   useEffect(() => {
-    if (!selectedOrgId || !selectedHoleId) {
+    if (!selectedHoleOrgId || !selectedHoleId) {
       setGeoRows([]);
       return;
     }
@@ -675,7 +697,7 @@ export default function DrillholeVizPage() {
       const { data, error } = await supabase
         .from("drillhole_geology_intervals")
         .select("id, from_m, to_m, lithology_type_id, notes, created_at")
-        .eq("organization_id", selectedOrgId)
+        .eq("organization_id", selectedHoleOrgId)
         .eq("hole_id", selectedHoleId)
         .order("from_m", { ascending: true });
 
@@ -698,11 +720,11 @@ export default function DrillholeVizPage() {
         }))
       );
     })();
-  }, [selectedOrgId, selectedHoleId, supabase]);
+  }, [selectedHoleOrgId, selectedHoleId, supabase]);
 
   // NEW: Load construction intervals when hole changes
   useEffect(() => {
-    if (!selectedOrgId || !selectedHoleId) {
+    if (!selectedHoleOrgId || !selectedHoleId) {
       setConstructionRows([]);
       return;
     }
@@ -711,7 +733,7 @@ export default function DrillholeVizPage() {
       const { data, error } = await supabase
         .from("drillhole_construction_intervals")
         .select("id, from_m, to_m, construction_type_id, notes, created_at")
-        .eq("organization_id", selectedOrgId)
+        .eq("organization_id", selectedHoleOrgId)
         .eq("hole_id", selectedHoleId)
         .order("from_m", { ascending: true });
 
@@ -734,11 +756,11 @@ export default function DrillholeVizPage() {
         }))
       );
     })();
-  }, [selectedOrgId, selectedHoleId, supabase]);
+  }, [selectedHoleOrgId, selectedHoleId, supabase]);
 
   // NEW: Load annulus intervals when hole changes
   useEffect(() => {
-    if (!selectedOrgId || !selectedHoleId) {
+    if (!selectedHoleOrgId || !selectedHoleId) {
       setAnnulusRows([]);
       return;
     }
@@ -747,7 +769,7 @@ export default function DrillholeVizPage() {
       const { data, error } = await supabase
         .from("drillhole_annulus_intervals")
         .select("id, from_m, to_m, annulus_type_id, notes, created_at")
-        .eq("organization_id", selectedOrgId)
+        .eq("organization_id", selectedHoleOrgId)
         .eq("hole_id", selectedHoleId)
         .order("from_m", { ascending: true });
 
@@ -770,7 +792,7 @@ export default function DrillholeVizPage() {
         }))
       );
     })();
-  }, [selectedOrgId, selectedHoleId, supabase]);
+  }, [selectedHoleOrgId, selectedHoleId, supabase]);
 
   const addGeoRow = () => {
     setGeoRows((prev) => [
@@ -1054,12 +1076,61 @@ export default function DrillholeVizPage() {
     if (!selectedOrgId) return;
     (async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("holes")
-        .select("id, organization_id, hole_id, project_id, depth, planned_depth, water_level_m, projects ( id, name )")
-        .eq("organization_id", selectedOrgId)
-        .order("project_id", { ascending: true })
-        .order("hole_id", { ascending: true });
+      let data = [];
+      let error = null;
+
+      if (projectScope === "shared") {
+        const { data: sharedRows, error: sharedErr } = await supabase
+          .from("organization_shared_projects")
+          .select("project_id, relationship:relationship_id(vendor_organization_id,status,permissions,accepted_at)")
+          .limit(5000);
+
+        if (sharedErr) {
+          console.error(sharedErr);
+          toast.error("Could not load shared projects");
+          setHoles([]);
+          setSelectedHoleId("");
+          setLoading(false);
+          return;
+        }
+
+        const sharedProjectIds = Array.from(
+          new Set(
+            (sharedRows || [])
+              .filter((row) => {
+                const rel = row.relationship;
+                if (!rel) return false;
+                const status = String(rel.status || "");
+                const accepted = status === "active" || status === "accepted" || !!rel.accepted_at;
+                const allowed = !!rel.permissions?.share_project_details;
+                return rel.vendor_organization_id === selectedOrgId && accepted && allowed;
+              })
+              .map((row) => row.project_id)
+              .filter(Boolean)
+          )
+        );
+
+        if (sharedProjectIds.length) {
+          const res = await supabase
+            .from("holes")
+            .select("id, organization_id, hole_id, project_id, depth, planned_depth, water_level_m, projects ( id, name )")
+            .in("project_id", sharedProjectIds)
+            .neq("organization_id", selectedOrgId)
+            .order("project_id", { ascending: true })
+            .order("hole_id", { ascending: true });
+          data = res.data || [];
+          error = res.error || null;
+        }
+      } else {
+        const res = await supabase
+          .from("holes")
+          .select("id, organization_id, hole_id, project_id, depth, planned_depth, water_level_m, projects ( id, name )")
+          .eq("organization_id", selectedOrgId)
+          .order("project_id", { ascending: true })
+          .order("hole_id", { ascending: true });
+        data = res.data || [];
+        error = res.error || null;
+      }
 
       if (error) {
         console.error(error);
@@ -1072,6 +1143,7 @@ export default function DrillholeVizPage() {
       setHoles(
         (data || []).map((h) => ({
           id: h.id,
+          organization_id: h.organization_id,
           hole_id: h.hole_id,
           project_id: h.project_id ?? null,
           projects: h.projects ?? null, // <-- keep joined project info
@@ -1080,11 +1152,12 @@ export default function DrillholeVizPage() {
           water_level_m: h.water_level_m ?? null,
         }))
       );
+      setSelectedHoleId((prev) => ((data || []).some((h) => h.id === prev) ? prev : ""));
       setLoading(false);
     })();
-  }, [supabase, selectedOrgId]);
+  }, [supabase, selectedOrgId, projectScope]);
 
-  const canSeeTypesTab = myRole === "admin";
+  const canSeeTypesTab = myRole === "admin" && !isSharedScope;
 
   const canEditHole = canEdit;
 
@@ -1234,6 +1307,31 @@ export default function DrillholeVizPage() {
             {selectedHole ? "Unified schematic preview (SVG V1)" : "Select a hole to begin"}
           </div>
         </div>
+
+        {!externalProjectScope && (
+          <div className="inline-flex rounded-lg border border-white/15 bg-white/5 p-1">
+            <button
+              type="button"
+              className={[
+                "px-2.5 py-1 text-xs rounded-md transition",
+                projectScope === "own" ? "bg-emerald-500/20 text-emerald-200" : "text-slate-300 hover:bg-white/10",
+              ].join(" ")}
+              onClick={() => setLocalProjectScope("own")}
+            >
+              My projects
+            </button>
+            <button
+              type="button"
+              className={[
+                "px-2.5 py-1 text-xs rounded-md transition",
+                projectScope === "shared" ? "bg-cyan-500/20 text-cyan-200" : "text-slate-300 hover:bg-white/10",
+              ].join(" ")}
+              onClick={() => setLocalProjectScope("shared")}
+            >
+              Client shared
+            </button>
+          </div>
+        )}
 
         <button
           type="button"

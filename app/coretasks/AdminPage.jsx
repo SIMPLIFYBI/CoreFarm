@@ -16,7 +16,7 @@ const TASK_TYPES = [
   "specific_gravity",
 ];
 
-export function AdminPage() {
+export function AdminPage({ projectScope = "own" }) {
   const supabase = supabaseBrowser();
   const { orgId } = useOrg();
 
@@ -124,13 +124,67 @@ export function AdminPage() {
       setHoleStatus({});
       return;
     }
-    const { data, error } = await supabase
-      .from("holes")
-      .select(
-        "id, hole_id, depth, planned_depth, drilling_diameter, project_id, drilling_contractor, created_at, organization_id, projects(name)"
-      )
-      .eq("organization_id", orgId)
-      .order("created_at", { ascending: false });
+    let data = [];
+    let error = null;
+
+    if (projectScope === "shared") {
+      const { data: sharedRows, error: sharedErr } = await supabase
+        .from("organization_shared_projects")
+        .select("project_id, relationship:relationship_id(vendor_organization_id,status,permissions,accepted_at)")
+        .limit(5000);
+
+      if (sharedErr) {
+        toast.error(sharedErr.message);
+        setHoles([]);
+        setHoleStatus({});
+        return;
+      }
+
+      const sharedProjectIds = Array.from(
+        new Set(
+          (sharedRows || [])
+            .filter((row) => {
+              const rel = row.relationship;
+              if (!rel) return false;
+              const status = String(rel.status || "");
+              const accepted = status === "active" || status === "accepted" || !!rel.accepted_at;
+              const allowed = !!rel.permissions?.share_project_details;
+              return rel.vendor_organization_id === orgId && accepted && allowed;
+            })
+            .map((row) => row.project_id)
+            .filter(Boolean)
+        )
+      );
+
+      if (sharedProjectIds.length === 0) {
+        setHoles([]);
+        setHoleStatus({});
+        return;
+      }
+
+      const res = await supabase
+        .from("holes")
+        .select(
+          "id, hole_id, depth, planned_depth, drilling_diameter, project_id, drilling_contractor, created_at, organization_id, projects(name)"
+        )
+        .in("project_id", sharedProjectIds)
+        .neq("organization_id", orgId)
+        .order("created_at", { ascending: false });
+
+      data = res.data;
+      error = res.error;
+    } else {
+      const res = await supabase
+        .from("holes")
+        .select(
+          "id, hole_id, depth, planned_depth, drilling_diameter, project_id, drilling_contractor, created_at, organization_id, projects(name)"
+        )
+        .eq("organization_id", orgId)
+        .order("created_at", { ascending: false });
+
+      data = res.data;
+      error = res.error;
+    }
 
     if (error) {
       toast.error(error.message);
@@ -231,7 +285,13 @@ export function AdminPage() {
       setLoading(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orgId]);
+  }, [orgId, projectScope]);
+
+  useEffect(() => {
+    setSelectedProject("");
+    setSelectedId(null);
+    setIntervals(emptyIntervals);
+  }, [projectScope, emptyIntervals]);
 
   useEffect(() => {
     if (!statusMenuOpen && !projectMenuOpen) return;
@@ -433,6 +493,7 @@ export function AdminPage() {
   };
 
   const deleteHole = async (id) => {
+    if (projectScope === "shared") return toast.error("Client-shared holes cannot be deleted here");
     if (!user) return toast.error("Sign in required");
 
     const hole = holes.find((h) => h.id === id);
@@ -635,7 +696,9 @@ export function AdminPage() {
                       <td className="hidden md:table-cell">
                         <div className="flex gap-2">
                           <EditIconButton
+                            disabled={projectScope === "shared"}
                             onClick={() => {
+                              if (projectScope === "shared") return;
                               setEditingId(h.id);
                               setSingle({
                                 hole_id: h.hole_id || "",
@@ -648,7 +711,7 @@ export function AdminPage() {
                               setShowHoleModal(true);
                             }}
                           />
-                          <DeleteIconButton onClick={() => deleteHole(h.id)} />
+                          <DeleteIconButton disabled={projectScope === "shared"} onClick={() => deleteHole(h.id)} />
                         </div>
                       </td>
                     </tr>

@@ -13,45 +13,49 @@ export default function ConstructionIntervalsTab({
   onUpdateRow,
   onRemoveRow,
 }) {
+  const rowCount = (constructionRows || []).length;
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {!selectedHole ? (
-        <div className="text-sm text-slate-300">Select a hole.</div>
+        <div className="glass rounded-2xl border border-white/10 p-4 text-sm text-slate-300">Select a hole.</div>
       ) : (
-        <div className="card p-3 space-y-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-sm font-medium text-slate-100">Construction intervals</div>
-              <div className="text-[11px] text-slate-400 truncate">
-                Hole: <span className="text-slate-200">{selectedHole.hole_id}</span>
+        <div className="glass rounded-2xl border border-white/10 p-4 md:p-5 space-y-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="min-w-0 space-y-1">
+              <div className="text-sm font-semibold text-slate-100">Construction intervals</div>
+              <div className="text-xs text-slate-400 truncate">
+                Hole: <span className="text-slate-200">{selectedHole.hole_id}</span> · {rowCount} rows
               </div>
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              <button type="button" className="btn btn-xs" onClick={onAddRow} disabled={!canEdit}>
-                + Row
+              <button type="button" className="btn h-10 min-h-0 px-4 text-xs" onClick={onAddRow} disabled={!canEdit}>
+                Add interval
               </button>
               <button
                 type="button"
-                className="btn btn-xs btn-primary"
+                className="btn btn-primary h-10 min-h-0 px-4 text-xs"
                 onClick={onSave}
                 disabled={!canEdit || constructionSaving}
               >
-                {constructionSaving ? "Saving…" : "Save"}
+                {constructionSaving ? "Saving..." : "Save changes"}
               </button>
             </div>
           </div>
 
           {constructionLoading ? (
-            <div className="text-sm text-slate-300">Loading construction…</div>
+            <div className="glass rounded-xl border border-white/10 p-3 text-sm text-slate-300">Loading construction...</div>
           ) : (constructionTypesActive || []).length === 0 ? (
-            <div className="text-sm text-amber-300">
+            <div className="glass rounded-xl border border-amber-300/30 p-3 text-sm text-amber-300">
               No active construction types found for this org. Add/enable them in <b>Construction Types</b>.
             </div>
           ) : (
-            <div className="space-y-2">
-              {(constructionRows || []).length === 0 && (
-                <div className="text-xs text-slate-400 italic">No construction intervals yet.</div>
+            <div className="space-y-3">
+              {rowCount === 0 && (
+                <div className="glass rounded-xl border border-white/10 p-3 text-xs italic text-slate-400">
+                  No construction intervals yet.
+                </div>
               )}
 
               {(constructionRows || []).map((r, idx) => {
@@ -59,78 +63,75 @@ export default function ConstructionIntervalsTab({
                 const swatch = t?.color || "#64748b";
 
                 return (
-                  <div key={r.id || `new-con-${idx}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
-                    <div
-                      className={[
-                        "grid gap-2 items-center",
-                        "grid-cols-1",
-                        "md:grid-cols-[minmax(96px,1fr)_minmax(96px,1fr)_minmax(220px,2.2fr)_minmax(160px,2fr)_auto]",
-                      ].join(" ")}
-                    >
-                      <input
-                        className="input input-xs w-full"
-                        type="number"
-                        step="0.1"
-                        placeholder="From (m)"
-                        value={r.from_m}
-                        disabled={!canEdit}
-                        onChange={(e) => onUpdateRow(idx, { from_m: e.target.value })}
-                      />
-                      <input
-                        className="input input-xs w-full"
-                        type="number"
-                        step="0.1"
-                        placeholder="To (m)"
-                        value={r.to_m}
-                        disabled={!canEdit}
-                        onChange={(e) => onUpdateRow(idx, { to_m: e.target.value })}
-                      />
-
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span
-                          className="inline-block h-3 w-3 rounded-sm border border-white/20 shrink-0"
-                          style={{ backgroundColor: swatch }}
-                          title={t?.name || "Construction color"}
-                        />
-                        <select
-                          className="select-gradient-sm w-full min-w-0"
-                          value={r.construction_type_id || ""}
+                  <div key={r.id || `new-con-${idx}`} className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+                    <div className="grid grid-cols-1 md:grid-cols-[minmax(92px,1fr)_minmax(92px,1fr)_minmax(0,2.6fr)_48px] gap-3 items-end">
+                      <div>
+                        <label className="mb-1 block text-[11px] uppercase tracking-wide text-slate-400">From (m)</label>
+                        <input
+                          className="input h-10 min-h-0 w-full"
+                          type="number"
+                          step="0.1"
+                          placeholder="0.0"
+                          value={r.from_m}
                           disabled={!canEdit}
-                          onChange={(e) => onUpdateRow(idx, { construction_type_id: e.target.value })}
-                        >
-                          <option value="">Construction…</option>
-                          {(constructionTypesActive || []).map((ct) => (
-                            <option key={ct.id} value={ct.id}>
-                              {ct.name}
-                            </option>
-                          ))}
-                        </select>
+                          onChange={(e) => onUpdateRow(idx, { from_m: e.target.value })}
+                        />
                       </div>
 
-                      <input
-                        className="input input-xs w-full"
-                        type="text"
-                        placeholder="Notes"
-                        value={r.notes || ""}
-                        disabled={!canEdit}
-                        onChange={(e) => onUpdateRow(idx, { notes: e.target.value })}
-                      />
+                      <div>
+                        <label className="mb-1 block text-[11px] uppercase tracking-wide text-slate-400">To (m)</label>
+                        <input
+                          className="input h-10 min-h-0 w-full"
+                          type="number"
+                          step="0.1"
+                          placeholder="0.0"
+                          value={r.to_m}
+                          disabled={!canEdit}
+                          onChange={(e) => onUpdateRow(idx, { to_m: e.target.value })}
+                        />
+                      </div>
 
-                      <button
-                        type="button"
-                        className="btn btn-xs w-full md:w-auto"
-                        onClick={() => onRemoveRow(idx)}
-                        disabled={!canEdit}
-                        title="Remove"
-                      >
-                        ×
-                      </button>
+                      <div className="min-w-0">
+                        <label className="mb-1 block text-[11px] uppercase tracking-wide text-slate-400">Construction Type</label>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span
+                            className="inline-block h-3 w-3 rounded-sm border border-white/20 shrink-0"
+                            style={{ backgroundColor: swatch }}
+                            title={t?.name || "Construction color"}
+                          />
+                          <select
+                            className="select h-10 min-h-0 w-full"
+                            value={r.construction_type_id || ""}
+                            disabled={!canEdit}
+                            onChange={(e) => onUpdateRow(idx, { construction_type_id: e.target.value })}
+                          >
+                            <option value="">Choose construction type</option>
+                            {(constructionTypesActive || []).map((ct) => (
+                              <option key={ct.id} value={ct.id}>
+                                {ct.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <button
+                          type="button"
+                          className="h-10 min-h-0 w-full rounded-xl border border-rose-300/35 bg-rose-500/10 text-rose-200 transition-base hover:bg-rose-500/20 disabled:opacity-50 flex items-center justify-center"
+                          onClick={() => onRemoveRow(idx)}
+                          disabled={!canEdit}
+                          title="Remove interval"
+                        >
+                          X
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
               })}
 
-              <div className="text-[11px] text-slate-400">
+              <div className="text-xs text-slate-400">
                 Rules: From &lt; To, 0.1m precision, no overlaps (also enforced by DB exclusion constraint).
               </div>
             </div>

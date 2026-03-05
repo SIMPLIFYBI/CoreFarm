@@ -48,7 +48,7 @@ function lineId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export default function SampleDispatchPage() {
+export default function SampleDispatchPage({ projectScope = "own" }) {
   const supabase = supabaseBrowser();
   const { orgId } = useOrg();
 
@@ -96,18 +96,52 @@ export default function SampleDispatchPage() {
 
     setLoading(true);
 
-    const [
-      holesRes,
-      plannedRes,
-      progressRes,
-      dispatchesRes,
-      dispatchItemsRes,
-    ] = await Promise.all([
-      supabase
+    let holesRes;
+    if (projectScope === "shared") {
+      const { data: sharedRows, error: sharedErr } = await supabase
+        .from("organization_shared_projects")
+        .select("project_id, relationship:relationship_id(vendor_organization_id,status,permissions,accepted_at)")
+        .limit(5000);
+
+      if (sharedErr) {
+        toast.error(sharedErr.message || "Failed to load shared projects");
+        setLoading(false);
+        return;
+      }
+
+      const sharedProjectIds = Array.from(
+        new Set(
+          (sharedRows || [])
+            .filter((row) => {
+              const rel = row.relationship;
+              if (!rel) return false;
+              const status = String(rel.status || "");
+              const accepted = status === "active" || status === "accepted" || !!rel.accepted_at;
+              const allowed = !!rel.permissions?.share_project_details;
+              return rel.vendor_organization_id === orgId && accepted && allowed;
+            })
+            .map((row) => row.project_id)
+            .filter(Boolean)
+        )
+      );
+
+      holesRes = sharedProjectIds.length
+        ? await supabase
+            .from("holes")
+            .select("id,hole_id,depth,project_id,organization_id,projects(name)")
+            .in("project_id", sharedProjectIds)
+            .neq("organization_id", orgId)
+            .order("hole_id", { ascending: true })
+        : { data: [], error: null };
+    } else {
+      holesRes = await supabase
         .from("holes")
         .select("id,hole_id,depth,project_id,projects(name)")
         .eq("organization_id", orgId)
-        .order("hole_id", { ascending: true }),
+        .order("hole_id", { ascending: true });
+    }
+
+    const [plannedRes, progressRes, dispatchesRes, dispatchItemsRes] = await Promise.all([
       supabase
         .from("hole_task_intervals")
         .select("id,hole_id,task_type,from_m,to_m"),
@@ -156,7 +190,7 @@ export default function SampleDispatchPage() {
   useEffect(() => {
     void reloadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orgId]);
+  }, [orgId, projectScope]);
 
   const holeMap = useMemo(() => {
     const map = new Map();

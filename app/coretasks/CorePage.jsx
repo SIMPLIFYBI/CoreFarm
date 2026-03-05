@@ -26,7 +26,7 @@ function overlapLen(a1, a2, b1, b2) {
   return Math.max(0, end - start);
 }
 
-export default function CorePage() {
+export default function CorePage({ projectScope = "own" }) {
   const supabase = supabaseBrowser();
   const { orgId } = useOrg();
   const [holes, setHoles] = useState([]); // {id, hole_id}
@@ -112,10 +112,44 @@ export default function CorePage() {
   useEffect(() => {
     if (!orgId) return;
     (async () => {
-      const { data: holesData } = await supabase
-        .from("holes")
-        .select("id, hole_id, depth, project_id, projects(name)")
-        .eq('organization_id', orgId);
+      let holesData = [];
+      if (projectScope === "shared") {
+        const { data: sharedRows } = await supabase
+          .from("organization_shared_projects")
+          .select("project_id, relationship:relationship_id(vendor_organization_id,status,permissions,accepted_at)")
+          .limit(5000);
+
+        const sharedProjectIds = Array.from(
+          new Set(
+            (sharedRows || [])
+              .filter((row) => {
+                const rel = row.relationship;
+                if (!rel) return false;
+                const status = String(rel.status || "");
+                const accepted = status === "active" || status === "accepted" || !!rel.accepted_at;
+                const allowed = !!rel.permissions?.share_project_details;
+                return rel.vendor_organization_id === orgId && accepted && allowed;
+              })
+              .map((row) => row.project_id)
+              .filter(Boolean)
+          )
+        );
+
+        if (sharedProjectIds.length) {
+          const { data } = await supabase
+            .from("holes")
+            .select("id, hole_id, depth, project_id, organization_id, projects(name)")
+            .in("project_id", sharedProjectIds)
+            .neq("organization_id", orgId);
+          holesData = data || [];
+        }
+      } else {
+        const { data } = await supabase
+          .from("holes")
+          .select("id, hole_id, depth, project_id, projects(name)")
+          .eq("organization_id", orgId);
+        holesData = data || [];
+      }
       setHoles(holesData || []);
       const ids = (holesData || []).map((h) => h.id);
       if (ids.length > 0) {
@@ -154,7 +188,7 @@ export default function CorePage() {
       }
       setLoading(false);
     })();
-  }, [supabase, orgId]);
+  }, [supabase, orgId, projectScope]);
 
   // current user id for labeling progress entries
   useEffect(() => {

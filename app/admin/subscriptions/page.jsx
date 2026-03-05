@@ -31,10 +31,35 @@ export default function AdminSubscriptionsPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  const [accessChecked, setAccessChecked] = useState(false);
+  const [isAppAdmin, setIsAppAdmin] = useState(false);
 
   // Per-org draft settings for changes
   const [draft, setDraft] = useState({}); // { [orgId]: { plan, term, customEndDate, po, notes } }
   const [busyOrg, setBusyOrg] = useState(null);
+
+  const checkAccess = async () => {
+    const { data: authData } = await supabase.auth.getUser();
+    const userId = authData?.user?.id;
+    if (!userId) {
+      setIsAppAdmin(false);
+      setAccessChecked(true);
+      return false;
+    }
+
+    const { data, error } = await supabase.from("app_admins").select("user_id").eq("user_id", userId).maybeSingle();
+    if (error) {
+      setErr(error.message || "Unable to verify admin access");
+      setIsAppAdmin(false);
+      setAccessChecked(true);
+      return false;
+    }
+
+    const allowed = !!data?.user_id;
+    setIsAppAdmin(allowed);
+    setAccessChecked(true);
+    return allowed;
+  };
 
   const load = async () => {
     setErr("");
@@ -64,7 +89,11 @@ export default function AdminSubscriptionsPage() {
   };
 
   useEffect(() => {
-    load();
+    (async () => {
+      const allowed = await checkAccess();
+      if (allowed) await load();
+      else setLoading(false);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -144,7 +173,7 @@ export default function AdminSubscriptionsPage() {
     <div className="max-w-6xl mx-auto p-4 md:p-6">
       <div className="card p-4">
         <div className="flex items-center justify-between gap-3 mb-3">
-          <h1 className="text-lg font-semibold text-slate-100">Admin: Subscriptions</h1>
+          <h1 className="text-lg font-semibold text-slate-100">App Admin</h1>
           <button className="btn btn-xs" type="button" onClick={load} disabled={loading}>
             Refresh
           </button>
@@ -152,9 +181,13 @@ export default function AdminSubscriptionsPage() {
 
         {err ? <div className="text-sm text-red-300 mb-3">{err}</div> : null}
 
+        {accessChecked && !isAppAdmin ? (
+          <div className="text-sm text-red-200">You do not have access to App Admin.</div>
+        ) : null}
+
         {loading ? (
           <div className="text-slate-300/70 text-sm">Loading…</div>
-        ) : (
+        ) : isAppAdmin ? (
           <div className="overflow-x-auto">
             <table className="table w-full min-w-[1120px]">
               <thead>
@@ -287,7 +320,7 @@ export default function AdminSubscriptionsPage() {
               </tbody>
             </table>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

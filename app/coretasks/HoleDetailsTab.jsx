@@ -15,7 +15,7 @@ function toNumOrNull(value) {
   return Number.isFinite(num) ? num : null;
 }
 
-export default function HoleDetailsTab() {
+export default function HoleDetailsTab({ projectScope = "own" }) {
   const supabase = supabaseBrowser();
   const { orgId } = useOrg();
 
@@ -65,22 +65,70 @@ export default function HoleDetailsTab() {
 
     setLoading(true);
     try {
-      const [holesRes, projectsRes] = await Promise.all([
-        supabase
+      if (projectScope === "shared") {
+        const { data: sharedRows, error: sharedErr } = await supabase
+          .from("organization_shared_projects")
+          .select("project_id, relationship:relationship_id(vendor_organization_id,status,permissions,accepted_at)")
+          .limit(5000);
+        if (sharedErr) throw sharedErr;
+
+        const sharedProjectIds = Array.from(
+          new Set(
+            (sharedRows || [])
+              .filter((row) => {
+                const rel = row.relationship;
+                if (!rel) return false;
+                const status = String(rel.status || "");
+                const accepted = status === "active" || status === "accepted" || !!rel.accepted_at;
+                const allowed = !!rel.permissions?.share_project_details;
+                return rel.vendor_organization_id === orgId && accepted && allowed;
+              })
+              .map((row) => row.project_id)
+              .filter(Boolean)
+          )
+        );
+
+        if (sharedProjectIds.length === 0) {
+          setHoles([]);
+          setProjects([]);
+          return;
+        }
+
+        const { data: sharedHoles, error: holesErr } = await supabase
           .from("holes")
           .select(
-            "id,hole_id,depth,planned_depth,water_level_m,state,drilling_diameter,drilling_contractor,project_id,created_at,projects(name)"
+            "id,hole_id,depth,planned_depth,water_level_m,state,drilling_diameter,drilling_contractor,project_id,created_at,organization_id,projects(name)"
           )
-          .eq("organization_id", orgId)
-          .order("created_at", { ascending: false }),
-        supabase.from("projects").select("id,name").eq("organization_id", orgId).order("name", { ascending: true }),
-      ]);
+          .in("project_id", sharedProjectIds)
+          .neq("organization_id", orgId)
+          .order("created_at", { ascending: false });
+        if (holesErr) throw holesErr;
 
-      if (holesRes.error) throw holesRes.error;
-      if (projectsRes.error) throw projectsRes.error;
+        const projectMap = new Map();
+        (sharedHoles || []).forEach((h) => {
+          if (h.project_id && h.projects?.name) projectMap.set(h.project_id, h.projects.name);
+        });
 
-      setHoles(holesRes.data || []);
-      setProjects(projectsRes.data || []);
+        setHoles(sharedHoles || []);
+        setProjects(Array.from(projectMap.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)));
+      } else {
+        const [holesRes, projectsRes] = await Promise.all([
+          supabase
+            .from("holes")
+            .select(
+              "id,hole_id,depth,planned_depth,water_level_m,state,drilling_diameter,drilling_contractor,project_id,created_at,projects(name)"
+            )
+            .eq("organization_id", orgId)
+            .order("created_at", { ascending: false }),
+          supabase.from("projects").select("id,name").eq("organization_id", orgId).order("name", { ascending: true }),
+        ]);
+
+        if (holesRes.error) throw holesRes.error;
+        if (projectsRes.error) throw projectsRes.error;
+
+        setHoles(holesRes.data || []);
+        setProjects(projectsRes.data || []);
+      }
     } catch (error) {
       toast.error(error?.message || "Failed to load hole details");
       setHoles([]);
@@ -92,7 +140,13 @@ export default function HoleDetailsTab() {
   useEffect(() => {
     void loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orgId]);
+  }, [orgId, projectScope]);
+
+  useEffect(() => {
+    setProjectFilter("");
+    setSelectedHole(null);
+    setIsCreateMode(false);
+  }, [projectScope]);
 
   const filteredHoles = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -139,6 +193,7 @@ export default function HoleDetailsTab() {
   };
 
   const openCreateHole = () => {
+    if (projectScope === "shared") return;
     setIsCreateMode(true);
     setSelectedHole({ id: null });
     setForm({
@@ -154,6 +209,7 @@ export default function HoleDetailsTab() {
   };
 
   const saveHole = async () => {
+    if (projectScope === "shared") return toast.error("Client-shared holes are read-only here");
     if (!selectedHole) return;
     if (!String(form.hole_id || "").trim()) {
       toast.error("Hole ID is required");
@@ -195,6 +251,7 @@ export default function HoleDetailsTab() {
   };
 
   const onBulkUpload = async () => {
+    if (projectScope === "shared") return toast.error("Bulk upload is disabled for client-shared holes");
     const rows = parsed.length ? parsed : parseTable(bulkText);
     if (!rows.length) return toast.error("No rows found");
 
@@ -238,6 +295,7 @@ export default function HoleDetailsTab() {
           <button
             type="button"
             className="btn hidden md:inline-flex"
+            disabled={projectScope === "shared"}
             onClick={() => {
               setShowBulk(true);
               setParsed([]);
@@ -245,7 +303,7 @@ export default function HoleDetailsTab() {
           >
             Open bulk uploader
           </button>
-          <button type="button" className="btn btn-primary" onClick={openCreateHole}>
+          <button type="button" className="btn btn-primary" onClick={openCreateHole} disabled={projectScope === "shared"}>
             Add New Core
           </button>
         </div>
@@ -476,7 +534,7 @@ export default function HoleDetailsTab() {
               <button type="button" className="btn" onClick={closeHole} disabled={saving}>
                 Cancel
               </button>
-              <button type="button" className="btn btn-primary" onClick={saveHole} disabled={saving}>
+              <button type="button" className="btn btn-primary" onClick={saveHole} disabled={saving || projectScope === "shared"}>
                 {saving ? "Saving…" : isCreateMode ? "Add Hole" : "Save Changes"}
               </button>
             </div>
