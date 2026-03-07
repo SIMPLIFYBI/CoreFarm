@@ -28,8 +28,8 @@ export default function SchematicArea({
               </div>
 
               {/* EXPORT ROOT (axis + schematic) */}
-              <div className="overflow-x-hidden">
-                <div id="schematic-export-root" className="w-full">
+              <div className="overflow-x-auto pb-1">
+                <div id="schematic-export-root" className="w-full min-w-max">
                   <div className="flex md:hidden gap-2 items-start">
                     <DepthAxisBar
                       plannedDepth={selectedHole.planned_depth}

@@ -8,11 +8,65 @@ import { parseTable } from "@/lib/parseTable";
 
 const STATE_OPTIONS = ["proposed", "in_progress", "drilled"];
 const DIAMETER_OPTIONS = ["", "NQ", "HQ", "PQ", "Other"];
+const COLLAR_SOURCE_OPTIONS = ["", "gps", "survey", "estimated", "imported"];
+const COMPLETION_STATUS_OPTIONS = ["", "completed", "abandoned", "suspended"];
+const BULK_COLUMNS = [
+  { key: "hole_id", required: true, description: "Unique hole identifier." },
+  { key: "depth", required: false, description: "Actual drilled depth (m)." },
+  { key: "planned_depth", required: false, description: "Planned depth (m)." },
+  { key: "water_level_m", required: false, description: "Water level from collar (m)." },
+  { key: "azimuth", required: false, description: "0 <= azimuth < 360." },
+  { key: "dip", required: false, description: "-90 to +90." },
+  { key: "collar_longitude", required: false, description: "WGS84 longitude." },
+  { key: "collar_latitude", required: false, description: "WGS84 latitude." },
+  { key: "collar_elevation_m", required: false, description: "Collar elevation (m)." },
+  { key: "collar_source", required: false, description: "gps/survey/estimated/imported." },
+  { key: "started_at", required: false, description: "Datetime, e.g. 2026-03-01T06:00." },
+  { key: "completed_at", required: false, description: "Datetime, e.g. 2026-03-02T18:00." },
+  { key: "completion_status", required: false, description: "completed/abandoned/suspended." },
+  { key: "completion_notes", required: false, description: "Free text." },
+  { key: "drilling_diameter", required: false, description: "NQ/HQ/PQ/Other." },
+  { key: "drilling_contractor", required: false, description: "Contractor name." },
+];
 
 function toNumOrNull(value) {
   if (value === "" || value == null) return null;
   const num = Number(value);
   return Number.isFinite(num) ? num : null;
+}
+
+function toTextOrNull(value) {
+  const txt = String(value || "").trim();
+  return txt || null;
+}
+
+function toIsoOrNull(value) {
+  const txt = String(value || "").trim();
+  if (!txt) return null;
+  const d = new Date(txt);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+function toDateTimeLocal(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function formatMeters(value) {
+  if (value == null || value === "") return "-";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "-";
+  return `${n.toFixed(1)} m`;
+}
+
+function formatDegrees(value) {
+  if (value == null || value === "") return "-";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "-";
+  return `${n.toFixed(1)}°`;
 }
 
 export default function HoleDetailsTab({ projectScope = "own" }) {
@@ -41,6 +95,16 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
     depth: "",
     planned_depth: "",
     water_level_m: "",
+    azimuth: "",
+    dip: "",
+    collar_longitude: "",
+    collar_latitude: "",
+    collar_elevation_m: "",
+    collar_source: "",
+    started_at: "",
+    completed_at: "",
+    completion_status: "",
+    completion_notes: "",
     state: "proposed",
     drilling_diameter: "",
     drilling_contractor: "",
@@ -49,9 +113,10 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
 
   const sampleHeaders = useMemo(
     () =>
-      "hole_id,depth,planned_depth,drilling_diameter\n" +
-      "HOLE-001,150,200,NQ\n" +
-      "HOLE-002,220,250,HQ\n",
+      "hole_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,drilling_diameter,drilling_contractor\n" +
+      "HOLE-001,150,200,12.5,135.0,-60.0,121.12345,-27.12345,385.2,gps,2026-03-01T06:00,2026-03-02T18:00,completed,Completed to planned depth,NQ,North Drilling\n" +
+      "HOLE-002,220,250,18.0,142.5,-55.0,121.12510,-27.12430,388.1,survey,2026-03-03T07:30,2026-03-04T16:40,completed,Deviation survey complete,HQ,Westline Drilling\n" +
+      "HOLE-003,80,180,,,,,,,,,,abandoned,Stopped due to poor ground conditions,PQ,\n",
     []
   );
 
@@ -97,7 +162,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
         const { data: sharedHoles, error: holesErr } = await supabase
           .from("holes")
           .select(
-            "id,hole_id,depth,planned_depth,water_level_m,state,drilling_diameter,drilling_contractor,project_id,created_at,organization_id,projects(name)"
+            "id,hole_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state,drilling_diameter,drilling_contractor,project_id,created_at,organization_id,projects(name)"
           )
           .in("project_id", sharedProjectIds)
           .neq("organization_id", orgId)
@@ -116,7 +181,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
           supabase
             .from("holes")
             .select(
-              "id,hole_id,depth,planned_depth,water_level_m,state,drilling_diameter,drilling_contractor,project_id,created_at,projects(name)"
+              "id,hole_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state,drilling_diameter,drilling_contractor,project_id,created_at,projects(name)"
             )
             .eq("organization_id", orgId)
             .order("created_at", { ascending: false }),
@@ -171,6 +236,74 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
     });
   }, [holes, search, projectFilter, stateFilter, diameterFilter]);
 
+  const bulkAllowedHeaders = useMemo(() => BULK_COLUMNS.map((c) => c.key), []);
+  const bulkRequiredHeaders = useMemo(() => BULK_COLUMNS.filter((c) => c.required).map((c) => c.key), []);
+  const bulkHeaderCsv = useMemo(() => BULK_COLUMNS.map((c) => c.key).join(","), []);
+  const bulkHeaderTsv = useMemo(() => BULK_COLUMNS.map((c) => c.key).join("\t"), []);
+  const bulkHeadersPresent = useMemo(() => Object.keys(parsed?.[0] || {}), [parsed]);
+
+  const bulkInvalidHeaders = useMemo(
+    () => bulkHeadersPresent.filter((header) => !bulkAllowedHeaders.includes(header)),
+    [bulkHeadersPresent, bulkAllowedHeaders]
+  );
+
+  const bulkMissingRequired = useMemo(
+    () => bulkRequiredHeaders.filter((header) => !bulkHeadersPresent.includes(header)),
+    [bulkRequiredHeaders, bulkHeadersPresent]
+  );
+
+  const bulkValidRowsCount = useMemo(
+    () => (parsed || []).filter((row) => String(row?.hole_id || "").trim()).length,
+    [parsed]
+  );
+
+  const bulkCanImport =
+    !importing &&
+    parsed.length > 0 &&
+    bulkInvalidHeaders.length === 0 &&
+    bulkMissingRequired.length === 0 &&
+    bulkValidRowsCount > 0;
+
+  const copyBulkHeaders = async () => {
+    const text = `${bulkHeaderTsv}\n`;
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      toast.success("Headers copied. Paste into Excel to create columns.");
+    } catch {
+      toast.error("Could not copy headers. You can use the sample text as a fallback.");
+    }
+  };
+
+  const downloadBulkSample = () => {
+    try {
+      const csvContent = sampleHeaders.endsWith("\n") ? sampleHeaders : `${sampleHeaders}\n`;
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", "holes_bulk_upload_sample.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success("Sample CSV downloaded");
+    } catch {
+      toast.error("Could not download sample CSV");
+    }
+  };
+
   const openHole = (hole) => {
     setIsCreateMode(false);
     setSelectedHole(hole);
@@ -179,6 +312,16 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
       depth: hole.depth ?? "",
       planned_depth: hole.planned_depth ?? "",
       water_level_m: hole.water_level_m ?? "",
+      azimuth: hole.azimuth ?? "",
+      dip: hole.dip ?? "",
+      collar_longitude: hole.collar_longitude ?? "",
+      collar_latitude: hole.collar_latitude ?? "",
+      collar_elevation_m: hole.collar_elevation_m ?? "",
+      collar_source: hole.collar_source || "",
+      started_at: toDateTimeLocal(hole.started_at),
+      completed_at: toDateTimeLocal(hole.completed_at),
+      completion_status: hole.completion_status || "",
+      completion_notes: hole.completion_notes || "",
       state: hole.state || "proposed",
       drilling_diameter: hole.drilling_diameter || "",
       drilling_contractor: hole.drilling_contractor || "",
@@ -201,6 +344,16 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
       depth: "",
       planned_depth: "",
       water_level_m: "",
+      azimuth: "",
+      dip: "",
+      collar_longitude: "",
+      collar_latitude: "",
+      collar_elevation_m: "",
+      collar_source: "",
+      started_at: "",
+      completed_at: "",
+      completion_status: "",
+      completion_notes: "",
       state: "proposed",
       drilling_diameter: "",
       drilling_contractor: "",
@@ -218,14 +371,39 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
 
     setSaving(true);
     try {
+      const azimuth = toNumOrNull(form.azimuth);
+      const dip = toNumOrNull(form.dip);
+      const collarLongitude = toNumOrNull(form.collar_longitude);
+      const collarLatitude = toNumOrNull(form.collar_latitude);
+      const startedAt = toIsoOrNull(form.started_at);
+      const completedAt = toIsoOrNull(form.completed_at);
+
+      if (form.azimuth !== "" && azimuth == null) return toast.error("Azimuth must be a number");
+      if (form.dip !== "" && dip == null) return toast.error("Dip must be a number");
+      if (azimuth != null && (azimuth < 0 || azimuth >= 360)) return toast.error("Azimuth must be between 0 and < 360");
+      if (dip != null && (dip < -90 || dip > 90)) return toast.error("Dip must be between -90 and 90");
+      if ((collarLongitude == null) !== (collarLatitude == null)) return toast.error("Longitude and latitude must both be set or both blank");
+      if (form.started_at && !startedAt) return toast.error("Started at is invalid");
+      if (form.completed_at && !completedAt) return toast.error("Completed at is invalid");
+
       const payload = {
         hole_id: String(form.hole_id || "").trim(),
         depth: toNumOrNull(form.depth),
         planned_depth: toNumOrNull(form.planned_depth),
         water_level_m: toNumOrNull(form.water_level_m),
+        azimuth,
+        dip,
+        collar_longitude: collarLongitude,
+        collar_latitude: collarLatitude,
+        collar_elevation_m: toNumOrNull(form.collar_elevation_m),
+        collar_source: toTextOrNull(form.collar_source),
+        started_at: startedAt,
+        completed_at: completedAt,
+        completion_status: toTextOrNull(form.completion_status),
+        completion_notes: toTextOrNull(form.completion_notes),
         state: form.state || "proposed",
         drilling_diameter: form.drilling_diameter || null,
-        drilling_contractor: String(form.drilling_contractor || "").trim() || null,
+        drilling_contractor: toTextOrNull(form.drilling_contractor),
         project_id: form.project_id || null,
       };
 
@@ -255,18 +433,31 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
     const rows = parsed.length ? parsed : parseTable(bulkText);
     if (!rows.length) return toast.error("No rows found");
 
-    const allowed = ["hole_id", "depth", "planned_depth", "drilling_diameter"];
-    const invalid = Object.keys(rows[0] || {}).filter((key) => !allowed.includes(key));
+    const invalid = Object.keys(rows[0] || {}).filter((key) => !bulkAllowedHeaders.includes(key));
     if (invalid.length) return toast.error(`Unexpected headers: ${invalid.join(", ")}`);
+
+    const missing = bulkRequiredHeaders.filter((key) => !(key in (rows[0] || {})));
+    if (missing.length) return toast.error(`Missing required headers: ${missing.join(", ")}`);
 
     const payloads = rows
       .map((row) => ({
         hole_id: String(row.hole_id || "").trim(),
         depth: toNumOrNull(row.depth),
         planned_depth: toNumOrNull(row.planned_depth),
+        water_level_m: toNumOrNull(row.water_level_m),
+        azimuth: toNumOrNull(row.azimuth),
+        dip: toNumOrNull(row.dip),
+        collar_longitude: toNumOrNull(row.collar_longitude),
+        collar_latitude: toNumOrNull(row.collar_latitude),
+        collar_elevation_m: toNumOrNull(row.collar_elevation_m),
+        collar_source: toTextOrNull(row.collar_source),
+        started_at: toIsoOrNull(row.started_at),
+        completed_at: toIsoOrNull(row.completed_at),
+        completion_status: toTextOrNull(row.completion_status),
+        completion_notes: toTextOrNull(row.completion_notes),
         drilling_diameter: row.drilling_diameter || null,
+        drilling_contractor: toTextOrNull(row.drilling_contractor),
         project_id: null,
-        drilling_contractor: null,
         state: "proposed",
         organization_id: orgId || null,
       }))
@@ -383,6 +574,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
               <th>State</th>
               <th>Depth</th>
               <th>Planned</th>
+              <th>Azimuth</th>
               <th>Diameter</th>
               <th>Contractor</th>
             </tr>
@@ -390,13 +582,13 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="text-center py-8 text-slate-300">
+                <td colSpan={8} className="text-center py-8 text-slate-300">
                   Loading holes…
                 </td>
               </tr>
             ) : filteredHoles.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center py-8 text-slate-300">
+                <td colSpan={8} className="text-center py-8 text-slate-300">
                   No holes match your filters.
                 </td>
               </tr>
@@ -410,8 +602,9 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
                   <td className="font-medium">{hole.hole_id}</td>
                   <td>{hole.projects?.name || "—"}</td>
                   <td>{hole.state || "—"}</td>
-                  <td>{hole.depth ?? "—"}</td>
-                  <td>{hole.planned_depth ?? "—"}</td>
+                  <td>{formatMeters(hole.depth)}</td>
+                  <td>{formatMeters(hole.planned_depth)}</td>
+                  <td>{formatDegrees(hole.azimuth)}</td>
                   <td>{hole.drilling_diameter || "—"}</td>
                   <td>{hole.drilling_contractor || "—"}</td>
                 </tr>
@@ -490,6 +683,125 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
               </label>
 
               <label className="text-sm">
+                Azimuth (deg)
+                <input
+                  className="input mt-1"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="359.9"
+                  value={form.azimuth}
+                  onChange={(e) => setForm((prev) => ({ ...prev, azimuth: e.target.value }))}
+                />
+              </label>
+
+              <label className="text-sm">
+                Dip (deg)
+                <input
+                  className="input mt-1"
+                  type="number"
+                  step="0.1"
+                  min="-90"
+                  max="90"
+                  value={form.dip}
+                  onChange={(e) => setForm((prev) => ({ ...prev, dip: e.target.value }))}
+                />
+              </label>
+
+              <label className="text-sm">
+                Collar Longitude (WGS84)
+                <input
+                  className="input mt-1"
+                  type="number"
+                  step="0.000001"
+                  value={form.collar_longitude}
+                  onChange={(e) => setForm((prev) => ({ ...prev, collar_longitude: e.target.value }))}
+                />
+              </label>
+
+              <label className="text-sm">
+                Collar Latitude (WGS84)
+                <input
+                  className="input mt-1"
+                  type="number"
+                  step="0.000001"
+                  value={form.collar_latitude}
+                  onChange={(e) => setForm((prev) => ({ ...prev, collar_latitude: e.target.value }))}
+                />
+              </label>
+
+              <label className="text-sm">
+                Collar Elevation (m)
+                <input
+                  className="input mt-1"
+                  type="number"
+                  step="0.01"
+                  value={form.collar_elevation_m}
+                  onChange={(e) => setForm((prev) => ({ ...prev, collar_elevation_m: e.target.value }))}
+                />
+              </label>
+
+              <label className="text-sm">
+                Collar Source
+                <select
+                  className="select-gradient-sm mt-1"
+                  value={form.collar_source}
+                  onChange={(e) => setForm((prev) => ({ ...prev, collar_source: e.target.value }))}
+                >
+                  {COLLAR_SOURCE_OPTIONS.map((source) => (
+                    <option key={source || "none"} value={source}>
+                      {source || "Select..."}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="text-sm">
+                Started At
+                <input
+                  className="input mt-1"
+                  type="datetime-local"
+                  value={form.started_at}
+                  onChange={(e) => setForm((prev) => ({ ...prev, started_at: e.target.value }))}
+                />
+              </label>
+
+              <label className="text-sm">
+                Completed At
+                <input
+                  className="input mt-1"
+                  type="datetime-local"
+                  value={form.completed_at}
+                  onChange={(e) => setForm((prev) => ({ ...prev, completed_at: e.target.value }))}
+                />
+              </label>
+
+              <label className="text-sm">
+                Completion Status
+                <select
+                  className="select-gradient-sm mt-1"
+                  value={form.completion_status}
+                  onChange={(e) => setForm((prev) => ({ ...prev, completion_status: e.target.value }))}
+                >
+                  {COMPLETION_STATUS_OPTIONS.map((status) => (
+                    <option key={status || "none"} value={status}>
+                      {status || "Select..."}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="text-sm md:col-span-2">
+                Completion Notes
+                <textarea
+                  className="textarea mt-1"
+                  rows={3}
+                  value={form.completion_notes}
+                  onChange={(e) => setForm((prev) => ({ ...prev, completion_notes: e.target.value }))}
+                />
+              </label>
+
+              <label className="text-sm">
                 Diameter
                 <select
                   className="select-gradient-sm mt-1"
@@ -543,88 +855,177 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
       )}
 
       {showBulk && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
-          <div className="card w-full max-w-5xl p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-medium">Bulk upload holes</h3>
-              <button className="btn" onClick={() => setShowBulk(false)}>Close</button>
-            </div>
-
-            <div className="mb-3 text-sm font-bold text-red-700">
-              Copy and paste must include the column header exactly the same as displayed below
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm mb-1">Paste CSV/TSV (first row headers)</label>
-                <textarea
-                  autoFocus
-                  rows={10}
-                  className="textarea font-mono"
-                  placeholder={sampleHeaders}
-                  value={bulkText}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setBulkText(value);
-                    try {
-                      setParsed(parseTable(value));
-                    } catch {
-                      setParsed([]);
-                    }
-                  }}
-                />
-                <div className="mt-2 text-xs text-gray-600">Tip: You can paste directly from Excel/Sheets; tabs are supported.</div>
+        <div className="fixed inset-0 z-[70] bg-slate-950/70 backdrop-blur-md p-3 md:p-5">
+          <div className="glass h-full w-full rounded-2xl border border-white/15 bg-slate-950/85 shadow-[0_30px_90px_rgba(2,6,23,0.65)] overflow-hidden flex flex-col">
+            <div className="border-b border-white/10 px-4 py-3 md:px-6 md:py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-lg md:text-xl font-semibold text-slate-100 truncate">Bulk Hole Uploader</h3>
+                  <p className="text-xs md:text-sm text-slate-400 mt-1">
+                    Paste directly from Excel, CSV, or TSV. Validate headers, preview records, then import.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button type="button" className="btn" onClick={downloadBulkSample}>
+                    Download sample
+                  </button>
+                  <button className="btn" onClick={() => setShowBulk(false)}>Close</button>
+                </div>
               </div>
 
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <div className="text-sm text-gray-700">Preview</div>
-                  <div className="text-xs text-gray-600">Rows: {parsed.length || 0}</div>
+              <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2">
+                <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-wide text-slate-400">Parsed rows</div>
+                  <div className="text-base font-semibold text-slate-100">{parsed.length}</div>
                 </div>
-                <div className="table-container" style={{ maxHeight: 320 }}>
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>hole_id</th>
-                        <th>depth</th>
-                        <th>planned_depth</th>
-                        <th>drilling_diameter</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(parsed || []).slice(0, 200).map((row, index) => (
-                        <tr key={index}>
-                          <td>{row.hole_id}</td>
-                          <td>{row.depth}</td>
-                          <td>{row.planned_depth}</td>
-                          <td>{row.drilling_diameter}</td>
-                        </tr>
-                      ))}
-                      {parsed.length === 0 && (
+                <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-wide text-slate-400">Valid rows</div>
+                  <div className="text-base font-semibold text-emerald-300">{bulkValidRowsCount}</div>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-wide text-slate-400">Invalid headers</div>
+                  <div className="text-base font-semibold text-amber-300">{bulkInvalidHeaders.length}</div>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-wide text-slate-400">Required missing</div>
+                  <div className="text-base font-semibold text-rose-300">{bulkMissingRequired.length}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[1.05fr_1.2fr] gap-4 p-4 md:p-6 overflow-hidden">
+              <div className="min-h-0 flex flex-col gap-3">
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium text-slate-200">Paste CSV/TSV</label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="btn btn-xs"
+                        onClick={copyBulkHeaders}
+                        title={bulkHeaderCsv}
+                      >
+                        Copy headers
+                      </button>
+                    </div>
+                  </div>
+                  <textarea
+                    autoFocus
+                    rows={12}
+                    className="textarea font-mono text-xs"
+                    placeholder={sampleHeaders}
+                    value={bulkText}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setBulkText(value);
+                      try {
+                        setParsed(parseTable(value));
+                      } catch {
+                        setParsed([]);
+                      }
+                    }}
+                  />
+                  <div className="mt-2 text-xs text-slate-400">
+                    Tip: paste directly from Excel or Google Sheets. Tab-delimited paste is supported.
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 space-y-2">
+                  <div className="text-sm font-medium text-slate-200">Validation</div>
+                  {bulkInvalidHeaders.length > 0 && (
+                    <div className="text-xs text-amber-300">
+                      Unexpected headers: {bulkInvalidHeaders.join(", ")}
+                    </div>
+                  )}
+                  {bulkMissingRequired.length > 0 && (
+                    <div className="text-xs text-rose-300">
+                      Missing required headers: {bulkMissingRequired.join(", ")}
+                    </div>
+                  )}
+                  {bulkInvalidHeaders.length === 0 && bulkMissingRequired.length === 0 && parsed.length > 0 && (
+                    <div className="text-xs text-emerald-300">Headers look good and ready to import.</div>
+                  )}
+                  {parsed.length === 0 && (
+                    <div className="text-xs text-slate-400">Paste records to start validation.</div>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 min-h-0 overflow-auto">
+                  <div className="text-sm font-medium text-slate-200 mb-2">Column guide</div>
+                  <div className="space-y-1">
+                    {BULK_COLUMNS.map((column) => (
+                      <div key={column.key} className="flex items-start justify-between gap-3 text-xs">
+                        <div className="text-slate-200 font-mono">{column.key}</div>
+                        <div className="text-slate-400 text-right">{column.description}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="min-h-0 flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium text-slate-200">Preview (first 200 rows)</div>
+                  <div className="text-xs text-slate-400">Scroll horizontally for all fields</div>
+                </div>
+
+                <div className="table-container flex-1 min-h-0 overflow-hidden" style={{ maxHeight: "100%" }}>
+                  <div className="h-full w-full overflow-x-auto overflow-y-auto">
+                    <table className="table min-w-[2200px]">
+                      <thead>
                         <tr>
-                          <td colSpan={4} className="text-center text-sm text-gray-500">Paste data to preview</td>
+                          <th className="left-0 z-20" style={{ left: 0, minWidth: 170 }}>hole_id</th>
+                          <th className="left-0 z-20" style={{ left: 170, minWidth: 110 }}>depth</th>
+                          {BULK_COLUMNS.filter((c) => !["hole_id", "depth"].includes(c.key)).map((column) => (
+                            <th key={column.key}>{column.key}</th>
+                          ))}
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {(parsed || []).slice(0, 200).map((row, index) => (
+                          <tr key={index}>
+                            <td className="sticky left-0 z-10 bg-slate-900/95" style={{ left: 0, minWidth: 170 }}>{row.hole_id}</td>
+                            <td className="sticky left-0 z-10 bg-slate-900/95" style={{ left: 170, minWidth: 110 }}>{row.depth}</td>
+                            {BULK_COLUMNS.filter((c) => !["hole_id", "depth"].includes(c.key)).map((column) => (
+                              <td key={column.key}>{row[column.key]}</td>
+                            ))}
+                          </tr>
+                        ))}
+                        {parsed.length === 0 && (
+                          <tr>
+                            <td colSpan={BULK_COLUMNS.length} className="text-center text-sm text-slate-400 py-8">
+                              Paste data to preview records.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="mt-3 flex items-center gap-2">
+            <div className="border-t border-white/10 px-4 py-3 md:px-6 md:py-4 flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={onBulkUpload}
                 className="btn btn-primary"
-                disabled={importing || !parsed.length}
+                disabled={!bulkCanImport}
               >
-                {importing ? "Importing…" : "Import"}
+                {importing ? "Importing..." : `Import ${bulkValidRowsCount || 0} rows`}
               </button>
-              <button type="button" className="btn" onClick={() => { setBulkText(""); setParsed([]); }}>
-                Clear
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setBulkText("");
+                  setParsed([]);
+                }}
+              >
+                Clear all
               </button>
-              <div className="text-xs text-gray-600 ml-auto">
-                Required: hole_id. Optional: depth, planned_depth, drilling_diameter.
+              <div className="ml-auto text-xs text-slate-400">
+                Required header: <span className="font-mono text-slate-300">hole_id</span>
               </div>
             </div>
           </div>

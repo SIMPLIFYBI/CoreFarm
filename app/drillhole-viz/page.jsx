@@ -41,6 +41,19 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
   // NEW
   const [waterLevelInput, setWaterLevelInput] = useState("");
   const [savingWaterLevel, setSavingWaterLevel] = useState(false);
+  const [savingAdditionalAttributes, setSavingAdditionalAttributes] = useState(false);
+  const [attributeInputs, setAttributeInputs] = useState({
+    azimuth: "",
+    dip: "",
+    collar_longitude: "",
+    collar_latitude: "",
+    collar_elevation_m: "",
+    collar_source: "",
+    started_at: "",
+    completed_at: "",
+    completion_status: "",
+    completion_notes: "",
+  });
 
   // Types (existing)
   const [lithologyTypesAll, setLithologyTypesAll] = useState([]);
@@ -82,6 +95,14 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
 
   const selectedHoleOrgId = selectedHole?.organization_id || selectedOrgId;
 
+  const toDateTimeLocal = (value) => {
+    if (!value) return "";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "";
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
   useEffect(() => {
     if (externalProjectScope) return;
     if (typeof window === "undefined") return;
@@ -102,12 +123,36 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
     if (!selectedHole) {
       setPlannedDepthInput("");
       setWaterLevelInput("");
+      setAttributeInputs({
+        azimuth: "",
+        dip: "",
+        collar_longitude: "",
+        collar_latitude: "",
+        collar_elevation_m: "",
+        collar_source: "",
+        started_at: "",
+        completed_at: "",
+        completion_status: "",
+        completion_notes: "",
+      });
       return;
     }
 
     setPlannedDepthInput(selectedHole.planned_depth ?? "");
     setWaterLevelInput(selectedHole.water_level_m ?? "");
-  }, [selectedHole?.id, selectedHole?.planned_depth, selectedHole?.water_level_m]);
+    setAttributeInputs({
+      azimuth: selectedHole.azimuth ?? "",
+      dip: selectedHole.dip ?? "",
+      collar_longitude: selectedHole.collar_longitude ?? "",
+      collar_latitude: selectedHole.collar_latitude ?? "",
+      collar_elevation_m: selectedHole.collar_elevation_m ?? "",
+      collar_source: selectedHole.collar_source ?? "",
+      started_at: toDateTimeLocal(selectedHole.started_at),
+      completed_at: toDateTimeLocal(selectedHole.completed_at),
+      completion_status: selectedHole.completion_status ?? "",
+      completion_notes: selectedHole.completion_notes ?? "",
+    });
+  }, [selectedHole?.id, selectedHole?.planned_depth, selectedHole?.water_level_m, selectedHole?.azimuth, selectedHole?.dip, selectedHole?.collar_longitude, selectedHole?.collar_latitude, selectedHole?.collar_elevation_m, selectedHole?.collar_source, selectedHole?.started_at, selectedHole?.completed_at, selectedHole?.completion_status, selectedHole?.completion_notes]);
 
   // Group holes by project
   const projects = useMemo(() => {
@@ -1113,7 +1158,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
         if (sharedProjectIds.length) {
           const res = await supabase
             .from("holes")
-            .select("id, organization_id, hole_id, project_id, depth, planned_depth, water_level_m, projects ( id, name )")
+            .select("id, organization_id, hole_id, project_id, depth, planned_depth, water_level_m, azimuth, dip, collar_longitude, collar_latitude, collar_elevation_m, collar_source, started_at, completed_at, completion_status, completion_notes, projects ( id, name )")
             .in("project_id", sharedProjectIds)
             .neq("organization_id", selectedOrgId)
             .order("project_id", { ascending: true })
@@ -1124,7 +1169,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
       } else {
         const res = await supabase
           .from("holes")
-          .select("id, organization_id, hole_id, project_id, depth, planned_depth, water_level_m, projects ( id, name )")
+          .select("id, organization_id, hole_id, project_id, depth, planned_depth, water_level_m, azimuth, dip, collar_longitude, collar_latitude, collar_elevation_m, collar_source, started_at, completed_at, completion_status, completion_notes, projects ( id, name )")
           .eq("organization_id", selectedOrgId)
           .order("project_id", { ascending: true })
           .order("hole_id", { ascending: true });
@@ -1150,6 +1195,16 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
           depth: h.depth ?? null,
           planned_depth: h.planned_depth ?? null,
           water_level_m: h.water_level_m ?? null,
+          azimuth: h.azimuth ?? null,
+          dip: h.dip ?? null,
+          collar_longitude: h.collar_longitude ?? null,
+          collar_latitude: h.collar_latitude ?? null,
+          collar_elevation_m: h.collar_elevation_m ?? null,
+          collar_source: h.collar_source ?? null,
+          started_at: h.started_at ?? null,
+          completed_at: h.completed_at ?? null,
+          completion_status: h.completion_status ?? null,
+          completion_notes: h.completion_notes ?? null,
         }))
       );
       setSelectedHoleId((prev) => ((data || []).some((h) => h.id === prev) ? prev : ""));
@@ -1263,7 +1318,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
       const { error } = await supabase
         .from("holes")
         .update({ water_level_m: value })
-        .match({ id: selectedHoleId, organization_id: selectedOrgId });
+        .match({ id: selectedHoleId, organization_id: selectedHoleOrgId });
 
       if (error) throw error;
 
@@ -1280,23 +1335,106 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
     }
   };
 
+  const handleAttributeChange = (key, value) => {
+    setAttributeInputs((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const toIsoOrNull = (value) => {
+    const raw = String(value || "").trim();
+    if (!raw) return null;
+    const d = new Date(raw);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  };
+
+  const saveAdditionalAttributes = async () => {
+    if (!selectedHoleId || !selectedHoleOrgId) return;
+
+    const numOrNull = (value) => {
+      const raw = String(value ?? "").trim();
+      if (!raw) return null;
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : null;
+    };
+
+    const az = numOrNull(attributeInputs.azimuth);
+    const dip = numOrNull(attributeInputs.dip);
+    const lon = numOrNull(attributeInputs.collar_longitude);
+    const lat = numOrNull(attributeInputs.collar_latitude);
+    const startedAt = toIsoOrNull(attributeInputs.started_at);
+    const completedAt = toIsoOrNull(attributeInputs.completed_at);
+
+    if (attributeInputs.azimuth !== "" && az == null) return toast.error("Azimuth must be a number.");
+    if (attributeInputs.dip !== "" && dip == null) return toast.error("Dip must be a number.");
+    if (attributeInputs.collar_longitude !== "" && lon == null) return toast.error("Longitude must be a number.");
+    if (attributeInputs.collar_latitude !== "" && lat == null) return toast.error("Latitude must be a number.");
+    if ((lon == null) !== (lat == null)) return toast.error("Longitude and latitude must both be provided or both be blank.");
+    if (az != null && (az < 0 || az >= 360)) return toast.error("Azimuth must be between 0 and < 360.");
+    if (dip != null && (dip < -90 || dip > 90)) return toast.error("Dip must be between -90 and 90.");
+    if (startedAt == null && String(attributeInputs.started_at || "").trim()) return toast.error("Started at is invalid.");
+    if (completedAt == null && String(attributeInputs.completed_at || "").trim()) return toast.error("Completed at is invalid.");
+
+    try {
+      setSavingAdditionalAttributes(true);
+
+      const payload = {
+        azimuth: az,
+        dip,
+        collar_longitude: lon,
+        collar_latitude: lat,
+        collar_elevation_m: numOrNull(attributeInputs.collar_elevation_m),
+        collar_source: String(attributeInputs.collar_source || "").trim() || null,
+        started_at: startedAt,
+        completed_at: completedAt,
+        completion_status: String(attributeInputs.completion_status || "").trim() || null,
+        completion_notes: String(attributeInputs.completion_notes || "").trim() || null,
+      };
+
+      const { error } = await supabase.from("holes").update(payload).match({ id: selectedHoleId, organization_id: selectedHoleOrgId });
+      if (error) throw error;
+
+      setHoles((prev) =>
+        (prev || []).map((h) =>
+          h.id === selectedHoleId
+            ? {
+                ...h,
+                ...payload,
+              }
+            : h
+        )
+      );
+
+      toast.success("Additional attributes saved");
+    } catch (e) {
+      console.error(e);
+      toast.error(e?.message || "Failed to save additional attributes");
+    } finally {
+      setSavingAdditionalAttributes(false);
+    }
+  };
+
   return (
     <div className="h-[calc(100vh-64px)] w-full flex flex-col">
       <div className="p-2 md:p-3 border-b border-white/10 flex items-center gap-2 shrink-0">
         <button
           type="button"
           className={[
-            "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
-            "bg-gradient-to-br from-indigo-600 to-purple-600 text-white",
-            "border border-white/20 ring-1 ring-indigo-300/25 shadow-lg",
-            "hover:from-indigo-500 hover:to-purple-500 hover:shadow-xl",
+            "relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl",
+            "border border-white/35 text-slate-100 backdrop-blur-md",
+            "bg-[linear-gradient(150deg,rgba(255,255,255,0.22),rgba(148,163,184,0.10))]",
+            "shadow-[0_10px_26px_rgba(2,6,23,0.45),inset_0_1px_0_rgba(255,255,255,0.50),inset_0_-1px_0_rgba(15,23,42,0.55)]",
+            "hover:-translate-y-[1px] hover:border-white/50",
+            "active:translate-y-[1px] active:shadow-[0_4px_12px_rgba(2,6,23,0.45),inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-1px_0_rgba(15,23,42,0.65)]",
             "transition-base focus-ring",
           ].join(" ")}
           onClick={() => setDrawerOpen((v) => !v)}
           title={drawerOpen ? "Collapse attributes pane" : "Expand attributes pane"}
           aria-label={drawerOpen ? "Collapse attributes pane" : "Expand attributes pane"}
         >
-          <span className="text-sm leading-none">{drawerOpen ? "◀" : "▶"}</span>
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-1 top-1 h-3 rounded-full bg-gradient-to-b from-white/35 to-transparent"
+          />
+          <span className="relative text-base leading-none text-slate-100/95">{drawerOpen ? "◀" : "▶"}</span>
         </button>
 
         <div className="flex-1 min-w-0">
@@ -1425,6 +1563,19 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
                   savingWaterLevel={savingWaterLevel}
                   onWaterLevelChange={setWaterLevelInput}
                   onSaveWaterLevel={saveWaterLevel}
+                  azimuthInput={attributeInputs.azimuth}
+                  dipInput={attributeInputs.dip}
+                  collarLongitudeInput={attributeInputs.collar_longitude}
+                  collarLatitudeInput={attributeInputs.collar_latitude}
+                  collarElevationInput={attributeInputs.collar_elevation_m}
+                  collarSourceInput={attributeInputs.collar_source}
+                  startedAtInput={attributeInputs.started_at}
+                  completedAtInput={attributeInputs.completed_at}
+                  completionStatusInput={attributeInputs.completion_status}
+                  completionNotesInput={attributeInputs.completion_notes}
+                  onAttributesChange={handleAttributeChange}
+                  onSaveAdditionalAttributes={saveAdditionalAttributes}
+                  savingAdditionalAttributes={savingAdditionalAttributes}
                 />
               ) : drawerTab === "geology" ? (
                 <GeologyIntervalsTab

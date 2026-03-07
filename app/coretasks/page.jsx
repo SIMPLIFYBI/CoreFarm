@@ -1,23 +1,14 @@
 "use client";
 import { useEffect, useState } from "react";
 import CorePage from "./CorePage";
-import { AdminPage } from "./AdminPage";
 import SampleDispatchPage from "./SampleDispatchPage";
 import DrillholeVizPage from "../drillhole-viz/page";
 import HoleDetailsTab from "./HoleDetailsTab";
 
 const PROJECT_SCOPE_STORAGE_KEY = "coretasks:projectScope";
 
-const TABS = [
-  { key: "logging", label: "Logging" },
-  { key: "addcore", label: "Add Core" },
-  { key: "sampledispatch", label: "Sample Dispatch" },
-  { key: "holedetails", label: "Hole Details" },
-  { key: "drillholeviz", label: "Drillhole Viz" },
-];
-
 export default function CoreTasksPage() {
-  const [tab, setTab] = useState("logging");
+  const [tab, setTab] = useState("holedetails");
   const [projectScope, setProjectScope] = useState("own"); // 'own' | 'shared'
   const isDrillholeVizTab = tab === "drillholeviz";
 
@@ -56,28 +47,22 @@ export default function CoreTasksPage() {
 
         <div className="mb-6 flex gap-2 border-b border-white/10">
           <button
+            className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "holedetails" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
+            onClick={() => setTab("holedetails")}
+          >
+            Hole Details
+          </button>
+          <button
             className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "logging" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
             onClick={() => setTab("logging")}
           >
             Logging
           </button>
           <button
-            className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "addcore" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
-            onClick={() => setTab("addcore")}
-          >
-            Add Core
-          </button>
-          <button
             className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "sampledispatch" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
             onClick={() => setTab("sampledispatch")}
           >
             Sample Dispatch
-          </button>
-          <button
-            className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "holedetails" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
-            onClick={() => setTab("holedetails")}
-          >
-            Hole Details
           </button>
           <button
             className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "drillholeviz" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
@@ -100,13 +85,7 @@ export default function CoreTasksPage() {
             </div>
           ) : (
             <div className="card overflow-hidden">
-              {tab === "logging" ? (
-                <CorePage projectScope={projectScope} />
-              ) : tab === "addcore" ? (
-                <AdminPage projectScope={projectScope} />
-              ) : (
-                <SampleDispatchPage projectScope={projectScope} />
-              )}
+              {tab === "logging" ? <CorePage projectScope={projectScope} /> : <SampleDispatchPage projectScope={projectScope} />}
             </div>
           )}
         </div>

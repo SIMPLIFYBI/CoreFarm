@@ -107,6 +107,15 @@ export default function BoreholeSchematicPreview({
   const geologyRightX = rightPanelStartX;
   const geologyRightW = showRightGeology ? geologyPanelW : 0;
 
+  const fitLabel = (text, panelWidth, isCompact) => {
+    const raw = String(text || "").trim();
+    if (!raw) return "";
+    const approxCharPx = isCompact ? 5.3 : 6.1;
+    const maxChars = Math.max(5, Math.floor((panelWidth - 16) / approxCharPx));
+    if (raw.length <= maxChars) return raw;
+    return `${raw.slice(0, Math.max(0, maxChars - 1))}…`;
+  };
+
   return (
     <div className="shrink-0">
       <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMinYMin meet" className="block">
@@ -175,6 +184,7 @@ export default function BoreholeSchematicPreview({
             const t = lithById?.get?.(it.typeId);
             const color = t?.color || "#64748b";
             const label = t?.name || "Geology";
+            const fittedLabel = fitLabel(label, geologyLeftW, compact);
 
             const y1 = yForDepth(it.from);
             const y2 = yForDepth(it.to);
@@ -191,13 +201,13 @@ export default function BoreholeSchematicPreview({
                 {showRightGeology && <rect x={geologyRightX + 2} y={y1} width={geologyRightW - 4} height={h} fill={color} fillOpacity="0.75" />}
                 {h >= 18 && (
                   <text
-                    x={showRightGeology ? geologyRightX + geologyRightW - 10 : geologyLeftX + 8}
+                    x={geologyLeftX + 8}
                     y={y1 + Math.min(h - 6, 16)}
-                    textAnchor={showRightGeology ? "end" : "start"}
+                    textAnchor="start"
                     fontSize={compact ? "10" : "11"}
                     fill="rgba(15,23,42,0.95)"
                   >
-                    {label}
+                    {fittedLabel}
                   </text>
                 )}
               </g>
