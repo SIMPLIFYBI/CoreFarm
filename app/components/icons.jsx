@@ -120,3 +120,13 @@ export function IconPlods() {
     </svg>
   );
 }
+
+export function IconMap(props) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <path d="M3.5 6.5 8.75 4l6.5 2.5L20.5 4v13.5L15.25 20l-6.5-2.5L3.5 20V6.5Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M8.75 4v13.5M15.25 6.5V20" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/>
+      <circle cx="12" cy="11" r="2.2" stroke="currentColor" strokeWidth="1.5"/>
+    </svg>
+  );
+}

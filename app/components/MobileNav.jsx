@@ -3,13 +3,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
-import { IconCore, IconAdmin, IconTeam, IconUser, IconReport, IconClipboard, IconCoreTasks, AssetIcon, IconPlods } from "./icons";
+import { IconCore, IconAdmin, IconTeam, IconUser, IconReport, IconClipboard, IconCoreTasks, IconMap, AssetIcon, IconPlods } from "./icons";
 
 const tabs = [
   { href: "/dashboard", label: "Dashboard", icon: IconReport },
   { href: "/activity", label: "Activity", icon: IconClipboard },
   { href: "/plods", label: "Plods", icon: IconPlods },
   { href: "/coretasks", label: "Core Tasks", icon: IconCoreTasks },
+  { href: "/map-mobile", label: "Map", icon: IconMap },
   { href: "/drillhole-viz", label: "Drillhole Viz", icon: IconCore },
   { href: "/consumables", label: "Consumables", icon: IconCore },
   { href: "/projects", label: "Projects", icon: IconClipboard },

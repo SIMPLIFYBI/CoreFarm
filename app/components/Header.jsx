@@ -15,6 +15,7 @@ import {
   IconReport,
   IconClipboard,
   IconCoreTasks,
+  IconMap,
   AssetIcon,
   IconPlods,
 } from "./icons";
@@ -153,6 +154,7 @@ export default function Header() {
     { href: "/dashboard", label: "Dashboard", icon: IconReport },
     { href: "/activity", label: "Activity", icon: IconClipboard },
     { href: "/coretasks", label: "Core Tasks", icon: IconCoreTasks },
+    { href: "/map", label: "Map", icon: IconMap },
     { href: "/drillhole-viz", label: "Drillhole Viz", icon: IconCore },
     { href: "/consumables", label: "Consumables", icon: IconCore },
     { href: "/projects", label: "Projects", icon: IconClipboard },
