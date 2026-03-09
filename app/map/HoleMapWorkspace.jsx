@@ -15,6 +15,33 @@ const DEFAULT_CENTER = [133.7751, -25.2744];
 const DEFAULT_ZOOM = 3;
 const MAPBOX_STYLE_URL = "mapbox://styles/jamesblue/cmmhkajfi000w01shgzr5c1op";
 
+function getHoleStateTone(state) {
+  if (state === "drilled") {
+    return {
+      label: "Drilled",
+      text: "#bbf7d0",
+      border: "rgba(34,197,94,0.35)",
+      background: "rgba(34,197,94,0.16)",
+    };
+  }
+
+  if (state === "in_progress") {
+    return {
+      label: "In Progress",
+      text: "#fde68a",
+      border: "rgba(251,191,36,0.35)",
+      background: "rgba(251,191,36,0.16)",
+    };
+  }
+
+  return {
+    label: state ? String(state).replace(/_/g, " ") : "Proposed",
+    text: "#bae6fd",
+    border: "rgba(34,211,238,0.35)",
+    background: "rgba(34,211,238,0.16)",
+  };
+}
+
 function formatValue(value, suffix = "") {
   if (value == null || value === "") return "-";
   return `${value}${suffix}`;
@@ -87,7 +114,7 @@ function ProjectAccordionList({
             <button
               type="button"
               className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left transition hover:bg-white/[0.04]"
-              onClick={() => onToggleProject(project.id, isExpanded)}
+              onClick={() => onToggleProject(project, isExpanded)}
             >
               <div className="min-w-0">
                 <div className={`truncate font-semibold text-white ${compact ? "text-[15px]" : "text-sm"}`}>{project.name}</div>
@@ -533,18 +560,51 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     }
   }, [selectedHoleId, visibleHoles]);
 
+  const frameHolesOnMap = (holes) => {
+    const map = mapRef.current;
+    const mapboxgl = mapboxRef.current;
+    if (!map || !mapboxgl || !mapReadyRef.current) return;
+
+    const mappableHoles = (holes || []).filter((hole) => {
+      const lng = Number(hole.collar_longitude);
+      const lat = Number(hole.collar_latitude);
+      return Number.isFinite(lng) && Number.isFinite(lat);
+    });
+
+    if (!mappableHoles.length) return;
+
+    if (mappableHoles.length === 1) {
+      map.flyTo({ center: [Number(mappableHoles[0].collar_longitude), Number(mappableHoles[0].collar_latitude)], zoom: 11.5, speed: 0.8, curve: 1.2 });
+      return;
+    }
+
+    const bounds = new mapboxgl.LngLatBounds();
+    mappableHoles.forEach((hole) => {
+      bounds.extend([Number(hole.collar_longitude), Number(hole.collar_latitude)]);
+    });
+
+    map.fitBounds(bounds, { padding: { top: 110, right: 90, bottom: 110, left: 90 }, maxZoom: 13, duration: 1200 });
+  };
+
   const renderPopupHtml = (hole) => {
     if (!hole) return "";
+    const stateTone = getHoleStateTone(hole.state);
+
     return `
-      <div style="min-width:190px;color:#0f172a;">
-        <div style="font-weight:700;font-size:13px;letter-spacing:0.02em;">${hole.hole_id || "Unnamed hole"}</div>
-        <div style="margin-top:6px;font-size:12px;line-height:1.5;">
-          <div><strong>Project:</strong> ${hole.project_name || "No project"}</div>
-          <div><strong>State:</strong> ${hole.state || "-"}</div>
-          <div><strong>Depth:</strong> ${formatValue(hole.depth, " m")}</div>
-          <div><strong>Planned:</strong> ${formatValue(hole.planned_depth, " m")}</div>
-          <div><strong>Azimuth:</strong> ${formatValue(hole.azimuth, "°")}</div>
-          <div><strong>Dip:</strong> ${formatValue(hole.dip, "°")}</div>
+      <div style="min-width:240px;max-width:260px;color:#e2e8f0;font-family:Arial,Helvetica,sans-serif;">
+        <div style="display:flex;flex-direction:column;gap:10px;min-width:0;">
+          <div style="font-size:10px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:rgba(186,230,253,0.78);">Hole</div>
+          <div style="font-size:16px;font-weight:700;line-height:1.2;color:#f8fafc;word-break:break-word;">${hole.hole_id || "Unnamed hole"}</div>
+          <div style="font-size:12px;line-height:1.4;color:rgba(226,232,240,0.78);word-break:break-word;">${hole.project_name || "No project"}</div>
+          <div style="display:inline-flex;align-self:flex-start;max-width:100%;border:1px solid ${stateTone.border};background:${stateTone.background};color:${stateTone.text};border-radius:999px;padding:6px 10px;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;line-height:1.1;">
+            ${stateTone.label}
+          </div>
+        </div>
+        <div style="margin-top:14px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px;">
+          <div style="border:1px solid rgba(148,163,184,0.18);background:rgba(15,23,42,0.5);border-radius:14px;padding:10px 12px;">
+            <div style="font-size:10px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:rgba(148,163,184,0.84);">Depth</div>
+            <div style="margin-top:6px;font-size:15px;font-weight:700;color:#f8fafc;">${formatValue(hole.depth, " m")}</div>
+          </div>
         </div>
       </div>
     `;
@@ -568,7 +628,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     }
 
     if (!popupRef.current) {
-      popupRef.current = new mapboxgl.Popup({ offset: 18, closeButton: false, closeOnClick: false });
+      popupRef.current = new mapboxgl.Popup({ offset: 18, closeButton: false, closeOnClick: true, className: "hole-map-popup" });
     }
 
     popupRef.current.setLngLat([lng, lat]).setHTML(renderPopupHtml(hole)).addTo(map);
@@ -655,19 +715,26 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     map.setFilter(HOLES_SELECTED_LAYER_ID, ["==", ["get", "id"], selectedHole?.id || ""]);
 
     if (!handlersBoundRef.current) {
-      map.on("mouseenter", HOLES_CIRCLE_LAYER_ID, () => {
+      const setPointerCursor = () => {
         map.getCanvas().style.cursor = "pointer";
-      });
-      map.on("mouseleave", HOLES_CIRCLE_LAYER_ID, () => {
+      };
+      const clearPointerCursor = () => {
         map.getCanvas().style.cursor = "";
-      });
-      map.on("click", HOLES_CIRCLE_LAYER_ID, (event) => {
+      };
+      const handleHoleLayerClick = (event) => {
         const feature = event.features?.[0];
         if (!feature) return;
         const hole = visibleHolesRef.current.find((row) => String(row.id) === String(feature.properties?.id));
         if (!hole) return;
         focusHole(hole, { flyTo: false });
-      });
+      };
+
+      map.on("mouseenter", HOLES_CIRCLE_LAYER_ID, setPointerCursor);
+      map.on("mouseenter", HOLES_SELECTED_LAYER_ID, setPointerCursor);
+      map.on("mouseleave", HOLES_CIRCLE_LAYER_ID, clearPointerCursor);
+      map.on("mouseleave", HOLES_SELECTED_LAYER_ID, clearPointerCursor);
+      map.on("click", HOLES_CIRCLE_LAYER_ID, handleHoleLayerClick);
+      map.on("click", HOLES_SELECTED_LAYER_ID, handleHoleLayerClick);
       handlersBoundRef.current = true;
     }
 
@@ -690,16 +757,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
       return;
     }
 
-    const bounds = new mapboxgl.LngLatBounds();
-    visibleHoles.forEach((hole) => {
-      bounds.extend([Number(hole.collar_longitude), Number(hole.collar_latitude)]);
-    });
-
-    if (visibleHoles.length === 1) {
-      map.flyTo({ center: [Number(visibleHoles[0].collar_longitude), Number(visibleHoles[0].collar_latitude)], zoom: 11.5 });
-    } else {
-      map.fitBounds(bounds, { padding: { top: 110, right: 90, bottom: 110, left: 90 }, maxZoom: 13, duration: 1200 });
-    }
+    frameHolesOnMap(visibleHoles);
   }, [mapStatus, visibleHoles]);
 
   const totalProjects = projects.length;
@@ -707,8 +765,9 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const totalVisibleHoles = visibleHoles.length;
   const totalShared = allHoles.filter((hole) => hole.organization_id !== orgId).length;
 
-  const toggleProjectExpanded = (projectId, isExpanded) => {
-    setExpandedProjects((prev) => ({ ...prev, [projectId]: !isExpanded }));
+  const toggleProjectExpanded = (project, isExpanded) => {
+    setExpandedProjects((prev) => ({ ...prev, [project.id]: !isExpanded }));
+    frameHolesOnMap(project.holes);
   };
 
   return (

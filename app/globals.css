@@ -253,6 +253,33 @@ button, a {
 }
 .btn-danger:hover { background: linear-gradient(180deg, #dc2626 0%, #b91c1c 100%); border-color: #dc2626; }
 
+/* Custom Mapbox popup styling for the drillhole map. */
+.hole-map-popup .mapboxgl-popup-content {
+  padding: 14px !important;
+  border-radius: 22px !important;
+  border: 1px solid rgba(148, 163, 184, 0.18) !important;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 0.99)) !important;
+  color: rgb(var(--text)) !important;
+  box-shadow: 0 22px 60px rgba(2, 6, 23, 0.42) !important;
+  overflow: hidden;
+}
+
+.hole-map-popup .mapboxgl-popup-tip {
+  border-top-color: rgba(15, 23, 42, 0.98) !important;
+}
+
+.hole-map-popup.mapboxgl-popup-anchor-top .mapboxgl-popup-tip {
+  border-bottom-color: rgba(15, 23, 42, 0.98) !important;
+}
+
+.hole-map-popup.mapboxgl-popup-anchor-left .mapboxgl-popup-tip {
+  border-right-color: rgba(15, 23, 42, 0.98) !important;
+}
+
+.hole-map-popup.mapboxgl-popup-anchor-right .mapboxgl-popup-tip {
+  border-left-color: rgba(15, 23, 42, 0.98) !important;
+}
+
 /* Success (green) and Warning (orange) button variants for PO item states */
 .btn-success {
   background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);

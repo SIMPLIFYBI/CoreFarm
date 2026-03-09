@@ -1,5 +1,6 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "react-hot-toast";
+import "mapbox-gl/dist/mapbox-gl.css";
 import "./globals.css";
 import { Suspense } from "react";
 import Header from "./components/Header";
