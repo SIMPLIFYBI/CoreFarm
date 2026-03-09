@@ -12,6 +12,7 @@ const HOLES_CIRCLE_LAYER_ID = "mobile-hole-map-circles";
 const HOLES_SELECTED_LAYER_ID = "mobile-hole-map-selected";
 const DEFAULT_CENTER = [133.7751, -25.2744];
 const DEFAULT_ZOOM = 3;
+const MAPBOX_STYLE_URL = "mapbox://styles/jamesblue/cmmhkajfi000w01shgzr5c1op";
 const SHEET_SNAP_OFFSETS = {
   full: 0,
   mid: 0.28,
@@ -345,7 +346,7 @@ export default function MobileHoleMapWorkspace({ publicToken = "", serverTokenPr
 
         const map = new mapboxgl.Map({
           container: mapContainerRef.current,
-          style: "mapbox://styles/mapbox/outdoors-v12",
+          style: MAPBOX_STYLE_URL,
           center: DEFAULT_CENTER,
           zoom: DEFAULT_ZOOM,
           pitch: 34,

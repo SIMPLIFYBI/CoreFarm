@@ -13,6 +13,7 @@ const HOLES_SELECTED_LAYER_ID = "prod-hole-map-selected";
 const HOLES_LABEL_LAYER_ID = "prod-hole-map-labels";
 const DEFAULT_CENTER = [133.7751, -25.2744];
 const DEFAULT_ZOOM = 3;
+const MAPBOX_STYLE_URL = "mapbox://styles/jamesblue/cmmhkajfi000w01shgzr5c1op";
 
 function formatValue(value, suffix = "") {
   if (value == null || value === "") return "-";
@@ -256,7 +257,7 @@ function HoleAttributesPanel({ selectedHole, mobile = false }) {
   );
 }
 
-export default function HoleMapWorkspace({ publicToken = "", serverTokenPresent = false }) {
+export default function HoleMapWorkspace({ publicToken = "" }) {
   const supabase = useMemo(() => supabaseBrowser(), []);
   const { orgId } = useOrg();
 
@@ -312,7 +313,7 @@ export default function HoleMapWorkspace({ publicToken = "", serverTokenPresent 
 
         const map = new mapboxgl.Map({
           container: mapContainerRef.current,
-          style: "mapbox://styles/mapbox/outdoors-v12",
+          style: MAPBOX_STYLE_URL,
           center: DEFAULT_CENTER,
           zoom: DEFAULT_ZOOM,
           pitch: 28,
@@ -711,9 +712,9 @@ export default function HoleMapWorkspace({ publicToken = "", serverTokenPresent 
   };
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.16),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(251,191,36,0.12),_transparent_24%),linear-gradient(180deg,_#04111f_0%,_#020617_42%,_#02030a_100%)] px-3 pb-24 pt-4 md:px-5 md:pb-8 md:pt-5">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.16),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(251,191,36,0.12),_transparent_24%),linear-gradient(180deg,_#04111f_0%,_#020617_42%,_#02030a_100%)] px-3 pb-24 pt-2 md:px-5 md:pb-8 md:pt-5">
       <div className="mx-auto max-w-[1600px] space-y-4">
-        <section className="overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/40 shadow-[0_30px_120px_rgba(2,6,23,0.45)] backdrop-blur-xl">
+        <section className="hidden overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/40 shadow-[0_30px_120px_rgba(2,6,23,0.45)] backdrop-blur-xl xl:block">
           <div className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(15,23,42,0.82),rgba(8,47,73,0.65)_45%,rgba(120,53,15,0.48))] px-4 py-5 md:px-6">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
               <div className="space-y-2">
@@ -770,7 +771,7 @@ export default function HoleMapWorkspace({ publicToken = "", serverTokenPresent 
                 </button>
               </div>
 
-              <div className="flex flex-col gap-3 md:flex-row md:items-center">
+              <div>
                 <label className="flex min-w-[240px] flex-col gap-2 text-xs uppercase tracking-[0.18em] text-slate-400">
                   Project Filter
                   <select
@@ -786,16 +787,6 @@ export default function HoleMapWorkspace({ publicToken = "", serverTokenPresent 
                     ))}
                   </select>
                 </label>
-
-                <div className="flex flex-wrap items-center gap-2 pt-1 md:pt-5">
-                  <span className={`badge ${serverTokenPresent ? "badge-green" : "badge-red"}`}>
-                    Token {serverTokenPresent ? "ready" : "missing"}
-                  </span>
-                  <span className={`badge ${mapStatus === "error" ? "badge-red" : mapStatus === "ready" ? "badge-green" : "badge-amber"}`}>
-                    {mapStatus === "ready" ? "Map ready" : mapStatus === "error" ? "Map error" : "Map loading"}
-                  </span>
-                  <span className="badge badge-blue">Scope: {projectScope === "own" ? "Own" : "Shared"}</span>
-                </div>
               </div>
             </div>
             {error ? <div className="mt-3 text-sm text-rose-300">{error}</div> : null}
@@ -870,6 +861,29 @@ export default function HoleMapWorkspace({ publicToken = "", serverTokenPresent 
                   </div>
                 </div>
                 <div className="mt-4 flex flex-col gap-3">
+                  <div className="inline-flex w-full items-center gap-2 rounded-2xl border border-white/10 bg-slate-900/45 p-1.5">
+                    <button
+                      type="button"
+                      className={`flex-1 rounded-2xl px-3 py-2.5 text-sm font-medium transition ${projectScope === "own" ? "bg-amber-400 text-slate-950 shadow-[0_12px_28px_rgba(251,191,36,0.28)]" : "text-slate-200 hover:bg-white/8"}`}
+                      onClick={() => {
+                        setProjectScope("own");
+                        setProjectFilter("");
+                      }}
+                    >
+                      My Projects
+                    </button>
+                    <button
+                      type="button"
+                      className={`flex-1 rounded-2xl px-3 py-2.5 text-sm font-medium transition ${projectScope === "shared" ? "bg-cyan-300 text-slate-950 shadow-[0_12px_28px_rgba(34,211,238,0.25)]" : "text-slate-200 hover:bg-white/8"}`}
+                      onClick={() => {
+                        setProjectScope("shared");
+                        setProjectFilter("");
+                      }}
+                    >
+                      Client Shared
+                    </button>
+                  </div>
+
                   <label className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
                     Project Filter
                     <select
