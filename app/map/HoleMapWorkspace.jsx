@@ -78,7 +78,7 @@ function ProjectAccordionList({
   return (
     <div className={compact ? "space-y-3 p-4" : "space-y-3 p-4 md:p-5"}>
       {projects.map((project) => {
-        const isExpanded = expandedProjects[project.id] !== false;
+        const isExpanded = expandedProjects[project.id] === true;
         return (
           <div
             key={project.id}
@@ -517,7 +517,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     setExpandedProjects((prev) => {
       const next = { ...prev };
       filteredProjects.forEach((project) => {
-        if (typeof next[project.id] === "undefined") next[project.id] = true;
+        if (typeof next[project.id] === "undefined") next[project.id] = false;
       });
       return next;
     });
