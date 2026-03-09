@@ -288,7 +288,7 @@ function HoleDetailCards({ hole }) {
   );
 }
 
-export default function MobileHoleMapWorkspace({ publicToken = "", serverTokenPresent = false }) {
+export default function MobileHoleMapWorkspace({ publicToken = "" }) {
   const supabase = useMemo(() => supabaseBrowser(), []);
   const { orgId } = useOrg();
 
@@ -759,19 +759,13 @@ export default function MobileHoleMapWorkspace({ publicToken = "", serverTokenPr
 
         <div className="absolute inset-x-0 top-0 z-20 px-3 pt-3">
           <div className="rounded-[28px] border border-white/10 bg-slate-950/72 p-3 shadow-[0_16px_44px_rgba(2,6,23,0.35)] backdrop-blur-xl">
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
               <div className="min-w-0">
                 <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-100/80">Mobile Spatial View</div>
                 <div className="mt-1 truncate text-lg font-semibold text-white">Drillhole Map</div>
                 <div className="mt-1 text-xs text-slate-300">
                   {totalVisibleHoles} holes across {totalVisibleProjects} projects
                 </div>
-              </div>
-              <div className="flex flex-col items-end gap-2">
-                <span className={`badge ${serverTokenPresent ? "badge-green" : "badge-red"}`}>{serverTokenPresent ? "Token ready" : "Token missing"}</span>
-                <span className={`badge ${mapStatus === "error" ? "badge-red" : mapStatus === "ready" ? "badge-green" : "badge-amber"}`}>
-                  {mapStatus === "ready" ? "Map ready" : mapStatus === "error" ? "Map error" : "Loading"}
-                </span>
               </div>
             </div>
 
