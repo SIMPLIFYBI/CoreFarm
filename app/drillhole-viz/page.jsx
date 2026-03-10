@@ -42,6 +42,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
   const [waterLevelInput, setWaterLevelInput] = useState("");
   const [savingWaterLevel, setSavingWaterLevel] = useState(false);
   const [savingAdditionalAttributes, setSavingAdditionalAttributes] = useState(false);
+  const [attributeTouched, setAttributeTouched] = useState({});
   const [attributeInputs, setAttributeInputs] = useState({
     azimuth: "",
     dip: "",
@@ -123,6 +124,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
     if (!selectedHole) {
       setPlannedDepthInput("");
       setWaterLevelInput("");
+      setAttributeTouched({});
       setAttributeInputs({
         azimuth: "",
         dip: "",
@@ -140,6 +142,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
 
     setPlannedDepthInput(selectedHole.planned_depth ?? "");
     setWaterLevelInput(selectedHole.water_level_m ?? "");
+  setAttributeTouched({});
     setAttributeInputs({
       azimuth: selectedHole.azimuth ?? "",
       dip: selectedHole.dip ?? "",
@@ -1336,6 +1339,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
   };
 
   const handleAttributeChange = (key, value) => {
+    setAttributeTouched((prev) => ({ ...prev, [key]: true }));
     setAttributeInputs((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -1412,90 +1416,127 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
     }
   };
 
+  const totalProjects = projects.length;
+  const totalHoles = holes.length;
+  const totalShared = holes.filter((hole) => hole.organization_id !== selectedOrgId).length;
+
   return (
-    <div className="h-[calc(100vh-64px)] w-full flex flex-col">
-      <div className="p-2 md:p-3 border-b border-white/10 flex items-center gap-2 shrink-0">
-        <button
-          type="button"
-          className={[
-            "relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl",
-            "border border-white/35 text-slate-100 backdrop-blur-md",
-            "bg-[linear-gradient(150deg,rgba(255,255,255,0.22),rgba(148,163,184,0.10))]",
-            "shadow-[0_10px_26px_rgba(2,6,23,0.45),inset_0_1px_0_rgba(255,255,255,0.50),inset_0_-1px_0_rgba(15,23,42,0.55)]",
-            "hover:-translate-y-[1px] hover:border-white/50",
-            "active:translate-y-[1px] active:shadow-[0_4px_12px_rgba(2,6,23,0.45),inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-1px_0_rgba(15,23,42,0.65)]",
-            "transition-base focus-ring",
-          ].join(" ")}
-          onClick={() => setDrawerOpen((v) => !v)}
-          title={drawerOpen ? "Collapse attributes pane" : "Expand attributes pane"}
-          aria-label={drawerOpen ? "Collapse attributes pane" : "Expand attributes pane"}
-        >
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-x-1 top-1 h-3 rounded-full bg-gradient-to-b from-white/35 to-transparent"
-          />
-          <span className="relative text-base leading-none text-slate-100/95">{drawerOpen ? "◀" : "▶"}</span>
-        </button>
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.16),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(251,191,36,0.12),_transparent_24%),linear-gradient(180deg,_#04111f_0%,_#020617_42%,_#02030a_100%)] px-3 pb-24 pt-2 md:px-5 md:pb-8 md:pt-5">
+      <div className="mx-auto max-w-[1600px] space-y-4">
+        <section className="hidden overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/40 shadow-[0_30px_120px_rgba(2,6,23,0.45)] backdrop-blur-xl xl:block">
+          <div className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(15,23,42,0.82),rgba(8,47,73,0.65)_45%,rgba(120,53,15,0.48))] px-4 py-5 md:px-6">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-cyan-100">
+                  Spatial Drillhole Workspace
+                </div>
+                <div>
+                  <h1 className="text-2xl font-semibold tracking-tight text-white md:text-4xl">Inspect drillhole intervals, attributes, and schematic output in one place.</h1>
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300 md:text-base">
+                    Use the navigator to move between projects and holes, then edit attributes and interval data while previewing the full borehole schematic beside it.
+                  </p>
+                </div>
+              </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="text-slate-100 font-semibold truncate">
-            {selectedHole ? `Schematic: ${selectedHole.hole_id}` : "Schematic"}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:min-w-[420px] xl:max-w-[520px]">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3">
+                  <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Visible Projects</div>
+                  <div className="mt-2 text-2xl font-semibold text-white">{loading ? "..." : totalProjects}</div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3">
+                  <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Loaded Holes</div>
+                  <div className="mt-2 text-2xl font-semibold text-white">{loading ? "..." : totalHoles}</div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3">
+                  <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Shared In View</div>
+                  <div className="mt-2 text-2xl font-semibold text-white">{loading ? "..." : totalShared}</div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="text-[11px] text-slate-400">
-            {selectedHole ? "Unified schematic preview (SVG V1)" : "Select a hole to begin"}
+        </section>
+
+        <section className="overflow-hidden rounded-[32px] border border-white/10 bg-slate-950/60 shadow-[0_30px_100px_rgba(2,6,23,0.42)] backdrop-blur-xl">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(180deg,rgba(8,47,73,0.28),transparent)]" />
+          <div className="relative flex flex-col gap-3 border-b border-white/10 px-4 py-4 md:px-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                type="button"
+                className={[
+                  "relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl",
+                  "border border-white/20 bg-white/10 backdrop-blur-xl shadow-lg shadow-black/30 text-slate-100 hover:border-white/30 hover:bg-white/15",
+                  "active:scale-95 transition-base focus-ring",
+                ].join(" ")}
+                onClick={() => setDrawerOpen((v) => !v)}
+                title={drawerOpen ? "Collapse attributes pane" : "Expand attributes pane"}
+                aria-label={drawerOpen ? "Collapse attributes pane" : "Expand attributes pane"}
+              >
+                <span className="relative text-base leading-none text-slate-100/95">{drawerOpen ? "◀" : "▶"}</span>
+              </button>
+
+              <div className="min-w-0">
+                <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Drillhole Viz</div>
+                <div className="mt-1 truncate text-lg font-semibold text-white">
+                  {selectedHole ? `Schematic: ${selectedHole.hole_id}` : "Hole schematic workspace"}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{totalHoles} loaded holes</span>
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{selectedHole ? selectedHole.hole_id : "No selection"}</span>
+            </div>
+
+            <div className="flex flex-col gap-3 md:flex-row md:items-center">
+              {!externalProjectScope && (
+                <div className="inline-flex w-full flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-slate-900/45 p-1.5 md:w-auto">
+                  <button
+                    type="button"
+                    className={`rounded-xl px-4 py-2.5 text-sm font-medium transition ${projectScope === "own" ? "bg-amber-400 text-slate-950 shadow-[0_12px_28px_rgba(251,191,36,0.28)]" : "text-slate-200 hover:bg-white/8"}`}
+                    onClick={() => setLocalProjectScope("own")}
+                  >
+                    My Projects
+                  </button>
+                  <button
+                    type="button"
+                    className={`rounded-xl px-4 py-2.5 text-sm font-medium transition ${projectScope === "shared" ? "bg-cyan-300 text-slate-950 shadow-[0_12px_28px_rgba(34,211,238,0.25)]" : "text-slate-200 hover:bg-white/8"}`}
+                    onClick={() => setLocalProjectScope("shared")}
+                  >
+                    Client Shared
+                  </button>
+                </div>
+              )}
+
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#22d3ee,#38bdf8)] px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-[0_14px_36px_rgba(34,211,238,0.24)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={onExportPdf}
+                disabled={!!exportDisabledReason}
+                title={exportDisabledReason || "Export PDF"}
+              >
+                Export PDF
+              </button>
+            </div>
           </div>
-        </div>
 
-        {!externalProjectScope && (
-          <div className="inline-flex rounded-lg border border-white/15 bg-white/5 p-1">
-            <button
-              type="button"
-              className={[
-                "px-2.5 py-1 text-xs rounded-md transition",
-                projectScope === "own" ? "bg-emerald-500/20 text-emerald-200" : "text-slate-300 hover:bg-white/10",
-              ].join(" ")}
-              onClick={() => setLocalProjectScope("own")}
-            >
-              My projects
-            </button>
-            <button
-              type="button"
-              className={[
-                "px-2.5 py-1 text-xs rounded-md transition",
-                projectScope === "shared" ? "bg-cyan-500/20 text-cyan-200" : "text-slate-300 hover:bg-white/10",
-              ].join(" ")}
-              onClick={() => setLocalProjectScope("shared")}
-            >
-              Client shared
-            </button>
-          </div>
-        )}
-
-        <button
-          type="button"
-          className="btn btn-primary text-xs"
-          onClick={onExportPdf}
-          disabled={!!exportDisabledReason}
-          title={exportDisabledReason || "Export PDF"}
-        >
-          Export PDF
-        </button>
-      </div>
-
-      <div className="flex-1 min-h-0 flex">
+          <div className="flex min-h-[68svh] flex-1">
         {/* Left drawer */}
         <div
           className={[
-            "h-full bg-slate-950/40 backdrop-blur shrink-0",
-            drawerOpen ? "w-[460px] xl:w-[520px] max-w-[92vw] border-r border-white/10" : "w-0 border-r-0",
+            "h-full shrink-0 overflow-hidden border-r border-white/10 bg-slate-950/55 shadow-[0_24px_80px_rgba(2,6,23,0.24)] backdrop-blur-xl",
+            drawerOpen ? "w-[460px] xl:w-[520px] max-w-[92vw]" : "w-0 border-r-0",
             "transition-all duration-200 overflow-hidden",
           ].join(" ")}
         >
           <div className="h-full flex flex-col">
             {/* Tabs */}
             {drawerOpen && (
-              <div className="px-3 pt-3">
-                <div className="flex gap-2 border-b border-white/10">
+              <div className="border-b border-white/10 px-4 py-4 md:px-5">
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Project Navigator</div>
+                  <div className="mt-1 text-lg font-semibold text-white">Projects and intervals</div>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2 border-b border-white/10 pb-1">
                   <TabButton active={drawerTab === "hole"} onClick={() => setDrawerTab("hole")} label="Hole" />
                   <TabButton
                     active={drawerTab === "attributes"}
@@ -1534,7 +1575,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
             )}
 
             {/* Tab content */}
-            <div className="flex-1 overflow-auto p-3">
+            <div className="flex-1 overflow-auto p-4 md:p-5">
               {!drawerOpen ? null : loading ? (
                 <div className="text-sm text-slate-300">Loading…</div>
               ) : drawerTab === "hole" ? (
@@ -1565,8 +1606,8 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
                   onSaveWaterLevel={saveWaterLevel}
                   azimuthInput={attributeInputs.azimuth}
                   dipInput={attributeInputs.dip}
-                  collarLongitudeInput={attributeInputs.collar_longitude}
-                  collarLatitudeInput={attributeInputs.collar_latitude}
+                  collarLongitudeInput={attributeTouched.collar_longitude ? attributeInputs.collar_longitude : (selectedHole?.collar_longitude ?? attributeInputs.collar_longitude)}
+                  collarLatitudeInput={attributeTouched.collar_latitude ? attributeInputs.collar_latitude : (selectedHole?.collar_latitude ?? attributeInputs.collar_latitude)}
                   collarElevationInput={attributeInputs.collar_elevation_m}
                   collarSourceInput={attributeInputs.collar_source}
                   startedAtInput={attributeInputs.started_at}
@@ -1663,6 +1704,8 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
           onExportPdf={onExportPdf}
           exportDisabledReason={exportDisabledReason}
         />
+          </div>
+        </section>
       </div>
     </div>
   );

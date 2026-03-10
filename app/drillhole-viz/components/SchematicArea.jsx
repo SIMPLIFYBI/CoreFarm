@@ -15,9 +15,22 @@ export default function SchematicArea({
   const svgPxHeight = 620;
 
   return (
-    <div className="flex-1 h-full overflow-hidden min-w-0">
-      <div className="h-full overflow-auto p-2 md:p-4">
-        <div className="card p-2 md:p-4">
+    <div className="min-w-0 flex-1 overflow-hidden bg-slate-950/40">
+      <div className="h-full overflow-auto p-3 md:p-5">
+        <div className="overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/55 shadow-[0_24px_80px_rgba(2,6,23,0.32)] backdrop-blur-xl">
+          <div className="border-b border-white/10 px-4 py-4 md:px-5">
+            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+              <div>
+                <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Schematic Preview</div>
+                <div className="mt-1 text-lg font-semibold text-white">Borehole layout</div>
+              </div>
+              <div className="text-sm text-slate-300">
+                {selectedHole ? `Inspecting ${selectedHole.hole_id}` : "Select a hole to preview the schematic."}
+              </div>
+            </div>
+          </div>
+
+          <div className="p-3 md:p-5">
           {!selectedHole ? (
             <div className="text-sm text-slate-300">Select a hole to preview the schematic.</div>
           ) : (
@@ -28,7 +41,7 @@ export default function SchematicArea({
               </div>
 
               {/* EXPORT ROOT (axis + schematic) */}
-              <div className="overflow-x-auto pb-1">
+              <div className="overflow-x-auto rounded-[24px] border border-white/10 bg-slate-950/40 p-3 pb-1 md:p-5">
                 <div id="schematic-export-root" className="w-full min-w-max">
                   <div className="flex md:hidden gap-2 items-start">
                     <DepthAxisBar
@@ -79,6 +92,7 @@ export default function SchematicArea({
               </div>
             </div>
           )}
+        </div>
         </div>
 
         <div className="mt-4 text-xs text-slate-500">Note: This is a UI preview only (PDF export later).</div>

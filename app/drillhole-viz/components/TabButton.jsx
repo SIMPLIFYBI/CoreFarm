@@ -5,8 +5,8 @@ export default function TabButton({ active, onClick, label, disabled, title }) {
     <button
       type="button"
       className={[
-        "px-3 py-2 -mb-px border-b-2 text-sm transition-colors",
-        active ? "border-indigo-500 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100",
+        "rounded-xl px-3 py-2.5 text-sm font-medium transition",
+        active ? "bg-cyan-300 text-slate-950 shadow-[0_12px_28px_rgba(34,211,238,0.2)]" : "text-slate-200 hover:bg-white/8",
         disabled ? "opacity-50 cursor-not-allowed" : "",
       ].join(" ")}
       onClick={disabled ? undefined : onClick}

@@ -151,10 +151,10 @@ export default function Header() {
   }, [orgId, memberships]);
 
   const navTabs = [
-    { href: "/dashboard", label: "Dashboard", icon: IconReport },
+    { href: "/map", label: "Map", icon: IconMap },
+    { href: "/dashboard", label: "Reports", icon: IconReport },
     { href: "/activity", label: "Activity", icon: IconClipboard },
     { href: "/coretasks", label: "Core Tasks", icon: IconCoreTasks },
-    { href: "/map", label: "Map", icon: IconMap },
     { href: "/drillhole-viz", label: "Drillhole Viz", icon: IconCore },
     { href: "/consumables", label: "Consumables", icon: IconCore },
     { href: "/projects", label: "Projects", icon: IconClipboard },
@@ -193,7 +193,7 @@ export default function Header() {
 
           {/* Logo */}
           <div className="flex-shrink-0 flex items-center">
-            <Link className="flex items-center" href="/home">
+            <Link className="flex items-center" href="/map">
               <Image
                 src="/demo/SimplifyBI2.png"
                 alt="SimplifyBI Logo"

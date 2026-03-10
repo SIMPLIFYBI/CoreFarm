@@ -1,9 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
+import DepthAxisBar from "@/app/drillhole-viz/components/DepthAxisBar";
+import BoreholeSchematicPreview from "@/app/drillhole-viz/components/BoreholeSchematicPreview";
 
 const MAP_SCOPE_STORAGE_KEY = "map:projectScope";
 const HOLES_SOURCE_ID = "prod-hole-map-source";
@@ -14,6 +17,28 @@ const HOLES_LABEL_LAYER_ID = "prod-hole-map-labels";
 const DEFAULT_CENTER = [133.7751, -25.2744];
 const DEFAULT_ZOOM = 3;
 const MAPBOX_STYLE_URL = "mapbox://styles/jamesblue/cmmhkajfi000w01shgzr5c1op";
+const MAP_REFOCUS_SPEED = 0.38;
+const MAP_REFOCUS_CURVE = 1.5;
+const MAP_PROJECT_FRAME_DURATION = 2800;
+const HOLE_STATE_STYLES = [
+  { value: "proposed", label: "Proposed", color: "#38bdf8" },
+  { value: "in_progress", label: "In Progress", color: "#f59e0b" },
+  { value: "drilled", label: "Drilled", color: "#22c55e" },
+];
+
+const HOLE_STATE_COLOR_EXPRESSION = [
+  "match",
+  ["get", "state"],
+  "drilled",
+  "#22c55e",
+  "in_progress",
+  "#f59e0b",
+  "#38bdf8",
+];
+
+function cinematicEase(t) {
+  return 1 - Math.pow(1 - t, 3);
+}
 
 function getHoleStateTone(state) {
   if (state === "drilled") {
@@ -40,6 +65,44 @@ function getHoleStateTone(state) {
     border: "rgba(34,211,238,0.35)",
     background: "rgba(34,211,238,0.16)",
   };
+}
+
+function HoleStateLegend() {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-950/72 px-3 py-2.5 shadow-[0_14px_40px_rgba(2,6,23,0.35)] backdrop-blur-xl">
+      <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Hole Status</div>
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        {HOLE_STATE_STYLES.map((item) => (
+          <div key={item.value} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-xs text-slate-200">
+            <span className="h-2.5 w-2.5 rounded-full ring-2 ring-slate-950/70" style={{ backgroundColor: item.color }} />
+            <span>{item.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EmptyProjectPrompt({ compact = false }) {
+  return (
+    <div
+      className={compact ? "p-4" : "p-5"}
+    >
+      <div className="rounded-[28px] border border-dashed border-cyan-300/25 bg-[linear-gradient(180deg,rgba(8,47,73,0.32),rgba(2,6,23,0.88))] p-5 shadow-[0_20px_60px_rgba(2,6,23,0.24)]">
+        <div className="text-[11px] uppercase tracking-[0.24em] text-cyan-100/75">Get Started</div>
+        <h3 className="mt-3 text-xl font-semibold text-white">No projects yet</h3>
+        <p className="mt-2 max-w-xl text-sm leading-6 text-slate-300">
+          Create your first project to start mapping drillholes, viewing collar positions, and navigating between hole programs.
+        </p>
+        <Link
+          href="/projects?tab=projects"
+          className="mt-5 inline-flex items-center rounded-2xl bg-[linear-gradient(135deg,#22d3ee,#38bdf8)] px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-[0_14px_36px_rgba(34,211,238,0.24)] transition hover:brightness-105"
+        >
+          Create A Project
+        </Link>
+      </div>
+    </div>
+  );
 }
 
 function formatValue(value, suffix = "") {
@@ -99,7 +162,7 @@ function ProjectAccordionList({
   }
 
   if (!projects.length) {
-    return <div className="p-5 text-sm text-slate-400">No visible projects with mappable hole coordinates for this scope.</div>;
+    return <EmptyProjectPrompt compact={compact} />;
   }
 
   return (
@@ -284,6 +347,113 @@ function HoleAttributesPanel({ selectedHole, mobile = false }) {
   );
 }
 
+function HoleSchematicModal({
+  hole,
+  loading,
+  error,
+  geologyRows,
+  constructionRows,
+  annulusRows,
+  lithById,
+  constructionById,
+  annulusById,
+  onClose,
+}) {
+  useEffect(() => {
+    if (!hole) return undefined;
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [hole, onClose]);
+
+  if (!hole) return null;
+
+  return (
+    <div className="fixed inset-0 z-[80] bg-slate-950/78 backdrop-blur-md" onClick={onClose}>
+      <div className="flex h-full w-full items-center justify-center p-3 md:p-6">
+        <div
+          className="flex h-[min(92vh,980px)] w-full max-w-[1500px] flex-col overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.99))] shadow-[0_30px_120px_rgba(2,6,23,0.5)]"
+          onClick={(event) => event.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="hole-schematic-title"
+        >
+          <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4 md:px-6">
+            <div className="min-w-0">
+              <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-100/75">Hole Schematic</div>
+              <div id="hole-schematic-title" className="mt-2 text-2xl font-semibold text-white">
+                {hole.hole_id || "Unnamed hole"}
+              </div>
+              <div className="mt-1 text-sm text-slate-300">{hole.project_name || "No project"}</div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex items-center rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1]"
+            >
+              Back To Map
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-auto p-3 md:p-5">
+            {loading ? (
+              <div className="grid gap-4 lg:grid-cols-[120px_minmax(0,1fr)]">
+                <div className="h-[620px] animate-pulse rounded-3xl bg-white/[0.05]" />
+                <div className="h-[620px] animate-pulse rounded-3xl bg-white/[0.05]" />
+              </div>
+            ) : error ? (
+              <div className="rounded-[28px] border border-rose-400/20 bg-rose-500/10 px-5 py-4 text-sm text-rose-200">{error}</div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-4">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Depth</div>
+                    <div className="mt-2 text-lg font-semibold text-white">{formatValue(hole.depth, " m")}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Planned</div>
+                    <div className="mt-2 text-lg font-semibold text-white">{formatValue(hole.planned_depth, " m")}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Water</div>
+                    <div className="mt-2 text-lg font-semibold text-white">{formatValue(hole.water_level_m, " m")}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Status</div>
+                    <div className="mt-2 text-lg font-semibold text-white">{hole.state || "-"}</div>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto rounded-[28px] border border-white/10 bg-slate-950/40 p-3 md:p-5">
+                  <div className="inline-flex min-w-max items-start gap-3">
+                    <DepthAxisBar plannedDepth={hole.planned_depth} actualDepth={hole.depth} waterLevel={hole.water_level_m} />
+
+                    <BoreholeSchematicPreview
+                      plannedDepth={hole.planned_depth}
+                      actualDepth={hole.depth}
+                      waterLevel={hole.water_level_m}
+                      geologyIntervals={geologyRows}
+                      lithById={lithById}
+                      annulusIntervals={annulusRows}
+                      annulusById={annulusById}
+                      constructionIntervals={constructionRows}
+                      constructionById={constructionById}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function HoleMapWorkspace({ publicToken = "" }) {
   const supabase = useMemo(() => supabaseBrowser(), []);
   const { orgId } = useOrg();
@@ -295,6 +465,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const handlersBoundRef = useRef(false);
   const mapReadyRef = useRef(false);
   const visibleHolesRef = useRef([]);
+  const schematicRequestRef = useRef(0);
 
   const [projectScope, setProjectScope] = useState("own");
   const [loading, setLoading] = useState(true);
@@ -305,6 +476,15 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const [expandedProjects, setExpandedProjects] = useState({});
   const [selectedHoleId, setSelectedHoleId] = useState("");
   const [mobilePanelTab, setMobilePanelTab] = useState("projects");
+  const [schematicHole, setSchematicHole] = useState(null);
+  const [schematicLoading, setSchematicLoading] = useState(false);
+  const [schematicError, setSchematicError] = useState("");
+  const [schematicGeologyRows, setSchematicGeologyRows] = useState([]);
+  const [schematicConstructionRows, setSchematicConstructionRows] = useState([]);
+  const [schematicAnnulusRows, setSchematicAnnulusRows] = useState([]);
+  const [schematicLithologyTypes, setSchematicLithologyTypes] = useState([]);
+  const [schematicConstructionTypes, setSchematicConstructionTypes] = useState([]);
+  const [schematicAnnulusTypes, setSchematicAnnulusTypes] = useState([]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -540,6 +720,24 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     return visibleHoles.find((hole) => hole.id === selectedHoleId) || visibleHoles[0] || null;
   }, [selectedHoleId, visibleHoles]);
 
+  const schematicLithById = useMemo(() => {
+    const map = new Map();
+    for (const type of schematicLithologyTypes || []) map.set(type.id, type);
+    return map;
+  }, [schematicLithologyTypes]);
+
+  const schematicConstructionById = useMemo(() => {
+    const map = new Map();
+    for (const type of schematicConstructionTypes || []) map.set(type.id, type);
+    return map;
+  }, [schematicConstructionTypes]);
+
+  const schematicAnnulusById = useMemo(() => {
+    const map = new Map();
+    for (const type of schematicAnnulusTypes || []) map.set(type.id, type);
+    return map;
+  }, [schematicAnnulusTypes]);
+
   useEffect(() => {
     setExpandedProjects((prev) => {
       const next = { ...prev };
@@ -560,10 +758,15 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     }
   }, [selectedHoleId, visibleHoles]);
 
-  const frameHolesOnMap = (holes) => {
+  const frameHolesOnMap = (holes, options = {}) => {
     const map = mapRef.current;
     const mapboxgl = mapboxRef.current;
     if (!map || !mapboxgl || !mapReadyRef.current) return;
+
+    const padding = options.padding || { top: 110, right: 90, bottom: 110, left: 90 };
+    const maxZoom = typeof options.maxZoom === "number" ? options.maxZoom : 13;
+    const duration = typeof options.duration === "number" ? options.duration : MAP_PROJECT_FRAME_DURATION;
+    const singleZoom = typeof options.singleZoom === "number" ? options.singleZoom : 11.5;
 
     const mappableHoles = (holes || []).filter((hole) => {
       const lng = Number(hole.collar_longitude);
@@ -574,7 +777,13 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     if (!mappableHoles.length) return;
 
     if (mappableHoles.length === 1) {
-      map.flyTo({ center: [Number(mappableHoles[0].collar_longitude), Number(mappableHoles[0].collar_latitude)], zoom: 11.5, speed: 0.8, curve: 1.2 });
+      map.flyTo({
+        center: [Number(mappableHoles[0].collar_longitude), Number(mappableHoles[0].collar_latitude)],
+        zoom: singleZoom,
+        speed: MAP_REFOCUS_SPEED,
+        curve: MAP_REFOCUS_CURVE,
+        easing: cinematicEase,
+      });
       return;
     }
 
@@ -583,7 +792,143 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
       bounds.extend([Number(hole.collar_longitude), Number(hole.collar_latitude)]);
     });
 
-    map.fitBounds(bounds, { padding: { top: 110, right: 90, bottom: 110, left: 90 }, maxZoom: 13, duration: 1200 });
+    map.fitBounds(bounds, {
+      padding,
+      maxZoom,
+      duration,
+      easing: cinematicEase,
+    });
+  };
+
+  const closeSchematicModal = () => {
+    setSchematicHole(null);
+    setSchematicError("");
+  };
+
+  const openSchematicModal = async (hole) => {
+    if (!hole?.id || !hole.organization_id) return;
+
+    schematicRequestRef.current += 1;
+    const requestId = schematicRequestRef.current;
+
+    if (popupRef.current) popupRef.current.remove();
+
+    setSchematicHole(hole);
+    setSchematicLoading(true);
+    setSchematicError("");
+    setSchematicGeologyRows([]);
+    setSchematicConstructionRows([]);
+    setSchematicAnnulusRows([]);
+
+    try {
+      const [lithologyRes, constructionTypeRes, annulusTypeRes, geologyRes, constructionRes, annulusRes] = await Promise.all([
+        supabase
+          .from("drillhole_lithology_types")
+          .select("id, name, color, sort_order, is_active")
+          .eq("organization_id", hole.organization_id)
+          .order("sort_order", { ascending: true })
+          .order("name", { ascending: true }),
+        supabase
+          .from("drillhole_construction_types")
+          .select("id, name, color, sort_order, is_active")
+          .eq("organization_id", hole.organization_id)
+          .order("sort_order", { ascending: true })
+          .order("name", { ascending: true }),
+        supabase
+          .from("drillhole_annulus_types")
+          .select("id, name, color, sort_order, is_active")
+          .eq("organization_id", hole.organization_id)
+          .order("sort_order", { ascending: true })
+          .order("name", { ascending: true }),
+        supabase
+          .from("drillhole_geology_intervals")
+          .select("id, from_m, to_m, lithology_type_id, notes")
+          .eq("organization_id", hole.organization_id)
+          .eq("hole_id", hole.id)
+          .order("from_m", { ascending: true }),
+        supabase
+          .from("drillhole_construction_intervals")
+          .select("id, from_m, to_m, construction_type_id, notes")
+          .eq("organization_id", hole.organization_id)
+          .eq("hole_id", hole.id)
+          .order("from_m", { ascending: true }),
+        supabase
+          .from("drillhole_annulus_intervals")
+          .select("id, from_m, to_m, annulus_type_id, notes")
+          .eq("organization_id", hole.organization_id)
+          .eq("hole_id", hole.id)
+          .order("from_m", { ascending: true }),
+      ]);
+
+      const responses = [lithologyRes, constructionTypeRes, annulusTypeRes, geologyRes, constructionRes, annulusRes];
+      const firstError = responses.find((response) => response.error)?.error;
+      if (firstError) throw firstError;
+      if (requestId !== schematicRequestRef.current) return;
+
+      setSchematicLithologyTypes(
+        (lithologyRes.data || []).map((type) => ({
+          id: type.id,
+          name: type.name || "",
+          color: type.color || "#64748b",
+          sort_order: type.sort_order ?? 0,
+          is_active: type.is_active !== false,
+        }))
+      );
+      setSchematicConstructionTypes(
+        (constructionTypeRes.data || []).map((type) => ({
+          id: type.id,
+          name: type.name || "",
+          color: type.color || "#64748b",
+          sort_order: type.sort_order ?? 0,
+          is_active: type.is_active !== false,
+        }))
+      );
+      setSchematicAnnulusTypes(
+        (annulusTypeRes.data || []).map((type) => ({
+          id: type.id,
+          name: type.name || "",
+          color: type.color || "#64748b",
+          sort_order: type.sort_order ?? 0,
+          is_active: type.is_active !== false,
+        }))
+      );
+      setSchematicGeologyRows(
+        (geologyRes.data || []).map((row) => ({
+          id: row.id,
+          from_m: row.from_m ?? "",
+          to_m: row.to_m ?? "",
+          lithology_type_id: row.lithology_type_id || "",
+          notes: row.notes || "",
+        }))
+      );
+      setSchematicConstructionRows(
+        (constructionRes.data || []).map((row) => ({
+          id: row.id,
+          from_m: row.from_m ?? "",
+          to_m: row.to_m ?? "",
+          construction_type_id: row.construction_type_id || "",
+          notes: row.notes || "",
+        }))
+      );
+      setSchematicAnnulusRows(
+        (annulusRes.data || []).map((row) => ({
+          id: row.id,
+          from_m: row.from_m ?? "",
+          to_m: row.to_m ?? "",
+          annulus_type_id: row.annulus_type_id || "",
+          notes: row.notes || "",
+        }))
+      );
+    } catch (evt) {
+      if (requestId !== schematicRequestRef.current) return;
+      const message = evt?.message || "Could not load hole schematic.";
+      setSchematicError(message);
+      toast.error(message);
+    } finally {
+      if (requestId === schematicRequestRef.current) {
+        setSchematicLoading(false);
+      }
+    }
   };
 
   const renderPopupHtml = (hole) => {
@@ -591,21 +936,24 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     const stateTone = getHoleStateTone(hole.state);
 
     return `
-      <div style="min-width:240px;max-width:260px;color:#e2e8f0;font-family:Arial,Helvetica,sans-serif;">
-        <div style="display:flex;flex-direction:column;gap:10px;min-width:0;">
+      <div style="width:232px;padding:14px 14px 14px 8px;color:#e2e8f0;font-family:Arial,Helvetica,sans-serif;box-sizing:border-box;">
+        <div style="display:flex;flex-direction:column;gap:8px;min-width:0;">
           <div style="font-size:10px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:rgba(186,230,253,0.78);">Hole</div>
-          <div style="font-size:16px;font-weight:700;line-height:1.2;color:#f8fafc;word-break:break-word;">${hole.hole_id || "Unnamed hole"}</div>
-          <div style="font-size:12px;line-height:1.4;color:rgba(226,232,240,0.78);word-break:break-word;">${hole.project_name || "No project"}</div>
-          <div style="display:inline-flex;align-self:flex-start;max-width:100%;border:1px solid ${stateTone.border};background:${stateTone.background};color:${stateTone.text};border-radius:999px;padding:6px 10px;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;line-height:1.1;">
+          <div style="font-size:15px;font-weight:700;line-height:1.2;color:#f8fafc;word-break:break-word;">${hole.hole_id || "Unnamed hole"}</div>
+          <div style="font-size:11px;line-height:1.35;color:rgba(226,232,240,0.78);word-break:break-word;">${hole.project_name || "No project"}</div>
+          <div style="display:inline-flex;align-self:flex-start;max-width:100%;border:1px solid ${stateTone.border};background:${stateTone.background};color:${stateTone.text};border-radius:999px;padding:5px 9px;font-size:10px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;line-height:1.1;">
             ${stateTone.label}
           </div>
         </div>
-        <div style="margin-top:14px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px;">
-          <div style="border:1px solid rgba(148,163,184,0.18);background:rgba(15,23,42,0.5);border-radius:14px;padding:10px 12px;">
+        <div style="margin-top:12px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px;">
+          <div style="width:calc(100% - 8px);margin-right:auto;border:1px solid rgba(148,163,184,0.18);background:rgba(15,23,42,0.5);border-radius:14px;padding:9px 11px;box-sizing:border-box;">
             <div style="font-size:10px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:rgba(148,163,184,0.84);">Depth</div>
-            <div style="margin-top:6px;font-size:15px;font-weight:700;color:#f8fafc;">${formatValue(hole.depth, " m")}</div>
+            <div style="margin-top:5px;font-size:14px;font-weight:700;color:#f8fafc;">${formatValue(hole.depth, " m")}</div>
           </div>
         </div>
+        <button type="button" data-popup-action="open-schematic" style="display:block;margin-top:10px;width:calc(100% - 8px);margin-right:auto;box-sizing:border-box;border:none;border-radius:12px;background:linear-gradient(135deg,#22d3ee,#0ea5e9);padding:10px 12px;color:#082f49;font-size:11px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;box-shadow:0 12px 30px rgba(14,165,233,0.22);line-height:1.1;">
+          View Schematic
+        </button>
       </div>
     `;
   };
@@ -624,7 +972,14 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
 
     if (options.flyTo !== false) {
-      map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 11.5), speed: 0.8, curve: 1.2 });
+      map.flyTo({
+        center: [lng, lat],
+        zoom: typeof options.zoom === "number" ? options.zoom : Math.max(map.getZoom(), 11.5),
+        offset: [0, 120],
+        speed: MAP_REFOCUS_SPEED,
+        curve: MAP_REFOCUS_CURVE,
+        easing: cinematicEase,
+      });
     }
 
     if (!popupRef.current) {
@@ -632,6 +987,15 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     }
 
     popupRef.current.setLngLat([lng, lat]).setHTML(renderPopupHtml(hole)).addTo(map);
+
+    const schematicButton = popupRef.current.getElement()?.querySelector('[data-popup-action="open-schematic"]');
+    if (schematicButton) {
+      schematicButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void openSchematicModal(hole);
+      }, { once: true });
+    }
   };
 
   useEffect(() => {
@@ -668,12 +1032,16 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         source: HOLES_SOURCE_ID,
         paint: {
           "circle-radius": 7,
-          "circle-color": "#fde047",
+          "circle-color": HOLE_STATE_COLOR_EXPRESSION,
           "circle-stroke-color": "#082f49",
           "circle-stroke-width": 2.5,
           "circle-opacity": 0.96,
         },
       });
+    }
+
+    if (map.getLayer(HOLES_CIRCLE_LAYER_ID)) {
+      map.setPaintProperty(HOLES_CIRCLE_LAYER_ID, "circle-color", HOLE_STATE_COLOR_EXPRESSION);
     }
 
     if (!map.getLayer(HOLES_SELECTED_LAYER_ID)) {
@@ -726,7 +1094,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         if (!feature) return;
         const hole = visibleHolesRef.current.find((row) => String(row.id) === String(feature.properties?.id));
         if (!hole) return;
-        focusHole(hole, { flyTo: false });
+        focusHole(hole, { zoom: map.getZoom() });
       };
 
       map.on("mouseenter", HOLES_CIRCLE_LAYER_ID, setPointerCursor);
@@ -764,10 +1132,16 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const totalVisibleProjects = filteredProjects.length;
   const totalVisibleHoles = visibleHoles.length;
   const totalShared = allHoles.filter((hole) => hole.organization_id !== orgId).length;
+  const showCreateProjectPrompt = !loading && projectScope === "own" && totalProjects === 0;
 
   const toggleProjectExpanded = (project, isExpanded) => {
     setExpandedProjects((prev) => ({ ...prev, [project.id]: !isExpanded }));
-    frameHolesOnMap(project.holes);
+    frameHolesOnMap(project.holes, {
+      padding: { top: 56, right: 38, bottom: 56, left: 38 },
+      maxZoom: 15.2,
+      duration: 3000,
+      singleZoom: 14.1,
+    });
   };
 
   return (
@@ -905,6 +1279,18 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   </div>
                 </div>
               </div>
+              <div className="pointer-events-none absolute bottom-3 left-3 z-10 md:bottom-4 md:left-4">
+                <div className="pointer-events-auto">
+                  <HoleStateLegend />
+                </div>
+              </div>
+              {showCreateProjectPrompt ? (
+                <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-4 md:p-6">
+                  <div className="pointer-events-auto w-full max-w-xl rounded-[30px] border border-white/10 bg-slate-950/80 p-4 shadow-[0_24px_80px_rgba(2,6,23,0.45)] backdrop-blur-xl md:p-5">
+                    <EmptyProjectPrompt />
+                  </div>
+                </div>
+              ) : null}
               <div ref={mapContainerRef} className="h-[54svh] min-h-[360px] w-full md:h-[58vh] md:min-h-[480px]" />
             </div>
 
@@ -994,6 +1380,19 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
           </div>
         </section>
       </div>
+
+      <HoleSchematicModal
+        hole={schematicHole}
+        loading={schematicLoading}
+        error={schematicError}
+        geologyRows={schematicGeologyRows}
+        constructionRows={schematicConstructionRows}
+        annulusRows={schematicAnnulusRows}
+        lithById={schematicLithById}
+        constructionById={schematicConstructionById}
+        annulusById={schematicAnnulusById}
+        onClose={closeSchematicModal}
+      />
     </div>
   );
 }

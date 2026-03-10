@@ -255,7 +255,7 @@ button, a {
 
 /* Custom Mapbox popup styling for the drillhole map. */
 .hole-map-popup .mapboxgl-popup-content {
-  padding: 14px !important;
+  padding: 0 !important;
   border-radius: 22px !important;
   border: 1px solid rgba(148, 163, 184, 0.18) !important;
   background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 0.99)) !important;
