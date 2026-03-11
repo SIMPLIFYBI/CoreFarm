@@ -9,12 +9,16 @@ export default function BoreholeSchematicPreview({
   actualDepth,
   geologyIntervals,
   lithById,
+  componentRows,
+  componentById,
   annulusIntervals,
   annulusById,
   constructionIntervals,
   constructionById,
   waterLevel,
   compact = false,
+  selectedComponentId = "",
+  onSelectComponent,
 }) {
   const uid = useId();
 
@@ -83,6 +87,31 @@ export default function BoreholeSchematicPreview({
       .sort((a, b) => a.from - b.from);
   }, [constructionIntervals]);
 
+  const normComponents = useMemo(() => {
+    return (componentRows || [])
+      .map((r) => {
+        const depth = Number(r.depth_m);
+        const id = r.component_type_id || "";
+        if (!Number.isFinite(depth) || depth < 0 || !id) return null;
+        return {
+          id: r.id || null,
+          depth,
+          typeId: id,
+          label: r.label || "",
+          status: r.status || "installed",
+          notes: r.notes || "",
+          details: r.details || {},
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.depth - b.depth);
+  }, [componentRows]);
+
+  const selectedComponent = useMemo(() => {
+    if (!selectedComponentId) return null;
+    return normComponents.find((item) => item.id === selectedComponentId) || null;
+  }, [normComponents, selectedComponentId]);
+
   const holeW = compact ? 62 : 120;
   const annulusBandW = compact ? 16 : 34;
   const spacing = compact ? 8 : 18;
@@ -106,6 +135,8 @@ export default function BoreholeSchematicPreview({
 
   const geologyRightX = rightPanelStartX;
   const geologyRightW = showRightGeology ? geologyPanelW : 0;
+  const componentRailX = holeX + holeW / 2;
+  const componentCalloutX = compact ? holeX + holeW + annulusBandW + 10 : holeX + holeW + annulusBandW + 44;
 
   const fitLabel = (text, panelWidth, isCompact) => {
     const raw = String(text || "").trim();
@@ -115,6 +146,87 @@ export default function BoreholeSchematicPreview({
     if (raw.length <= maxChars) return raw;
     return `${raw.slice(0, Math.max(0, maxChars - 1))}…`;
   };
+
+  const renderComponentIcon = (icon, cx, cy, selected) => {
+    const key = String(icon || "dot").toLowerCase();
+    const stroke = "rgba(255,255,255,0.96)";
+    const baseProps = { stroke, strokeWidth: selected ? 1.9 : 1.6, fill: "none", strokeLinecap: "round", strokeLinejoin: "round" };
+
+    if (key.includes("pump")) {
+      return (
+        <g>
+          <path d={`M ${cx - 3.5} ${cy + 3.5} L ${cx + 4.2} ${cy} L ${cx - 3.5} ${cy - 3.5} Z`} fill={stroke} opacity="0.95" />
+          <line x1={cx - 5.5} y1={cy} x2={cx - 1.8} y2={cy} {...baseProps} />
+        </g>
+      );
+    }
+
+    if (key.includes("seal") || key.includes("packer")) {
+      return <rect x={cx - 3.2} y={cy - 3.2} width={6.4} height={6.4} transform={`rotate(45 ${cx} ${cy})`} fill={stroke} opacity="0.95" />;
+    }
+
+    if (key.includes("wave") || key.includes("level")) {
+      return <path d={`M ${cx - 4.5} ${cy + 1.4} Q ${cx - 2.8} ${cy - 1.4} ${cx - 1.1} ${cy + 1.4} T ${cx + 2.3} ${cy + 1.4} T ${cx + 5.7} ${cy + 1.4}`} {...baseProps} />;
+    }
+
+    if (key.includes("valve")) {
+      return (
+        <g>
+          <rect x={cx - 3.8} y={cy - 3.1} width={7.6} height={6.2} rx="1.5" fill={stroke} opacity="0.92" />
+          <line x1={cx} y1={cy - 5.4} x2={cx} y2={cy + 5.4} stroke="rgba(15,23,42,0.9)" strokeWidth="1.2" />
+        </g>
+      );
+    }
+
+    if (key.includes("gauge") || key.includes("sensor")) {
+      return (
+        <g>
+          <circle cx={cx} cy={cy} r={3.5} {...baseProps} />
+          <line x1={cx} y1={cy} x2={cx + 2.2} y2={cy - 2.2} {...baseProps} />
+        </g>
+      );
+    }
+
+    return <circle cx={cx} cy={cy} r={2.7} fill={stroke} opacity="0.95" />;
+  };
+
+  const selectedComponentPopup = useMemo(() => {
+    if (!selectedComponent) return null;
+    const type = componentById?.get?.(selectedComponent.typeId);
+    const detailEntries = Object.entries(selectedComponent.details || {})
+      .filter(([, value]) => value !== null && value !== "")
+      .slice(0, compact ? 2 : 3)
+      .map(([key, value]) => `${key.replace(/_/g, " ")}: ${String(value)}`);
+
+    const label = selectedComponent.label || type?.name || "Selected component";
+    const lines = [
+      label,
+      `${type?.name || "Unknown type"} . ${selectedComponent.depth.toFixed(1)}m`,
+      `Status: ${selectedComponent.status || "installed"}`,
+      ...(selectedComponent.notes ? [selectedComponent.notes] : []),
+      ...detailEntries,
+    ];
+
+    const popupW = compact ? 152 : 228;
+    const popupLineH = compact ? 13 : 15;
+    const popupH = 18 + lines.length * popupLineH;
+    const markerY = yForDepth(selectedComponent.depth);
+    const preferredX = compact ? holeX - popupW - 8 : componentCalloutX + 26;
+    const popupX = Math.max(sidePad + 6, Math.min(W - popupW - sidePad - 6, preferredX));
+    const popupY = Math.max(padTop + 8, Math.min(H - padBottom - popupH - 8, markerY - popupH / 2));
+    const anchorX = compact ? popupX + popupW : popupX;
+
+    return {
+      x: popupX,
+      y: popupY,
+      w: popupW,
+      h: popupH,
+      anchorX,
+      anchorY: markerY,
+      lines,
+      color: type?.color || "#38bdf8",
+    };
+  }, [compact, componentById, componentCalloutX, holeX, padBottom, padTop, selectedComponent, sidePad, W, H]);
 
   return (
     <div className="shrink-0">
@@ -263,7 +375,105 @@ export default function BoreholeSchematicPreview({
               </g>
             );
           })}
+
+          {normComponents.map((it, i) => {
+            const t = componentById?.get?.(it.typeId);
+            const color = t?.color || "#38bdf8";
+            const label = it.label || t?.name || `Component ${i + 1}`;
+            const y = yForDepth(it.depth);
+            const isSelected = selectedComponentId && selectedComponentId === it.id;
+            const railEndX = compact ? componentRailX + 14 : componentCalloutX - 10;
+
+            return (
+              <g key={it.id || `component-${it.typeId}-${it.depth}-${i}`}>
+                <line
+                  x1={componentRailX}
+                  y1={y}
+                  x2={railEndX}
+                  y2={y}
+                  stroke={isSelected ? "rgba(255,255,255,0.9)" : "rgba(148,163,184,0.72)"}
+                  strokeWidth={isSelected ? "2.5" : "1.5"}
+                  strokeDasharray={compact ? undefined : "4 4"}
+                />
+                <g
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onSelectComponent?.(selectedComponentId === it.id ? null : it)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onSelectComponent?.(selectedComponentId === it.id ? null : it);
+                    }
+                  }}
+                  style={{ cursor: "pointer" }}
+                >
+                  <circle
+                    cx={componentRailX}
+                    cy={y}
+                    r={isSelected ? 10 : 8}
+                    fill={color}
+                    stroke={isSelected ? "rgba(255,255,255,0.95)" : "rgba(15,23,42,0.55)"}
+                    strokeWidth={isSelected ? "3" : "2"}
+                  >
+                    <title>
+                      {label} . {it.depth.toFixed(1)}m{it.notes ? ` . ${it.notes}` : ""}
+                    </title>
+                  </circle>
+                  {renderComponentIcon(t?.icon, componentRailX, y, isSelected)}
+                </g>
+                {!compact && (
+                  <text x={componentCalloutX} y={y + 4} textAnchor="start" fontSize="11" fill={isSelected ? "rgba(255,255,255,0.96)" : "rgba(226,232,240,0.84)"}>
+                    {fitLabel(label, Math.max(120, W - componentCalloutX - sidePad), false)}
+                  </text>
+                )}
+              </g>
+            );
+          })}
         </g>
+
+        {selectedComponentPopup ? (
+          <g>
+            <line
+              x1={selectedComponentPopup.anchorX}
+              y1={selectedComponentPopup.anchorY}
+              x2={selectedComponentPopup.x + (compact ? selectedComponentPopup.w - 12 : 0)}
+              y2={selectedComponentPopup.y + selectedComponentPopup.h / 2}
+              stroke="rgba(255,255,255,0.32)"
+              strokeWidth="1.5"
+            />
+            <rect
+              x={selectedComponentPopup.x}
+              y={selectedComponentPopup.y}
+              width={selectedComponentPopup.w}
+              height={selectedComponentPopup.h}
+              rx="14"
+              fill="rgba(2,6,23,0.94)"
+              stroke="rgba(255,255,255,0.16)"
+            />
+            <rect
+              x={selectedComponentPopup.x + 10}
+              y={selectedComponentPopup.y + 10}
+              width="8"
+              height={selectedComponentPopup.h - 20}
+              rx="4"
+              fill={selectedComponentPopup.color}
+              opacity="0.95"
+            />
+            {selectedComponentPopup.lines.map((line, index) => (
+              <text
+                key={`${line}-${index}`}
+                x={selectedComponentPopup.x + 26}
+                y={selectedComponentPopup.y + 18 + index * (compact ? 13 : 15)}
+                textAnchor="start"
+                fontSize={index === 0 ? (compact ? "10" : "12") : compact ? "9" : "10"}
+                fill={index === 0 ? "rgba(255,255,255,0.98)" : "rgba(226,232,240,0.86)"}
+                fontWeight={index === 0 ? "700" : "400"}
+              >
+                {fitLabel(line, selectedComponentPopup.w - 34, compact)}
+              </text>
+            ))}
+          </g>
+        ) : null}
 
         {/* markers across the whole schematic */}
         {hasWater && (

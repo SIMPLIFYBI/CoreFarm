@@ -138,12 +138,21 @@ export default function TypesTabs({
   onSaveAnnulusTypes,
   onUpdateAnnulusType,
   onDeleteAnnulusType,
+  // components
+  componentTypesAll,
+  componentTypesLoading,
+  componentTypesSaving,
+  onAddComponentType,
+  onSaveComponentTypes,
+  onUpdateComponentType,
+  onDeleteComponentType,
 }) {
   const [subTab, setSubTab] = useState("geology");
 
   const header = useMemo(() => {
     if (subTab === "construction") return { title: "Construction" };
     if (subTab === "annulus") return { title: "Annulus" };
+    if (subTab === "components") return { title: "Components" };
     return { title: "Geology" };
   }, [subTab]);
 
@@ -159,6 +168,7 @@ export default function TypesTabs({
           <SubTabButton active={subTab === "geology"} onClick={() => setSubTab("geology")} label="Geology" />
           <SubTabButton active={subTab === "construction"} onClick={() => setSubTab("construction")} label="Construction" />
           <SubTabButton active={subTab === "annulus"} onClick={() => setSubTab("annulus")} label="Annulus" />
+          <SubTabButton active={subTab === "components"} onClick={() => setSubTab("components")} label="Components" />
         </div>
       </div>
 
@@ -188,7 +198,7 @@ export default function TypesTabs({
           onUpdate={onUpdateConstructionType}
           onDelete={onDeleteConstructionType}
         />
-      ) : (
+      ) : subTab === "annulus" ? (
         <TypesList
           title="Annulus types"
           description="Used by Annulus intervals."
@@ -201,6 +211,125 @@ export default function TypesTabs({
           onUpdate={onUpdateAnnulusType}
           onDelete={onDeleteAnnulusType}
         />
+      ) : (
+        <div className="card p-3 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-slate-100">Component types</div>
+              <div className="text-[11px] text-slate-400">Used by the Components tab and schematic markers.</div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button type="button" className="btn btn-xs" onClick={onAddComponentType} disabled={!canEdit}>
+                + Type
+              </button>
+              <button type="button" className="btn btn-xs btn-primary" onClick={onSaveComponentTypes} disabled={!canEdit || componentTypesSaving}>
+                {componentTypesSaving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+
+          {componentTypesLoading ? (
+            <div className="text-sm text-slate-300">Loading…</div>
+          ) : (
+            <div className="space-y-2">
+              {(componentTypesAll || []).length === 0 && <div className="text-xs text-slate-400 italic">No component types yet. Click "+ Type".</div>}
+
+              {(componentTypesAll || []).map((t, idx) => (
+                <div key={t.id || `new-component-type-${idx}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-3 space-y-3">
+                  <div className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1.2fr)_130px_110px_56px] md:items-center">
+                    <input
+                      className="input input-xs w-full min-w-0"
+                      placeholder="Type name"
+                      value={t.name}
+                      disabled={!canEdit}
+                      onChange={(e) => onUpdateComponentType?.(idx, { name: e.target.value })}
+                    />
+
+                    <input
+                      className="input input-xs w-full min-w-0 font-mono"
+                      placeholder="key"
+                      value={t.key || ""}
+                      disabled={!canEdit}
+                      onChange={(e) => onUpdateComponentType?.(idx, { key: e.target.value })}
+                    />
+
+                    <select
+                      className="select-gradient-sm w-full"
+                      value={t.category || "sensor"}
+                      disabled={!canEdit}
+                      onChange={(e) => onUpdateComponentType?.(idx, { category: e.target.value })}
+                    >
+                      <option value="sensor">sensor</option>
+                      <option value="pump">pump</option>
+                      <option value="packer">packer</option>
+                      <option value="valve">valve</option>
+                      <option value="instrument">instrument</option>
+                      <option value="other">other</option>
+                    </select>
+
+                    <input
+                      className="input input-xs w-full min-w-0"
+                      placeholder="icon"
+                      value={t.icon || "dot"}
+                      disabled={!canEdit}
+                      onChange={(e) => onUpdateComponentType?.(idx, { icon: e.target.value })}
+                    />
+
+                    <button
+                      type="button"
+                      className="btn btn-xs px-2 shrink-0"
+                      onClick={() => onDeleteComponentType?.(idx)}
+                      disabled={!canEdit}
+                      title="Delete"
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400">Color</span>
+                      <input
+                        className="input input-xs"
+                        type="color"
+                        value={t.color || "#38bdf8"}
+                        disabled={!canEdit}
+                        onChange={(e) => onUpdateComponentType?.(idx, { color: e.target.value })}
+                        title="Color"
+                        style={{ width: 42, padding: 2 }}
+                      />
+                    </div>
+
+                    <label className="text-xs text-slate-300 flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={t.is_active !== false}
+                        disabled={!canEdit}
+                        onChange={(e) => onUpdateComponentType?.(idx, { is_active: e.target.checked })}
+                      />
+                      Active
+                    </label>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-[11px] uppercase tracking-wide text-slate-400">Details Schema JSON</label>
+                    <textarea
+                      className="textarea w-full min-h-[120px] font-mono text-xs"
+                      value={t.details_schema_json || '{\n  "fields": []\n}'}
+                      disabled={!canEdit}
+                      onChange={(e) => onUpdateComponentType?.(idx, { details_schema_json: e.target.value })}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="text-[11px] text-slate-500">
+            Use a stable lowercase key like <span className="font-mono">pressure_sensor</span>. The schema format is <span className="font-mono">{'{"fields":[{"key":"model","label":"Model","type":"text"}]}'}</span>.
+          </div>
+        </div>
       )}
     </div>
   );

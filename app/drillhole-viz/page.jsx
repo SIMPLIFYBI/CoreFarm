@@ -8,6 +8,7 @@ import TabButton from "./components/TabButton";
 import GeologyIntervalsTab from "./components/GeologyIntervalsTab";
 import ConstructionIntervalsTab from "./components/ConstructionIntervalsTab";
 import AnnulusIntervalsTab from "./components/AnnulusIntervalsTab";
+import ComponentsTab from "./components/ComponentsTab";
 import HoleTab from "./components/HoleTab";
 import AttributesTab from "./components/AttributesTab";
 import SchematicArea from "./components/SchematicArea";
@@ -81,10 +82,20 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
   const [annulusTypesLoading, setAnnulusTypesLoading] = useState(false);
   const [annulusTypesSaving, setAnnulusTypesSaving] = useState(false);
 
+  // Component types (org-level)
+  const [componentTypesAll, setComponentTypesAll] = useState([]);
+  const [componentTypesLoading, setComponentTypesLoading] = useState(false);
+  const [componentTypesSaving, setComponentTypesSaving] = useState(false);
+
   // --- NEW: Annulus intervals (hole-level)
   const [annulusRows, setAnnulusRows] = useState([]);
   const [annulusLoading, setAnnulusLoading] = useState(false);
   const [annulusSaving, setAnnulusSaving] = useState(false);
+
+  // Components (hole-level)
+  const [componentRows, setComponentRows] = useState([]);
+  const [componentLoading, setComponentLoading] = useState(false);
+  const [componentSaving, setComponentSaving] = useState(false);
 
   const isSharedScope = projectScope === "shared";
   // Shared drillholes are view-only in this screen.
@@ -208,6 +219,16 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
   const annulusTypesActive = useMemo(() => {
     return (annulusTypesAll || []).filter((t) => t.is_active !== false);
   }, [annulusTypesAll]);
+
+  const componentById = useMemo(() => {
+    const m = new Map();
+    for (const t of componentTypesAll || []) m.set(t.id, t);
+    return m;
+  }, [componentTypesAll]);
+
+  const componentTypesActive = useMemo(() => {
+    return (componentTypesAll || []).filter((t) => t.is_active !== false);
+  }, [componentTypesAll]);
 
   const roundToTenth = (v) => {
     if (v === "" || v == null) return "";
@@ -445,10 +466,50 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
     );
   };
 
+  const reloadComponentTypes = async (organizationId = selectedHoleOrgId) => {
+    if (!organizationId) {
+      setComponentTypesAll([]);
+      return;
+    }
+    setComponentTypesLoading(true);
+
+    const { data, error } = await supabase
+      .from("drillhole_component_types")
+      .select("id, key, name, category, icon, color, sort_order, is_active, details_schema, created_at")
+      .eq("organization_id", organizationId)
+      .order("sort_order", { ascending: true })
+      .order("name", { ascending: true });
+
+    setComponentTypesLoading(false);
+
+    if (error) {
+      console.error(error);
+      toast.error("Could not load component types");
+      setComponentTypesAll([]);
+      return;
+    }
+
+    setComponentTypesAll(
+      (data || []).map((t) => ({
+        id: t.id,
+        key: t.key || "",
+        name: t.name || "",
+        category: t.category || "sensor",
+        icon: t.icon || "dot",
+        color: t.color || "#64748b",
+        sort_order: t.sort_order ?? 0,
+        is_active: t.is_active !== false,
+        details_schema: t.details_schema || {},
+        details_schema_json: JSON.stringify(t.details_schema || { fields: [] }, null, 2),
+      }))
+    );
+  };
+
   useEffect(() => {
     reloadLithologyTypes(selectedHoleOrgId);
     reloadConstructionTypes(selectedHoleOrgId);
     reloadAnnulusTypes(selectedHoleOrgId);
+    reloadComponentTypes(selectedHoleOrgId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedHoleOrgId]);
 
@@ -734,6 +795,161 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
     }
   };
 
+  const slugifyKey = (value) =>
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+
+  const parseDetailsSchemaInput = (value) => {
+    const raw = String(value || "").trim();
+    if (!raw) return { ok: true, schema: {} };
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return { ok: false, message: "Details schema must be a JSON object." };
+      }
+      if (parsed.fields != null && !Array.isArray(parsed.fields)) {
+        return { ok: false, message: "Details schema fields must be an array." };
+      }
+      return { ok: true, schema: parsed };
+    } catch {
+      return { ok: false, message: "Component type details schema must be valid JSON." };
+    }
+  };
+
+  const addComponentTypeRow = () => {
+    setComponentTypesAll((prev) => [
+      ...(prev || []),
+      {
+        id: null,
+        key: "",
+        name: "",
+        category: "sensor",
+        icon: "dot",
+        color: "#38bdf8",
+        sort_order: (prev?.length || 0) + 1,
+        is_active: true,
+        details_schema: { fields: [] },
+        details_schema_json: JSON.stringify({ fields: [] }, null, 2),
+      },
+    ]);
+  };
+
+  const updateComponentTypeRow = (idx, patch) => {
+    setComponentTypesAll((prev) => {
+      const next = [...(prev || [])];
+      next[idx] = { ...next[idx], ...patch };
+      return next;
+    });
+  };
+
+  const deleteComponentType = async (idx) => {
+    const row = componentTypesAll?.[idx];
+    if (!row) return;
+
+    if (!row.id) {
+      setComponentTypesAll((prev) => {
+        const next = [...(prev || [])];
+        next.splice(idx, 1);
+        return next;
+      });
+      return;
+    }
+
+    if (!confirm(`Delete component type "${row.name || "Unnamed"}"?`)) return;
+
+    const { error } = await supabase.from("drillhole_component_types").delete().eq("id", row.id);
+    if (error) {
+      console.error(error);
+      toast.error(error.message || "Could not delete component type");
+      return;
+    }
+
+    toast.success("Component type deleted");
+    await reloadComponentTypes();
+  };
+
+  const saveComponentTypes = async () => {
+    if (!selectedOrgId) return;
+
+    const cleaned = [];
+    for (const t of componentTypesAll || []) {
+      const schemaResult = parseDetailsSchemaInput(t.details_schema_json);
+      if (!schemaResult.ok) {
+        toast.error(schemaResult.message);
+        return;
+      }
+
+      cleaned.push({
+        ...t,
+        key: slugifyKey(t.key || t.name),
+        name: String(t.name || "").trim(),
+        category: String(t.category || "sensor").trim() || "sensor",
+        icon: String(t.icon || "dot").trim() || "dot",
+        color: t.color || "#38bdf8",
+        sort_order: Number.isFinite(Number(t.sort_order)) ? Number(t.sort_order) : 0,
+        is_active: t.is_active !== false,
+        details_schema: schemaResult.schema,
+      });
+    }
+
+    if (cleaned.some((t) => !t.name || !t.key)) {
+      toast.error("All component types need a name and key.");
+      return;
+    }
+
+    try {
+      setComponentTypesSaving(true);
+
+      const inserts = cleaned
+        .filter((t) => !t.id)
+        .map((t) => ({
+          organization_id: selectedOrgId,
+          key: t.key,
+          name: t.name,
+          category: t.category,
+          icon: t.icon,
+          color: t.color,
+          sort_order: t.sort_order,
+          is_active: t.is_active,
+          details_schema: t.details_schema,
+        }));
+
+      if (inserts.length) {
+        const { error } = await supabase.from("drillhole_component_types").insert(inserts);
+        if (error) throw error;
+      }
+
+      for (const t of cleaned.filter((x) => !!x.id)) {
+        const { error } = await supabase
+          .from("drillhole_component_types")
+          .update({
+            key: t.key,
+            name: t.name,
+            category: t.category,
+            icon: t.icon,
+            color: t.color,
+            sort_order: t.sort_order,
+            is_active: t.is_active,
+            details_schema: t.details_schema,
+          })
+          .eq("id", t.id);
+        if (error) throw error;
+      }
+
+      toast.success("Component types saved");
+      await reloadComponentTypes();
+    } catch (e) {
+      console.error(e);
+      toast.error(e?.message || "Failed to save component types");
+    } finally {
+      setComponentTypesSaving(false);
+    }
+  };
+
   // Load geology intervals when hole changes (existing)
   useEffect(() => {
     if (!selectedHoleOrgId || !selectedHoleId) {
@@ -842,6 +1058,43 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
     })();
   }, [selectedHoleOrgId, selectedHoleId, supabase]);
 
+  useEffect(() => {
+    if (!selectedHoleOrgId || !selectedHoleId) {
+      setComponentRows([]);
+      return;
+    }
+    (async () => {
+      setComponentLoading(true);
+      const { data, error } = await supabase
+        .from("drillhole_components")
+        .select("id, depth_m, component_type_id, label, status, details, notes, created_at")
+        .eq("organization_id", selectedHoleOrgId)
+        .eq("hole_id", selectedHoleId)
+        .order("depth_m", { ascending: true });
+
+      setComponentLoading(false);
+
+      if (error) {
+        console.error(error);
+        toast.error("Could not load components");
+        setComponentRows([]);
+        return;
+      }
+
+      setComponentRows(
+        (data || []).map((r) => ({
+          id: r.id,
+          depth_m: r.depth_m ?? "",
+          component_type_id: r.component_type_id || "",
+          label: r.label || "",
+          status: r.status || "installed",
+          details: r.details || {},
+          notes: r.notes || "",
+        }))
+      );
+    })();
+  }, [selectedHoleOrgId, selectedHoleId, supabase]);
+
   const addGeoRow = () => {
     setGeoRows((prev) => [
       ...(prev || []),
@@ -929,6 +1182,73 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
       next.splice(idx, 1);
       return next;
     });
+  };
+
+  const addComponentRow = () => {
+    setComponentRows((prev) => [
+      ...(prev || []),
+      {
+        id: null,
+        depth_m: "",
+        component_type_id: componentTypesActive?.[0]?.id || "",
+        label: "",
+        status: "installed",
+        details: {},
+        notes: "",
+      },
+    ]);
+  };
+
+  const updateComponentRow = (idx, patch) => {
+    setComponentRows((prev) => {
+      const next = [...(prev || [])];
+      next[idx] = { ...next[idx], ...patch };
+      return next;
+    });
+  };
+
+  const removeComponentRow = (idx) => {
+    setComponentRows((prev) => {
+      const next = [...(prev || [])];
+      next.splice(idx, 1);
+      return next;
+    });
+  };
+
+  const validateAndNormalizeComponents = (rows) => {
+    const prepared = [];
+    for (const row of rows || []) {
+      const hasAnyValue =
+        String(row?.depth_m ?? "").trim() !== "" ||
+        String(row?.component_type_id ?? "").trim() !== "" ||
+        String(row?.label ?? "").trim() !== "" ||
+        String(row?.notes ?? "").trim() !== "" ||
+        Object.keys(row?.details || {}).length > 0;
+
+      if (!hasAnyValue) continue;
+
+      const depth = Number(row?.depth_m);
+      if (!Number.isFinite(depth) || depth < 0) {
+        return { ok: false, message: "Each component needs a depth of 0m or greater." };
+      }
+      if (!row?.component_type_id) {
+        return { ok: false, message: "Each component needs a type." };
+      }
+
+      const details = row?.details && typeof row.details === "object" && !Array.isArray(row.details) ? row.details : {};
+
+      prepared.push({
+        depth_m: roundToTenth(depth),
+        component_type_id: row.component_type_id,
+        label: String(row?.label || "").trim() || null,
+        status: String(row?.status || "installed").trim() || "installed",
+        details,
+        notes: String(row?.notes || "").trim() || null,
+      });
+    }
+
+    prepared.sort((a, b) => a.depth_m - b.depth_m);
+    return { ok: true, rows: prepared };
   };
 
   const saveGeology = async () => {
@@ -1116,6 +1436,72 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
       toast.error(e?.message || "Failed to save annulus");
     } finally {
       setAnnulusSaving(false);
+    }
+  };
+
+  const saveComponents = async () => {
+    if (!selectedHoleOrgId || !selectedHoleId) return;
+
+    const v = validateAndNormalizeComponents(componentRows);
+    if (!v.ok) {
+      toast.error(v.message);
+      return;
+    }
+
+    try {
+      setComponentSaving(true);
+
+      const { error: delErr } = await supabase
+        .from("drillhole_components")
+        .delete()
+        .eq("organization_id", selectedHoleOrgId)
+        .eq("hole_id", selectedHoleId);
+
+      if (delErr) throw delErr;
+
+      const payload = (v.rows || []).map((r) => ({
+        organization_id: selectedHoleOrgId,
+        hole_id: selectedHoleId,
+        component_type_id: r.component_type_id,
+        depth_m: r.depth_m,
+        label: r.label,
+        status: r.status,
+        details: r.details,
+        notes: r.notes,
+      }));
+
+      if (payload.length) {
+        const { error: insErr } = await supabase.from("drillhole_components").insert(payload);
+        if (insErr) throw insErr;
+      }
+
+      toast.success("Components saved");
+
+      const { data, error } = await supabase
+        .from("drillhole_components")
+        .select("id, depth_m, component_type_id, label, status, details, notes")
+        .eq("organization_id", selectedHoleOrgId)
+        .eq("hole_id", selectedHoleId)
+        .order("depth_m", { ascending: true });
+
+      if (!error) {
+        setComponentRows(
+          (data || []).map((r) => ({
+            id: r.id,
+            depth_m: r.depth_m ?? "",
+            component_type_id: r.component_type_id || "",
+            label: r.label || "",
+            status: r.status || "installed",
+            details: r.details || {},
+            notes: r.notes || "",
+          }))
+        );
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error(e?.message || "Failed to save components");
+    } finally {
+      setComponentSaving(false);
     }
   };
 
@@ -1560,6 +1946,13 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
                     title={!selectedHoleId ? "Select a hole first" : ""}
                   />
                   <TabButton
+                    active={drawerTab === "components"}
+                    onClick={() => setDrawerTab("components")}
+                    label="Components"
+                    disabled={!selectedHoleId}
+                    title={!selectedHoleId ? "Select a hole first" : ""}
+                  />
+                  <TabButton
                     active={drawerTab === "annulus"}
                     onClick={() => setDrawerTab("annulus")}
                     label="Annulus"
@@ -1660,6 +2053,20 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
                   onUpdateRow={updateAnnulusRow}
                   onRemoveRow={removeAnnulusRow}
                 />
+              ) : drawerTab === "components" ? (
+                <ComponentsTab
+                  selectedHole={selectedHole}
+                  canEdit={canEdit}
+                  componentLoading={componentLoading}
+                  componentSaving={componentSaving}
+                  componentRows={componentRows}
+                  componentTypesActive={componentTypesActive}
+                  componentById={componentById}
+                  onAddRow={addComponentRow}
+                  onSave={saveComponents}
+                  onUpdateRow={updateComponentRow}
+                  onRemoveRow={removeComponentRow}
+                />
               ) : drawerTab === "types" ? (
                 <TypesTabs
                   myRole={myRole}
@@ -1685,6 +2092,13 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
                   onSaveAnnulusTypes={saveAnnulusTypes}
                   onUpdateAnnulusType={updateAnnulusTypeRow}
                   onDeleteAnnulusType={deleteAnnulusType}
+                  componentTypesAll={componentTypesAll}
+                  componentTypesLoading={componentTypesLoading}
+                  componentTypesSaving={componentTypesSaving}
+                  onAddComponentType={addComponentTypeRow}
+                  onSaveComponentTypes={saveComponentTypes}
+                  onUpdateComponentType={updateComponentTypeRow}
+                  onDeleteComponentType={deleteComponentType}
                 />
               ) : (
                 <div className="text-sm text-slate-300">Unknown tab: {drawerTab}</div>
@@ -1701,6 +2115,8 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
           constructionById={constructionById}
           annulusRows={annulusRows}
           annulusById={annulusById}
+          componentRows={componentRows}
+          componentById={componentById}
           onExportPdf={onExportPdf}
           exportDisabledReason={exportDisabledReason}
         />
