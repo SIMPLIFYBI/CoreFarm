@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
+import { getAustralianProjectCrsByCode } from "@/lib/coordinateSystems";
 import ProjectsTable from "./ProjectsTable";
 import TenementsTable from "./TenementsTable";
 import ProjectModal from "./ProjectModal";
@@ -47,7 +48,15 @@ export default function ProjectsView() {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState(null);
 
-  const emptyForm = { name: "", start_date: "", finish_date: "", cost_code: "", wbs_code: "" };
+  const emptyForm = {
+    name: "",
+    start_date: "",
+    finish_date: "",
+    cost_code: "",
+    wbs_code: "",
+    coordinate_crs_code: "",
+    coordinate_crs_name: "",
+  };
   const [form, setForm] = useState(emptyForm);
 
   const [activeTab, setActiveTab] = useState(urlTab);
@@ -118,7 +127,7 @@ export default function ProjectsView() {
       setLoading(true);
       const { data, error } = await supabase
         .from("projects")
-        .select("id,name,start_date,finish_date,cost_code,wbs_code,created_at")
+        .select("id,name,start_date,finish_date,cost_code,wbs_code,coordinate_crs_code,coordinate_crs_name,created_at")
         .eq("organization_id", orgId)
         .order("created_at", { ascending: false });
 
@@ -223,6 +232,8 @@ export default function ProjectsView() {
   };
 
   const openEdit = (p) => {
+    const selectedCrs = getAustralianProjectCrsByCode(p.coordinate_crs_code);
+
     setEditingId(p.id);
     setForm({
       name: p.name || "",
@@ -230,6 +241,8 @@ export default function ProjectsView() {
       finish_date: p.finish_date || "",
       cost_code: p.cost_code || "",
       wbs_code: p.wbs_code || "",
+      coordinate_crs_code: p.coordinate_crs_code || "",
+      coordinate_crs_name: selectedCrs?.name || p.coordinate_crs_name || "",
     });
     setShowModal(true);
   };
@@ -240,12 +253,16 @@ export default function ProjectsView() {
 
     setSaving(true);
     try {
+      const selectedCrs = getAustralianProjectCrsByCode(form.coordinate_crs_code);
+
       const payload = {
         name: form.name.trim(),
         start_date: form.start_date || null,
         finish_date: form.finish_date || null,
         cost_code: form.cost_code || null,
         wbs_code: form.wbs_code || null,
+        coordinate_crs_code: selectedCrs?.code || null,
+        coordinate_crs_name: selectedCrs?.name || null,
         organization_id: orgId,
       };
 
@@ -260,7 +277,7 @@ export default function ProjectsView() {
 
       const { data } = await supabase
         .from("projects")
-        .select("id,name,start_date,finish_date,cost_code,wbs_code,created_at")
+        .select("id,name,start_date,finish_date,cost_code,wbs_code,coordinate_crs_code,coordinate_crs_name,created_at")
         .eq("organization_id", orgId)
         .order("created_at", { ascending: false });
 

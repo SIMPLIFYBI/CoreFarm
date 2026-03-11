@@ -17,6 +17,7 @@ export default function ProjectsTable({ loading, projects, onEdit, onDelete }) {
             <thead>
               <tr className="text-left bg-slate-900/40 text-slate-200 border-b border-white/10">
                 <th className="p-2 font-medium">Name</th>
+                <th className="p-2 hidden lg:table-cell font-medium">CRS</th>
                 <th className="p-2 font-medium">Start</th>
                 <th className="p-2 font-medium">Finish</th>
                 <th className="p-2 hidden md:table-cell font-medium">Cost Code</th>
@@ -28,6 +29,7 @@ export default function ProjectsTable({ loading, projects, onEdit, onDelete }) {
               {projects.map((p) => (
                 <tr key={p.id} className="border-b last:border-b-0 hover:bg-indigo-50/10">
                   <td className="p-2 font-medium">{p.name}</td>
+                  <td className="p-2 hidden lg:table-cell text-slate-300/80">{p.coordinate_crs_code || p.coordinate_crs_name || "-"}</td>
                   <td className="p-2 whitespace-nowrap">{p.start_date || "—"}</td>
                   <td className="p-2 whitespace-nowrap">{p.finish_date || "—"}</td>
                   <td className="p-2 hidden md:table-cell">{p.cost_code || "—"}</td>

@@ -3,6 +3,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { EditIconButton, DeleteIconButton } from "@/app/components/ActionIconButton";
+import { useOrg } from "@/lib/OrgContext";
+import { getAustralianProjectCrsByCode } from "@/lib/coordinateSystems";
+import { convertProjectedToWgs84 } from "@/lib/coordinateTransforms";
 
 export default function AssetsTable({
   TABLE_HEAD_ROW,
@@ -11,10 +14,12 @@ export default function AssetsTable({
   addButtonLabel = "Add Asset",
 }) {
   const PAGE_SIZE = 30;
+  const { orgId } = useOrg();
 
   const [assets, setAssets] = useState([]);
   const [locations, setLocations] = useState([]);
   const [assetTypes, setAssetTypes] = useState([]);
+  const [projects, setProjects] = useState([]);
 
   const [loading, setLoading] = useState(true);
 
@@ -30,6 +35,12 @@ export default function AssetsTable({
     name: "",
     asset_type_id: "",
     location_id: "",
+    project_id: "",
+    easting: "",
+    northing: "",
+    longitude: "",
+    latitude: "",
+    coordinate_source: "manual",
     status: "Active",
   });
 
@@ -38,15 +49,27 @@ export default function AssetsTable({
     let mounted = true;
 
     async function load() {
+      if (!orgId) {
+        if (!mounted) return;
+        setAssets([]);
+        setLocations([]);
+        setAssetTypes([]);
+        setProjects([]);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
 
-      const [assetsRes, locRes, typesRes] = await Promise.all([
+      const [assetsRes, locRes, typesRes, projectsRes] = await Promise.all([
         supabase
           .from("assets")
-          .select("id, name, asset_type_id, location_id, status, asset_types(name), asset_locations(name)")
+          .select("id, name, asset_type_id, location_id, project_id, easting, northing, longitude, latitude, coordinate_source, status, asset_types(name), asset_locations(name), projects(name, coordinate_crs_code, coordinate_crs_name)")
+          .eq("organization_id", orgId)
           .order("name", { ascending: true }),
-        supabase.from("asset_locations").select("id, name").order("name", { ascending: true }),
+        supabase.from("asset_locations").select("id, name").eq("organization_id", orgId).order("name", { ascending: true }),
         supabase.from("asset_types").select("id, name").order("name", { ascending: true }),
+        supabase.from("projects").select("id, name, coordinate_crs_code, coordinate_crs_name").eq("organization_id", orgId).order("name", { ascending: true }),
       ]);
 
       if (!mounted) return;
@@ -54,6 +77,7 @@ export default function AssetsTable({
       setAssets(assetsRes.data || []);
       setLocations(locRes.data || []);
       setAssetTypes(typesRes.data || []);
+      setProjects(projectsRes.data || []);
       setLoading(false);
     }
 
@@ -61,7 +85,7 @@ export default function AssetsTable({
     return () => {
       mounted = false;
     };
-  }, [showModal]);
+  }, [orgId, showModal]);
 
   const filteredAssets = useMemo(() => {
     return (assets || []).filter((asset) => {
@@ -139,25 +163,92 @@ export default function AssetsTable({
             name: asset.name || "",
             asset_type_id: asset.asset_type_id || "",
             location_id: asset.location_id || "",
+            project_id: asset.project_id || "",
+            easting: asset.easting ?? "",
+            northing: asset.northing ?? "",
+            longitude: asset.longitude ?? "",
+            latitude: asset.latitude ?? "",
+            coordinate_source: asset.coordinate_source || "manual",
             status: asset.status || "Active",
           }
         : {
             name: "",
             asset_type_id: "",
             location_id: "",
+            project_id: "",
+            easting: "",
+            northing: "",
+            longitude: "",
+            latitude: "",
+            coordinate_source: "manual",
             status: "Active",
           }
     );
     setShowModal(true);
   };
 
+  const toNullableNumber = (value) => {
+    if (value === "" || value == null) return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const selectedProject = projects.find((project) => project.id === form.project_id) || null;
+  const selectedProjectCrs = getAustralianProjectCrsByCode(selectedProject?.coordinate_crs_code) || null;
+
   const handleSave = async () => {
     const supabase = supabaseBrowser();
+    const hasEasting = form.easting !== "";
+    const hasNorthing = form.northing !== "";
+    const hasProjectedCoordinates = hasEasting && hasNorthing;
+
+    if ((hasEasting || hasNorthing) && !form.project_id) {
+      window.alert("Select a project before entering easting and northing.");
+      return;
+    }
+
+    if (hasEasting !== hasNorthing) {
+      window.alert("Enter both easting and northing together.");
+      return;
+    }
+
+    if (hasProjectedCoordinates && !selectedProject?.coordinate_crs_code) {
+      window.alert("Set a project coordinate system before saving projected coordinates.");
+      return;
+    }
+
+    let convertedCoordinates = null;
+    if (hasProjectedCoordinates) {
+      try {
+        convertedCoordinates = convertProjectedToWgs84({
+          crsCode: selectedProject.coordinate_crs_code,
+          easting: form.easting,
+          northing: form.northing,
+        });
+      } catch (error) {
+        window.alert(error?.message || "Unable to convert projected coordinates for this project CRS.");
+        return;
+      }
+    }
+
+    const payload = {
+      organization_id: orgId,
+      name: form.name.trim(),
+      asset_type_id: form.asset_type_id || null,
+      location_id: form.location_id || null,
+      project_id: form.project_id || null,
+      easting: toNullableNumber(form.easting),
+      northing: toNullableNumber(form.northing),
+      longitude: convertedCoordinates?.longitude ?? toNullableNumber(form.longitude),
+      latitude: convertedCoordinates?.latitude ?? toNullableNumber(form.latitude),
+      coordinate_source: form.coordinate_source || null,
+      status: form.status,
+    };
 
     if (editAsset) {
-      await supabase.from("assets").update(form).eq("id", editAsset.id);
+      await supabase.from("assets").update(payload).eq("id", editAsset.id);
     } else {
-      await supabase.from("assets").insert([form]);
+      await supabase.from("assets").insert([payload]);
     }
 
     setShowModal(false);
@@ -261,6 +352,8 @@ export default function AssetsTable({
                   Location{sortIndicator("location")}
                 </button>
               </th>
+              <th className="p-2 hidden lg:table-cell font-medium">Project</th>
+              <th className="p-2 hidden xl:table-cell font-medium">Coordinates</th>
               <th className="p-2 font-medium">
                 <button type="button" className="hover:underline" onClick={() => toggleSort("status")}>
                   Status{sortIndicator("status")}
@@ -273,13 +366,13 @@ export default function AssetsTable({
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5} className="p-4 text-center text-slate-300/70">
+                <td colSpan={7} className="p-4 text-center text-slate-300/70">
                   Loading...
                 </td>
               </tr>
             ) : pagedAssets.length === 0 ? (
               <tr>
-                <td colSpan={5} className="p-4 text-center text-slate-300/70">
+                <td colSpan={7} className="p-4 text-center text-slate-300/70">
                   No assets found.
                 </td>
               </tr>
@@ -289,6 +382,14 @@ export default function AssetsTable({
                   <td className="p-2 font-medium">{asset.name}</td>
                   <td className="p-2">{asset.asset_types?.name || "-"}</td>
                   <td className="p-2">{asset.asset_locations?.name || "-"}</td>
+                  <td className="p-2 hidden lg:table-cell">{asset.projects?.name || "-"}</td>
+                  <td className="p-2 hidden xl:table-cell text-slate-300/80">
+                    {asset.easting != null && asset.northing != null
+                      ? `E ${asset.easting} / N ${asset.northing}`
+                      : asset.longitude != null && asset.latitude != null
+                        ? `${asset.longitude}, ${asset.latitude}`
+                        : "-"}
+                  </td>
                   <td className="p-2">{asset.status}</td>
                   <td className="p-2 text-right">
                     <div className="inline-flex items-center gap-2">
@@ -356,6 +457,29 @@ export default function AssetsTable({
 
               <select
                 className="input w-full"
+                value={form.project_id}
+                onChange={(e) => setForm((f) => ({ ...f, project_id: e.target.value }))}
+              >
+                <option value="">Select Project (optional)</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+
+              {form.project_id ? (
+                <div className="rounded-xl border border-cyan-300/15 bg-cyan-400/5 px-3 py-2 text-xs text-slate-300">
+                  {selectedProjectCrs
+                    ? `Working CRS: ${selectedProjectCrs.name} (${selectedProjectCrs.code})`
+                    : selectedProject?.coordinate_crs_code || selectedProject?.coordinate_crs_name
+                      ? `Working CRS: ${selectedProject.coordinate_crs_name || selectedProject.coordinate_crs_code}`
+                      : "Working CRS: Not set on project yet"}
+                </div>
+              ) : null}
+
+              <select
+                className="input w-full"
                 value={form.asset_type_id}
                 onChange={(e) => setForm((f) => ({ ...f, asset_type_id: e.target.value }))}
                 required
@@ -391,6 +515,71 @@ export default function AssetsTable({
                 <option value="Active">Active</option>
                 <option value="Inactive">Inactive</option>
               </select>
+
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 space-y-3">
+                <div>
+                  <div className="text-sm font-medium text-slate-100">Coordinates</div>
+                  <div className="mt-1 text-xs text-slate-300/70">
+                    Enter projected easting and northing against a project, or provide longitude and latitude for later mapping.
+                  </div>
+                  <div className="mt-1 text-xs text-slate-400/80">
+                    Easting and northing must be entered together and tied to the selected project CRS.
+                  </div>
+                  <div className="mt-1 text-xs text-cyan-200/80">
+                    When projected coordinates are entered, longitude and latitude will be calculated automatically on save.
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <input
+                    className="input w-full"
+                    type="number"
+                    step="0.001"
+                    placeholder="Easting"
+                    value={form.easting}
+                    onChange={(e) => setForm((f) => ({ ...f, easting: e.target.value }))}
+                  />
+
+                  <input
+                    className="input w-full"
+                    type="number"
+                    step="0.001"
+                    placeholder="Northing"
+                    value={form.northing}
+                    onChange={(e) => setForm((f) => ({ ...f, northing: e.target.value }))}
+                  />
+
+                  <input
+                    className="input w-full"
+                    type="number"
+                    step="0.000001"
+                    placeholder="Longitude"
+                    value={form.longitude}
+                    onChange={(e) => setForm((f) => ({ ...f, longitude: e.target.value }))}
+                  />
+
+                  <input
+                    className="input w-full"
+                    type="number"
+                    step="0.000001"
+                    placeholder="Latitude"
+                    value={form.latitude}
+                    onChange={(e) => setForm((f) => ({ ...f, latitude: e.target.value }))}
+                  />
+                </div>
+
+                <select
+                  className="input w-full"
+                  value={form.coordinate_source}
+                  onChange={(e) => setForm((f) => ({ ...f, coordinate_source: e.target.value }))}
+                >
+                  <option value="manual">Manual</option>
+                  <option value="gps">GPS</option>
+                  <option value="survey">Survey</option>
+                  <option value="imported">Imported</option>
+                  <option value="estimated">Estimated</option>
+                </select>
+              </div>
 
               <div className="flex gap-2 justify-end pt-2">
                 <button type="button" className="btn" onClick={() => setShowModal(false)}>

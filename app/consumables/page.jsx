@@ -465,6 +465,64 @@ export default function ConsumablesPage() {
     return 'badge-amber';
   };
 
+  const getInventoryStatusPillClass = (status) => {
+    if (status === 'badge-red') {
+      return 'border border-rose-300/45 bg-gradient-to-r from-rose-500/30 to-red-500/26 text-rose-50 shadow-[0_0_0_1px_rgba(251,113,133,0.18),0_10px_24px_rgba(190,24,93,0.22)]';
+    }
+    if (status === 'badge-amber') {
+      return 'border border-amber-300/45 bg-gradient-to-r from-amber-400/30 to-orange-500/24 text-amber-50 shadow-[0_0_0_1px_rgba(251,191,36,0.18),0_10px_24px_rgba(217,119,6,0.2)]';
+    }
+    if (status === 'badge-green') {
+      return 'border border-emerald-300/45 bg-gradient-to-r from-emerald-400/28 to-green-500/24 text-emerald-50 shadow-[0_0_0_1px_rgba(52,211,153,0.18),0_10px_24px_rgba(5,150,105,0.2)]';
+    }
+    return 'border border-slate-300/20 bg-slate-700/60 text-slate-100 shadow-[0_8px_18px_rgba(15,23,42,0.24)]';
+  };
+
+  const renderInventoryStatusIcon = (status) => {
+    if (status === 'badge-red') {
+      return (
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-3.5 w-3.5 shrink-0">
+          <path d="M10 3.2 17 15.8H3L10 3.2Z" />
+          <path d="M10 7.1v4.7" />
+          <circle cx="10" cy="14.1" r="0.75" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    }
+
+    if (status === 'badge-amber') {
+      return (
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-3.5 w-3.5 shrink-0">
+          <path d="M4 12.8c1.4-2.5 3.3-3.8 5.8-3.8 1.8 0 3.4.7 4.9 2.2" />
+          <path d="m12.2 7.1 2.7 4.1-4.8.5" />
+        </svg>
+      );
+    }
+
+    if (status === 'badge-green') {
+      return (
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.1" className="h-3.5 w-3.5 shrink-0">
+          <path d="m4.6 10.2 3.3 3.3 7.5-7.4" />
+        </svg>
+      );
+    }
+
+    return (
+      <svg viewBox="0 0 20 20" fill="currentColor" className="h-2.5 w-2.5 shrink-0 opacity-80">
+        <circle cx="10" cy="10" r="4" />
+      </svg>
+    );
+  };
+
+  const getPoStatusPillClass = (status) => {
+    if (status === 'badge-green') {
+      return 'border border-emerald-300/45 bg-gradient-to-r from-emerald-400/28 to-green-500/24 text-emerald-50 shadow-[0_0_0_1px_rgba(52,211,153,0.18),0_10px_24px_rgba(5,150,105,0.2)]';
+    }
+    if (status === 'badge-blue') {
+      return 'border border-sky-300/45 bg-gradient-to-r from-sky-400/28 to-indigo-500/26 text-sky-50 shadow-[0_0_0_1px_rgba(56,189,248,0.18),0_10px_24px_rgba(37,99,235,0.2)]';
+    }
+    return 'border border-amber-300/45 bg-gradient-to-r from-amber-400/30 to-orange-500/24 text-amber-50 shadow-[0_0_0_1px_rgba(251,191,36,0.18),0_10px_24px_rgba(217,119,6,0.2)]';
+  };
+
   const openReceiveModal = (poId) => {
     setReceiveModal({ open: true, poId, date: new Date().toISOString().slice(0, 10) });
   };
@@ -484,11 +542,11 @@ export default function ConsumablesPage() {
   };
 
   const renderPoExpandedBody = (pid, po, items) => (
-    <div className="space-y-3 rounded-xl border border-slate-500/30 bg-slate-800/25 p-3 md:p-4">
+    <div className="space-y-3 rounded-[20px] border border-white/10 bg-slate-950/35 p-3 md:p-4 shadow-[0_18px_40px_rgba(2,6,23,0.22)]">
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">PO Name</span>
+            <span className="text-sm text-slate-400">PO Name</span>
             <input
               className="input input-sm w-56"
               placeholder="Enter PO name"
@@ -497,7 +555,7 @@ export default function ConsumablesPage() {
             />
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">PO #</span>
+            <span className="text-sm text-slate-400">PO #</span>
             <input
               className="input input-sm w-40"
               placeholder="Enter PO number"
@@ -506,7 +564,7 @@ export default function ConsumablesPage() {
             />
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">Status</span>
+            <span className="text-sm text-slate-400">Status</span>
             <select
               className="select-gradient-sm w-auto"
               value={po.status || "not_ordered"}
@@ -534,7 +592,7 @@ export default function ConsumablesPage() {
             PO Submitted
           </button>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">Ordered</span>
+            <span className="text-sm text-slate-400">Ordered</span>
             <input
               type="date"
               className="input input-sm w-44"
@@ -550,7 +608,7 @@ export default function ConsumablesPage() {
             PO received
           </button>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">Received</span>
+            <span className="text-sm text-slate-400">Received</span>
             <input
               type="date"
               className="input input-sm w-44"
@@ -599,7 +657,7 @@ export default function ConsumablesPage() {
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={3} className="text-sm text-gray-500 text-center">No items on this PO.</td>
+                <td colSpan={3} className="text-sm text-slate-500 text-center">No items on this PO.</td>
               </tr>
             )}
           </tbody>
@@ -628,23 +686,31 @@ export default function ConsumablesPage() {
     </div>
   );
 
+  const tabButtonClass = (key) =>
+    [
+      "inline-flex items-center justify-center rounded-full border px-4 py-2 text-sm font-medium transition-base",
+      tab === key
+        ? "border-cyan-300/35 bg-gradient-to-r from-cyan-400/20 via-sky-400/14 to-indigo-500/20 text-white shadow-[0_0_0_1px_rgba(34,211,238,0.14),0_12px_30px_rgba(14,116,144,0.18)]"
+        : "border-white/10 bg-white/[0.03] text-slate-400 hover:border-white/16 hover:bg-white/[0.06] hover:text-slate-200",
+    ].join(" ");
+
   return (
-  <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-6">
-      <div className="flex gap-2 border-b mb-2">
+  <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-6 text-slate-200">
+      <div className="flex flex-wrap gap-2 border-b border-white/10 pb-3">
         <button
-          className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm ${tab === 'inventory' ? 'border-indigo-500 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          className={tabButtonClass('inventory')}
           onClick={() => setTab('inventory')}
         >
           Inventory
         </button>
         <button
-          className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm ${tab === 'requests' ? 'border-indigo-500 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          className={tabButtonClass('requests')}
           onClick={() => setTab('requests')}
         >
           Purchase Requests
         </button>
         <button
-          className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm ${tab === 'orders' ? 'border-indigo-500 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          className={tabButtonClass('orders')}
           onClick={() => setTab('orders')}
         >
           Purchase Orders
@@ -654,13 +720,16 @@ export default function ConsumablesPage() {
       {tab === "inventory" && (
         <div className="card p-4">
           <div className="flex items-center mb-3 gap-3">
-            <h2 className="font-medium">Inventory</h2>
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Consumables</div>
+              <h2 className="font-medium text-slate-50">Inventory</h2>
+            </div>
             {isAdmin && (
               <button className="btn btn-3d-primary text-xs" onClick={addConsumableItem}>Add Item</button>
             )}
           </div>
           {loadingItems ? (
-            <div className="text-sm text-gray-500">Loading…</div>
+            <div className="text-sm text-slate-400">Loading…</div>
           ) : (
             <div className="table-container">
               <table className="table text-[11px] md:text-sm">
@@ -684,10 +753,10 @@ export default function ConsumablesPage() {
                             type="button"
                             aria-label={`Edit item ${it.label}`}
                             onClick={() => startEditItem(it)}
-                            className="block truncate max-w-[140px] md:max-w-none leading-snug text-left font-medium hover:underline underline-offset-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded"
+                            className="block truncate max-w-[140px] md:max-w-none leading-snug text-left font-medium text-slate-100 hover:text-cyan-200 hover:underline underline-offset-2 focus:outline-none focus:ring-2 focus:ring-cyan-500 rounded"
                           >{it.label}</button>
                         ) : (
-                          <span className="block truncate max-w-[140px] md:max-w-none leading-snug">{it.label}</span>
+                          <span className="block truncate max-w-[140px] md:max-w-none leading-snug text-slate-100">{it.label}</span>
                         )}
                       </td>
                       {/* Reorder threshold (desktop only) */}
@@ -747,7 +816,17 @@ export default function ConsumablesPage() {
                             else if (c <= rv * 1.5) { badgeClass='badge-amber'; label='Low'; }
                             else { badgeClass='badge-green'; label='OK'; }
                           }
-                          return <span className={`badge ${badgeClass} text-[9px] md:text-[10px]`}>{label}</span>;
+                          return (
+                            <span
+                              className={[
+                                'inline-flex h-7 min-w-[72px] whitespace-nowrap items-center justify-center gap-1.5 rounded-full px-2.5 py-1 text-[8px] font-semibold uppercase tracking-[0.14em] md:min-w-[84px] md:text-[9px]',
+                                getInventoryStatusPillClass(badgeClass),
+                              ].join(' ')}
+                            >
+                              {renderInventoryStatusIcon(badgeClass)}
+                              {label}
+                            </span>
+                          );
                         })()}
                       </td>
                       <td className="align-middle py-1">
@@ -757,9 +836,9 @@ export default function ConsumablesPage() {
                             aria-label={`Order more ${it.label}`}
                             title={`Order more ${it.label}`}
                             onClick={() => addToPurchaseRequest(it.key)}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-indigo-300/40 bg-gradient-to-br from-indigo-500/70 to-violet-500/70 text-white shadow-[0_0_0_1px_rgba(99,102,241,0.3),0_10px_24px_rgba(79,70,229,0.35)] transition-base hover:from-indigo-400/80 hover:to-violet-400/80"
+                            className="inline-flex h-9 min-w-9 items-center justify-center rounded-full border border-cyan-300/45 bg-gradient-to-br from-cyan-400/85 via-sky-400/82 to-teal-400/78 px-2 text-slate-950 shadow-[0_0_0_1px_rgba(34,211,238,0.28),0_12px_28px_rgba(8,145,178,0.34),inset_0_1px_0_rgba(255,255,255,0.42)] transition-base hover:from-cyan-300 hover:via-sky-300 hover:to-teal-300 hover:shadow-[0_0_0_1px_rgba(103,232,249,0.34),0_16px_34px_rgba(8,145,178,0.4),inset_0_1px_0_rgba(255,255,255,0.5)] focus:outline-none focus:ring-2 focus:ring-cyan-300/65 focus:ring-offset-2 focus:ring-offset-slate-950 active:translate-y-[1px]"
                           >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" className="h-4 w-4">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.9" className="h-4.5 w-4.5 drop-shadow-[0_1px_0_rgba(255,255,255,0.18)]">
                               <path d="M12 5v14" />
                               <path d="M5 12h14" />
                             </svg>
@@ -771,7 +850,7 @@ export default function ConsumablesPage() {
                   ))}
                   {items.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="text-xs md:text-sm text-gray-500 text-center py-4">
+                      <td colSpan={7} className="text-xs md:text-sm text-slate-500 text-center py-4">
                         {isAdmin ? 'No items yet. Add your first item.' : 'No consumable items configured. Ask an admin to add items.'}
                       </td>
                     </tr>
@@ -785,8 +864,8 @@ export default function ConsumablesPage() {
 
       {addItemModal.open && (
         <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="add-item-title">
-          <div className="card p-4 w-full max-w-md mx-auto">
-            <h3 id="add-item-title" className="font-medium mb-4">Add Consumable Item</h3>
+          <div className="card p-4 w-full max-w-md mx-auto border border-white/10 bg-slate-950/90">
+            <h3 id="add-item-title" className="font-medium mb-4 text-slate-50">Add Consumable Item</h3>
             <form
               className="space-y-3"
               onSubmit={(e) => {
@@ -795,7 +874,7 @@ export default function ConsumablesPage() {
               }}
             >
               <div className="flex flex-col gap-1">
-                <label className="text-sm text-gray-700">Item label</label>
+                <label className="text-sm text-slate-300">Item label</label>
                 <input
                   className="input input-sm"
                   placeholder="e.g. Core Tray"
@@ -807,7 +886,7 @@ export default function ConsumablesPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
-                  <label className="text-sm text-gray-700">Reorder threshold</label>
+                  <label className="text-sm text-slate-300">Reorder threshold</label>
                   <input
                     type="number"
                     min={0}
@@ -818,7 +897,7 @@ export default function ConsumablesPage() {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-sm text-gray-700">Unit size</label>
+                  <label className="text-sm text-slate-300">Unit size</label>
                   <input
                     type="number"
                     min={1}
@@ -830,7 +909,7 @@ export default function ConsumablesPage() {
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-sm text-gray-700">Cost per unit</label>
+                <label className="text-sm text-slate-300">Cost per unit</label>
                 <input
                   type="number"
                   min={0}
@@ -864,13 +943,16 @@ export default function ConsumablesPage() {
           {/* Requested items not yet assigned to a PO */}
           <div className="card p-4">
             <div className="flex items-center justify-between gap-3 mb-3">
-              <h3 className="font-medium">Requested items</h3>
+              <div>
+                <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Consumables</div>
+                <h3 className="font-medium text-slate-50">Requested items</h3>
+              </div>
               <button className="btn text-xs" disabled={creatingPo} onClick={openCreatePoModal}>
                 {creatingPo ? 'Creating…' : 'Create New PO'}
               </button>
             </div>
             {unassignedItems.length === 0 ? (
-              <div className="text-sm text-gray-500">No requested items yet.</div>
+              <div className="text-sm text-slate-500">No requested items yet.</div>
             ) : (
               <div className="table-container">
                 <table className="table">
@@ -911,7 +993,7 @@ export default function ConsumablesPage() {
                         </td>
                         <td>
                           {poList.filter((p) => (p.status === 'not_ordered')).length === 0 ? (
-                            <span className="text-xs text-gray-500">Create a PO on the Purchase Orders tab before assigning items.</span>
+                            <span className="text-xs text-slate-500">Create a PO on the Purchase Orders tab before assigning items.</span>
                           ) : (
                             <AssignToPoRow item={it} poList={poList} onAssign={assignItemToPo} assigning={assigning} />
                           )}
@@ -930,11 +1012,11 @@ export default function ConsumablesPage() {
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <button className="btn" disabled={creatingPo} onClick={openCreatePoModal}>{creatingPo ? 'Creating…' : 'Create New PO'}</button>
-            <span className="text-sm text-gray-600">All purchase orders</span>
+            <span className="text-sm text-slate-400">All purchase orders</span>
           </div>
           <div className="card p-4">
             <div className="flex flex-wrap items-center gap-3">
-              <label className="text-sm text-gray-700">Filter by PO</label>
+              <label className="text-sm text-slate-300">Filter by PO</label>
               <select className="select-gradient-sm w-auto" value={poFilter} onChange={(e) => setPoFilter(e.target.value)}>
                 <option value="">All</option>
                 {poList
@@ -943,7 +1025,7 @@ export default function ConsumablesPage() {
                     <option key={p.id} value={String(p.po_number)}>{p.po_number}</option>
                   ))}
               </select>
-              <label className="text-sm text-gray-700 ml-4">Items status</label>
+              <label className="text-sm text-slate-300 ml-4">Items status</label>
               <select className="select-gradient-sm w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                 <option value="all">All</option>
                 <option value="outstanding">Outstanding</option>
@@ -954,7 +1036,7 @@ export default function ConsumablesPage() {
           </div>
 
           {visibleOrderPos.length === 0 ? (
-            <div className="card p-4 text-sm text-gray-500">No purchase orders to show.</div>
+            <div className="card p-4 text-sm text-slate-500">No purchase orders to show.</div>
           ) : (
             <>
               <div className="card p-4 hidden md:block">
@@ -992,7 +1074,10 @@ export default function ConsumablesPage() {
                               <td>{po.name || '(unnamed PO)'}</td>
                               <td>{po.po_number || '—'}</td>
                               <td>
-                                <span className={`badge ${statusBadge} capitalize`}>
+                                <span className={[
+                                  'inline-flex h-8 min-w-[108px] whitespace-nowrap items-center justify-center rounded-full px-3 py-1.5 text-[8px] font-semibold uppercase tracking-[0.14em] md:text-[9px]',
+                                  getPoStatusPillClass(statusBadge),
+                                ].join(' ')}>
                                   {getPoStatusLabel(po.status || 'not_ordered')}
                                 </span>
                               </td>
@@ -1031,13 +1116,16 @@ export default function ConsumablesPage() {
                         aria-controls={`po-mobile-details-${po.id}`}
                       >
                         <div className="space-y-1 min-w-0">
-                          <div className="font-medium truncate">{po.name || '(unnamed PO)'}</div>
-                          <div className="text-xs text-gray-400">PO # {po.po_number || '—'}</div>
-                          <div className="text-xs text-gray-400">Ordered {po.ordered_date || '—'} · Received {po.received_date || '—'}</div>
-                          <div className="text-xs text-gray-400">Items {items.length}</div>
+                          <div className="font-medium truncate text-slate-100">{po.name || '(unnamed PO)'}</div>
+                          <div className="text-xs text-slate-400">PO # {po.po_number || '—'}</div>
+                          <div className="text-xs text-slate-400">Ordered {po.ordered_date || '—'} · Received {po.received_date || '—'}</div>
+                          <div className="text-xs text-slate-400">Items {items.length}</div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className={`badge ${statusBadge} capitalize`}>
+                          <span className={[
+                            'inline-flex h-8 min-w-[96px] whitespace-nowrap items-center justify-center rounded-full px-3 py-1.5 text-[8px] font-semibold uppercase tracking-[0.14em] md:text-[9px]',
+                            getPoStatusPillClass(statusBadge),
+                          ].join(' ')}>
                             {getPoStatusLabel(po.status || 'not_ordered')}
                           </span>
                           <span className="btn text-xs w-11 h-11 p-0 rounded-full" aria-hidden="true">{isOpen ? '-' : '+'}</span>
@@ -1058,8 +1146,8 @@ export default function ConsumablesPage() {
       )}
       {createPoModal.open && (
         <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="create-po-title">
-          <div className="card p-4 w-full max-w-md mx-auto">
-            <h3 id="create-po-title" className="font-medium mb-3">Create New PO</h3>
+          <div className="card p-4 w-full max-w-md mx-auto border border-white/10 bg-slate-950/90">
+            <h3 id="create-po-title" className="font-medium mb-3 text-slate-50">Create New PO</h3>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -1068,7 +1156,7 @@ export default function ConsumablesPage() {
               className="space-y-4"
             >
               <div className="flex flex-col gap-1">
-                <label className="text-sm text-gray-700" htmlFor="create-po-name">PO name</label>
+                <label className="text-sm text-slate-300" htmlFor="create-po-name">PO name</label>
                 <input
                   id="create-po-name"
                   className="input input-sm"
@@ -1090,10 +1178,10 @@ export default function ConsumablesPage() {
       )}
       {receiveModal.open && (
         <div className="modal-overlay">
-          <div className="card p-4" role="dialog" aria-modal="true" aria-labelledby="rcv-title">
-            <h3 id="rcv-title" className="font-medium mb-3">Mark PO as received</h3>
+          <div className="card p-4 border border-white/10 bg-slate-950/90" role="dialog" aria-modal="true" aria-labelledby="rcv-title">
+            <h3 id="rcv-title" className="font-medium mb-3 text-slate-50">Mark PO as received</h3>
             <div className="flex items-center gap-3 mb-4">
-              <label className="text-sm text-gray-700" htmlFor="rcv-date">Received date</label>
+              <label className="text-sm text-slate-300" htmlFor="rcv-date">Received date</label>
               <input
                 id="rcv-date"
                 type="date"
@@ -1113,23 +1201,23 @@ export default function ConsumablesPage() {
       )}
       {editItem && isAdmin && (
         <div className="modal-overlay hidden md:flex" role="dialog" aria-modal="true" aria-labelledby="edit-item-title">
-          <div className="card p-4 w-full max-w-md mx-auto">
-            <h3 id="edit-item-title" className="font-medium mb-4">Edit Item</h3>
+          <div className="card p-4 w-full max-w-md mx-auto border border-white/10 bg-slate-950/90">
+            <h3 id="edit-item-title" className="font-medium mb-4 text-slate-50">Edit Item</h3>
             <div className="space-y-3 text-sm">
               <div className="flex flex-col gap-1">
-                <label className="text-gray-600">Label</label>
+                <label className="text-slate-300">Label</label>
                 <input className="input input-sm" value={editDraft.label} onChange={e => setEditDraft(d => ({ ...d, label: e.target.value }))} />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-gray-600">Reorder threshold</label>
+                <label className="text-slate-300">Reorder threshold</label>
                 <input type="number" min={0} className="input input-sm" value={editDraft.reorder_value} onChange={e => setEditDraft(d => ({ ...d, reorder_value: e.target.value }))} />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-gray-600">Unit size (physical items per unit)</label>
+                <label className="text-slate-300">Unit size (physical items per unit)</label>
                 <input type="number" min={1} className="input input-sm" value={editDraft.unit_size} onChange={e => setEditDraft(d => ({ ...d, unit_size: e.target.value }))} />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-gray-600">Cost per unit</label>
+                <label className="text-slate-300">Cost per unit</label>
                 <input type="number" min={0} step="0.01" className="input input-sm" value={editDraft.cost_per_unit} onChange={e => setEditDraft(d => ({ ...d, cost_per_unit: e.target.value }))} />
               </div>
             </div>

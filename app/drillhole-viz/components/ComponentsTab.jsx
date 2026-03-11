@@ -68,6 +68,12 @@ export default function ComponentsTab({
   onRemoveRow,
 }) {
   const rowCount = (componentRows || []).length;
+  const confirmRemoveRow = (index, row, type) => {
+    const label = row?.label || type?.name || "this component";
+    const ok = window.confirm(`This will permanently delete ${label}. Continue?`);
+    if (!ok) return;
+    onRemoveRow(index);
+  };
 
   return (
     <div className="space-y-4">
@@ -178,7 +184,7 @@ export default function ComponentsTab({
                         <button
                           type="button"
                           className="h-10 min-h-0 w-full rounded-xl border border-rose-300/35 bg-rose-500/10 text-rose-200 transition-base hover:bg-rose-500/20 disabled:opacity-50 flex items-center justify-center"
-                          onClick={() => onRemoveRow(idx)}
+                          onClick={() => confirmRemoveRow(idx, r, t)}
                           disabled={!canEdit}
                           title="Remove component"
                         >
