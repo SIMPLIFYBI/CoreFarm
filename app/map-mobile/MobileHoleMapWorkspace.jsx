@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
+import { deriveHoleCoordinates } from "@/lib/holeCoordinates";
 
 const MAP_SCOPE_STORAGE_KEY = "map-mobile:projectScope";
 const HOLES_SOURCE_ID = "mobile-hole-map-source";
@@ -273,6 +274,8 @@ function HoleDetailCards({ hole }) {
           ["Collar Source", hole?.collar_source || "-"],
           ["Longitude", formatValue(hole?.collar_longitude)],
           ["Latitude", formatValue(hole?.collar_latitude)],
+          ["Easting", formatValue(hole?.collar_easting)],
+          ["Northing", formatValue(hole?.collar_northing)],
           ["Started", formatDateTime(hole?.started_at)],
           ["Completed", formatDateTime(hole?.completed_at)],
           ["Completion Status", hole?.completion_status || "-"],
@@ -436,12 +439,10 @@ export default function MobileHoleMapWorkspace({ publicToken = "" }) {
             const { data, error: holesErr } = await supabase
               .from("holes")
               .select(
-                "id,organization_id,hole_id,project_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state,projects(id,name)"
+                "id,organization_id,hole_id,project_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_easting,collar_northing,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state,projects(id,name,coordinate_crs_code,coordinate_crs_name)"
               )
               .in("project_id", sharedProjectIds)
               .neq("organization_id", orgId)
-              .not("collar_longitude", "is", null)
-              .not("collar_latitude", "is", null)
               .order("project_id", { ascending: true })
               .order("hole_id", { ascending: true });
 
@@ -452,11 +453,9 @@ export default function MobileHoleMapWorkspace({ publicToken = "" }) {
           const { data, error: holesErr } = await supabase
             .from("holes")
             .select(
-              "id,organization_id,hole_id,project_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state,projects(id,name)"
+              "id,organization_id,hole_id,project_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_easting,collar_northing,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state,projects(id,name,coordinate_crs_code,coordinate_crs_name)"
             )
             .eq("organization_id", orgId)
-            .not("collar_longitude", "is", null)
-            .not("collar_latitude", "is", null)
             .order("project_id", { ascending: true })
             .order("hole_id", { ascending: true });
 
@@ -467,27 +466,41 @@ export default function MobileHoleMapWorkspace({ publicToken = "" }) {
         if (!active) return;
 
         setAllHoles(
-          rows.map((hole) => ({
-            id: hole.id,
-            organization_id: hole.organization_id,
-            hole_id: hole.hole_id,
-            project_id: hole.project_id || "",
-            project_name: hole.projects?.name || "No project",
-            state: hole.state || "",
-            depth: hole.depth ?? null,
-            planned_depth: hole.planned_depth ?? null,
-            water_level_m: hole.water_level_m ?? null,
-            azimuth: hole.azimuth ?? null,
-            dip: hole.dip ?? null,
-            collar_longitude: hole.collar_longitude ?? null,
-            collar_latitude: hole.collar_latitude ?? null,
-            collar_elevation_m: hole.collar_elevation_m ?? null,
-            collar_source: hole.collar_source ?? null,
-            started_at: hole.started_at ?? null,
-            completed_at: hole.completed_at ?? null,
-            completion_status: hole.completion_status ?? null,
-            completion_notes: hole.completion_notes ?? null,
-          }))
+          rows
+            .map((hole) => {
+              const derived = deriveHoleCoordinates({
+                collarLongitude: hole.collar_longitude ?? null,
+                collarLatitude: hole.collar_latitude ?? null,
+                collarEasting: hole.collar_easting ?? null,
+                collarNorthing: hole.collar_northing ?? null,
+                projectCrsCode: hole.projects?.coordinate_crs_code ?? null,
+              });
+
+              return {
+                id: hole.id,
+                organization_id: hole.organization_id,
+                hole_id: hole.hole_id,
+                project_id: hole.project_id || "",
+                project_name: hole.projects?.name || "No project",
+                state: hole.state || "",
+                depth: hole.depth ?? null,
+                planned_depth: hole.planned_depth ?? null,
+                water_level_m: hole.water_level_m ?? null,
+                azimuth: hole.azimuth ?? null,
+                dip: hole.dip ?? null,
+                collar_longitude: derived.collarLongitude,
+                collar_latitude: derived.collarLatitude,
+                collar_easting: hole.collar_easting ?? null,
+                collar_northing: hole.collar_northing ?? null,
+                collar_elevation_m: hole.collar_elevation_m ?? null,
+                collar_source: hole.collar_source ?? null,
+                started_at: hole.started_at ?? null,
+                completed_at: hole.completed_at ?? null,
+                completion_status: hole.completion_status ?? null,
+                completion_notes: hole.completion_notes ?? null,
+              };
+            })
+            .filter((hole) => hole.collar_longitude != null && hole.collar_latitude != null)
         );
       } catch (evt) {
         if (!active) return;

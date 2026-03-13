@@ -7,6 +7,34 @@ import { useOrg } from "@/lib/OrgContext";
 import { getAustralianProjectCrsByCode } from "@/lib/coordinateSystems";
 import { convertProjectedToWgs84 } from "@/lib/coordinateTransforms";
 
+function deriveAssetCoordinates(asset) {
+  const longitude = asset?.longitude ?? null;
+  const latitude = asset?.latitude ?? null;
+  if (longitude != null && latitude != null) {
+    return { longitude, latitude, coordinateDerived: false };
+  }
+
+  if (asset?.easting == null || asset?.northing == null || !asset?.projects?.coordinate_crs_code) {
+    return { longitude, latitude, coordinateDerived: false };
+  }
+
+  try {
+    const converted = convertProjectedToWgs84({
+      crsCode: asset.projects.coordinate_crs_code,
+      easting: asset.easting,
+      northing: asset.northing,
+    });
+
+    return {
+      longitude: converted.longitude,
+      latitude: converted.latitude,
+      coordinateDerived: true,
+    };
+  } catch {
+    return { longitude, latitude, coordinateDerived: false };
+  }
+}
+
 export default function AssetsTable({
   TABLE_HEAD_ROW,
   TABLE_ROW,
@@ -22,6 +50,7 @@ export default function AssetsTable({
   const [projects, setProjects] = useState([]);
 
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState({ key: "name", dir: "asc" }); // name|type|location|status
@@ -74,7 +103,17 @@ export default function AssetsTable({
 
       if (!mounted) return;
 
-      setAssets(assetsRes.data || []);
+      setAssets(
+        (assetsRes.data || []).map((asset) => {
+          const derived = deriveAssetCoordinates(asset);
+          return {
+            ...asset,
+            longitude: derived.longitude,
+            latitude: derived.latitude,
+            coordinateDerived: derived.coordinateDerived,
+          };
+        })
+      );
       setLocations(locRes.data || []);
       setAssetTypes(typesRes.data || []);
       setProjects(projectsRes.data || []);
@@ -194,13 +233,22 @@ export default function AssetsTable({
   };
 
   const selectedProject = projects.find((project) => project.id === form.project_id) || null;
+  const selectedAssetType = assetTypes.find((type) => type.id === form.asset_type_id) || null;
   const selectedProjectCrs = getAustralianProjectCrsByCode(selectedProject?.coordinate_crs_code) || null;
 
   const handleSave = async () => {
     const supabase = supabaseBrowser();
+    const trimmedName = form.name.trim();
     const hasEasting = form.easting !== "";
     const hasNorthing = form.northing !== "";
     const hasProjectedCoordinates = hasEasting && hasNorthing;
+    const manualLongitude = toNullableNumber(form.longitude);
+    const manualLatitude = toNullableNumber(form.latitude);
+
+    if (!trimmedName) {
+      window.alert("Enter an asset name before saving.");
+      return;
+    }
 
     if ((hasEasting || hasNorthing) && !form.project_id) {
       window.alert("Select a project before entering easting and northing.");
@@ -214,6 +262,21 @@ export default function AssetsTable({
 
     if (hasProjectedCoordinates && !selectedProject?.coordinate_crs_code) {
       window.alert("Set a project coordinate system before saving projected coordinates.");
+      return;
+    }
+
+    if ((manualLongitude == null) !== (manualLatitude == null)) {
+      window.alert("Enter both longitude and latitude together.");
+      return;
+    }
+
+    if (!hasProjectedCoordinates && manualLongitude == null && manualLatitude == null) {
+      window.alert("Enter either easting and northing or longitude and latitude before saving.");
+      return;
+    }
+
+    if (!selectedAssetType?.name) {
+      window.alert("Select an asset type before saving.");
       return;
     }
 
@@ -233,30 +296,45 @@ export default function AssetsTable({
 
     const payload = {
       organization_id: orgId,
-      name: form.name.trim(),
+      name: trimmedName,
+      asset_type: selectedAssetType.name,
       asset_type_id: form.asset_type_id || null,
       location_id: form.location_id || null,
       project_id: form.project_id || null,
       easting: toNullableNumber(form.easting),
       northing: toNullableNumber(form.northing),
-      longitude: convertedCoordinates?.longitude ?? toNullableNumber(form.longitude),
-      latitude: convertedCoordinates?.latitude ?? toNullableNumber(form.latitude),
+      longitude: convertedCoordinates?.longitude ?? manualLongitude,
+      latitude: convertedCoordinates?.latitude ?? manualLatitude,
       coordinate_source: form.coordinate_source || null,
       status: form.status,
     };
 
-    if (editAsset) {
-      await supabase.from("assets").update(payload).eq("id", editAsset.id);
-    } else {
-      await supabase.from("assets").insert([payload]);
-    }
+    setSaving(true);
 
-    setShowModal(false);
+    try {
+      if (editAsset) {
+        const { error } = await supabase.from("assets").update(payload).eq("id", editAsset.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("assets").insert([payload]);
+        if (error) throw error;
+      }
+
+      setShowModal(false);
+    } catch (error) {
+      window.alert(error?.message || "Unable to save asset.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (id) => {
     const supabase = supabaseBrowser();
-    await supabase.from("assets").delete().eq("id", id);
+    const { error } = await supabase.from("assets").delete().eq("id", id);
+    if (error) {
+      window.alert(error.message || "Unable to delete asset.");
+      return;
+    }
     setAssets((prev) => prev.filter((a) => a.id !== id));
   };
 
@@ -478,6 +556,12 @@ export default function AssetsTable({
                 </div>
               ) : null}
 
+              {form.easting !== "" && form.northing !== "" && form.longitude === "" && form.latitude === "" && selectedProjectCrs ? (
+                <div className="rounded-xl border border-cyan-300/15 bg-cyan-400/5 px-3 py-2 text-xs text-cyan-100/85">
+                  Longitude and latitude will be calculated from the selected project CRS when you save.
+                </div>
+              ) : null}
+
               <select
                 className="input w-full"
                 value={form.asset_type_id}
@@ -585,8 +669,8 @@ export default function AssetsTable({
                 <button type="button" className="btn" onClick={() => setShowModal(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  Save
+                <button type="submit" className="btn btn-primary" disabled={saving}>
+                  {saving ? "Saving..." : "Save"}
                 </button>
               </div>
             </form>

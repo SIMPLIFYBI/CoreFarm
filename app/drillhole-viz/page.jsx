@@ -14,6 +14,8 @@ import AttributesTab from "./components/AttributesTab";
 import SchematicArea from "./components/SchematicArea";
 import TypesTabs from "./components/TypesTabs";
 import { exportSchematicPdf } from "./utils/exportSchematicPdf";
+import { getAustralianProjectCrsByCode } from "@/lib/coordinateSystems";
+import { deriveHoleCoordinates } from "@/lib/holeCoordinates";
 
 const PROJECT_SCOPE_STORAGE_KEY = "coretasks:projectScope";
 
@@ -49,6 +51,8 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
     dip: "",
     collar_longitude: "",
     collar_latitude: "",
+    collar_easting: "",
+    collar_northing: "",
     collar_elevation_m: "",
     collar_source: "",
     started_at: "",
@@ -141,6 +145,8 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
         dip: "",
         collar_longitude: "",
         collar_latitude: "",
+        collar_easting: "",
+        collar_northing: "",
         collar_elevation_m: "",
         collar_source: "",
         started_at: "",
@@ -159,6 +165,8 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
       dip: selectedHole.dip ?? "",
       collar_longitude: selectedHole.collar_longitude ?? "",
       collar_latitude: selectedHole.collar_latitude ?? "",
+      collar_easting: selectedHole.collar_easting ?? "",
+      collar_northing: selectedHole.collar_northing ?? "",
       collar_elevation_m: selectedHole.collar_elevation_m ?? "",
       collar_source: selectedHole.collar_source ?? "",
       started_at: toDateTimeLocal(selectedHole.started_at),
@@ -166,7 +174,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
       completion_status: selectedHole.completion_status ?? "",
       completion_notes: selectedHole.completion_notes ?? "",
     });
-  }, [selectedHole?.id, selectedHole?.planned_depth, selectedHole?.water_level_m, selectedHole?.azimuth, selectedHole?.dip, selectedHole?.collar_longitude, selectedHole?.collar_latitude, selectedHole?.collar_elevation_m, selectedHole?.collar_source, selectedHole?.started_at, selectedHole?.completed_at, selectedHole?.completion_status, selectedHole?.completion_notes]);
+  }, [selectedHole?.id, selectedHole?.planned_depth, selectedHole?.water_level_m, selectedHole?.azimuth, selectedHole?.dip, selectedHole?.collar_longitude, selectedHole?.collar_latitude, selectedHole?.collar_easting, selectedHole?.collar_northing, selectedHole?.collar_elevation_m, selectedHole?.collar_source, selectedHole?.started_at, selectedHole?.completed_at, selectedHole?.completion_status, selectedHole?.completion_notes]);
 
   // Group holes by project
   const projects = useMemo(() => {
@@ -1547,7 +1555,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
         if (sharedProjectIds.length) {
           const res = await supabase
             .from("holes")
-            .select("id, organization_id, hole_id, project_id, depth, planned_depth, water_level_m, azimuth, dip, collar_longitude, collar_latitude, collar_elevation_m, collar_source, started_at, completed_at, completion_status, completion_notes, projects ( id, name )")
+            .select("id, organization_id, hole_id, project_id, depth, planned_depth, water_level_m, azimuth, dip, collar_longitude, collar_latitude, collar_easting, collar_northing, collar_elevation_m, collar_source, started_at, completed_at, completion_status, completion_notes, projects ( id, name, coordinate_crs_code, coordinate_crs_name )")
             .in("project_id", sharedProjectIds)
             .neq("organization_id", selectedOrgId)
             .order("project_id", { ascending: true })
@@ -1558,7 +1566,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
       } else {
         const res = await supabase
           .from("holes")
-          .select("id, organization_id, hole_id, project_id, depth, planned_depth, water_level_m, azimuth, dip, collar_longitude, collar_latitude, collar_elevation_m, collar_source, started_at, completed_at, completion_status, completion_notes, projects ( id, name )")
+          .select("id, organization_id, hole_id, project_id, depth, planned_depth, water_level_m, azimuth, dip, collar_longitude, collar_latitude, collar_easting, collar_northing, collar_elevation_m, collar_source, started_at, completed_at, completion_status, completion_notes, projects ( id, name, coordinate_crs_code, coordinate_crs_name )")
           .eq("organization_id", selectedOrgId)
           .order("project_id", { ascending: true })
           .order("hole_id", { ascending: true });
@@ -1576,6 +1584,22 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
 
       setHoles(
         (data || []).map((h) => ({
+          ...(() => {
+            const derived = deriveHoleCoordinates({
+              collarLongitude: h.collar_longitude ?? null,
+              collarLatitude: h.collar_latitude ?? null,
+              collarEasting: h.collar_easting ?? null,
+              collarNorthing: h.collar_northing ?? null,
+              projectCrsCode: h.projects?.coordinate_crs_code ?? null,
+            });
+
+            return {
+              collar_longitude: derived.collarLongitude,
+              collar_latitude: derived.collarLatitude,
+              collar_easting: h.collar_easting ?? null,
+              collar_northing: h.collar_northing ?? null,
+            };
+          })(),
           id: h.id,
           organization_id: h.organization_id,
           hole_id: h.hole_id,
@@ -1586,8 +1610,6 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
           water_level_m: h.water_level_m ?? null,
           azimuth: h.azimuth ?? null,
           dip: h.dip ?? null,
-          collar_longitude: h.collar_longitude ?? null,
-          collar_latitude: h.collar_latitude ?? null,
           collar_elevation_m: h.collar_elevation_m ?? null,
           collar_source: h.collar_source ?? null,
           started_at: h.started_at ?? null,
@@ -1748,16 +1770,33 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
 
     const az = numOrNull(attributeInputs.azimuth);
     const dip = numOrNull(attributeInputs.dip);
+    const easting = numOrNull(attributeInputs.collar_easting);
+    const northing = numOrNull(attributeInputs.collar_northing);
     const lon = numOrNull(attributeInputs.collar_longitude);
     const lat = numOrNull(attributeInputs.collar_latitude);
     const startedAt = toIsoOrNull(attributeInputs.started_at);
     const completedAt = toIsoOrNull(attributeInputs.completed_at);
+    const projectedCoordinates = deriveHoleCoordinates({
+      collarLongitude: null,
+      collarLatitude: null,
+      collarEasting: easting,
+      collarNorthing: northing,
+      projectCrsCode: selectedHole?.projects?.coordinate_crs_code ?? null,
+    });
+    const effectiveLongitude = easting != null && northing != null ? projectedCoordinates.collarLongitude : lon;
+    const effectiveLatitude = easting != null && northing != null ? projectedCoordinates.collarLatitude : lat;
 
     if (attributeInputs.azimuth !== "" && az == null) return toast.error("Azimuth must be a number.");
     if (attributeInputs.dip !== "" && dip == null) return toast.error("Dip must be a number.");
+    if (attributeInputs.collar_easting !== "" && easting == null) return toast.error("Easting must be a number.");
+    if (attributeInputs.collar_northing !== "" && northing == null) return toast.error("Northing must be a number.");
     if (attributeInputs.collar_longitude !== "" && lon == null) return toast.error("Longitude must be a number.");
     if (attributeInputs.collar_latitude !== "" && lat == null) return toast.error("Latitude must be a number.");
+    if ((easting == null) !== (northing == null)) return toast.error("Easting and northing must both be provided or both be blank.");
+    if ((easting != null || northing != null) && !selectedHole?.project_id) return toast.error("Assign the hole to a project before entering projected coordinates.");
+    if ((easting != null || northing != null) && !selectedHole?.projects?.coordinate_crs_code) return toast.error("Set the project CRS before saving projected coordinates.");
     if ((lon == null) !== (lat == null)) return toast.error("Longitude and latitude must both be provided or both be blank.");
+    if (effectiveLongitude == null || effectiveLatitude == null) return toast.error("Enter either longitude and latitude or easting and northing.");
     if (az != null && (az < 0 || az >= 360)) return toast.error("Azimuth must be between 0 and < 360.");
     if (dip != null && (dip < -90 || dip > 90)) return toast.error("Dip must be between -90 and 90.");
     if (startedAt == null && String(attributeInputs.started_at || "").trim()) return toast.error("Started at is invalid.");
@@ -1769,8 +1808,10 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
       const payload = {
         azimuth: az,
         dip,
-        collar_longitude: lon,
-        collar_latitude: lat,
+        collar_longitude: effectiveLongitude,
+        collar_latitude: effectiveLatitude,
+        collar_easting: easting,
+        collar_northing: northing,
         collar_elevation_m: numOrNull(attributeInputs.collar_elevation_m),
         collar_source: String(attributeInputs.collar_source || "").trim() || null,
         started_at: startedAt,
@@ -2001,8 +2042,15 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
                   dipInput={attributeInputs.dip}
                   collarLongitudeInput={attributeTouched.collar_longitude ? attributeInputs.collar_longitude : (selectedHole?.collar_longitude ?? attributeInputs.collar_longitude)}
                   collarLatitudeInput={attributeTouched.collar_latitude ? attributeInputs.collar_latitude : (selectedHole?.collar_latitude ?? attributeInputs.collar_latitude)}
+                  collarEastingInput={attributeInputs.collar_easting}
+                  collarNorthingInput={attributeInputs.collar_northing}
                   collarElevationInput={attributeInputs.collar_elevation_m}
                   collarSourceInput={attributeInputs.collar_source}
+                  projectCrsLabel={(() => {
+                    const selectedCrs = getAustralianProjectCrsByCode(selectedHole?.projects?.coordinate_crs_code);
+                    if (selectedCrs) return `${selectedCrs.name} (${selectedCrs.code})`;
+                    return selectedHole?.projects?.coordinate_crs_name || selectedHole?.projects?.coordinate_crs_code || "";
+                  })()}
                   startedAtInput={attributeInputs.started_at}
                   completedAtInput={attributeInputs.completed_at}
                   completionStatusInput={attributeInputs.completion_status}

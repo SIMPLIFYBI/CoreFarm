@@ -5,6 +5,8 @@ import toast from "react-hot-toast";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import { parseTable } from "@/lib/parseTable";
+import { getAustralianProjectCrsByCode } from "@/lib/coordinateSystems";
+import { deriveHoleCoordinates } from "@/lib/holeCoordinates";
 
 const STATE_OPTIONS = ["proposed", "in_progress", "drilled"];
 const DIAMETER_OPTIONS = ["", "NQ", "HQ", "PQ", "Other"];
@@ -12,6 +14,7 @@ const COLLAR_SOURCE_OPTIONS = ["", "gps", "survey", "estimated", "imported"];
 const COMPLETION_STATUS_OPTIONS = ["", "completed", "abandoned", "suspended"];
 const BULK_COLUMNS = [
   { key: "hole_id", required: true, description: "Unique hole identifier." },
+  { key: "project_id", required: false, description: "Project UUID for projected collar coordinates." },
   { key: "depth", required: false, description: "Actual drilled depth (m)." },
   { key: "planned_depth", required: false, description: "Planned depth (m)." },
   { key: "water_level_m", required: false, description: "Water level from collar (m)." },
@@ -19,6 +22,8 @@ const BULK_COLUMNS = [
   { key: "dip", required: false, description: "-90 to +90." },
   { key: "collar_longitude", required: false, description: "WGS84 longitude." },
   { key: "collar_latitude", required: false, description: "WGS84 latitude." },
+  { key: "collar_easting", required: false, description: "Projected easting against the project CRS." },
+  { key: "collar_northing", required: false, description: "Projected northing against the project CRS." },
   { key: "collar_elevation_m", required: false, description: "Collar elevation (m)." },
   { key: "collar_source", required: false, description: "gps/survey/estimated/imported." },
   { key: "started_at", required: false, description: "Datetime, e.g. 2026-03-01T06:00." },
@@ -99,6 +104,8 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
     dip: "",
     collar_longitude: "",
     collar_latitude: "",
+    collar_easting: "",
+    collar_northing: "",
     collar_elevation_m: "",
     collar_source: "",
     started_at: "",
@@ -113,10 +120,10 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
 
   const sampleHeaders = useMemo(
     () =>
-      "hole_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,drilling_diameter,drilling_contractor\n" +
-      "HOLE-001,150,200,12.5,135.0,-60.0,121.12345,-27.12345,385.2,gps,2026-03-01T06:00,2026-03-02T18:00,completed,Completed to planned depth,NQ,North Drilling\n" +
-      "HOLE-002,220,250,18.0,142.5,-55.0,121.12510,-27.12430,388.1,survey,2026-03-03T07:30,2026-03-04T16:40,completed,Deviation survey complete,HQ,Westline Drilling\n" +
-      "HOLE-003,80,180,,,,,,,,,,abandoned,Stopped due to poor ground conditions,PQ,\n",
+      "hole_id,project_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_easting,collar_northing,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,drilling_diameter,drilling_contractor\n" +
+      "HOLE-001,,150,200,12.5,135.0,-60.0,121.12345,-27.12345,,,385.2,gps,2026-03-01T06:00,2026-03-02T18:00,completed,Completed to planned depth,NQ,North Drilling\n" +
+      "HOLE-002,project-uuid-here,220,250,18.0,142.5,-55.0,,,500120.4,6987450.2,388.1,survey,2026-03-03T07:30,2026-03-04T16:40,completed,Deviation survey complete,HQ,Westline Drilling\n" +
+      "HOLE-003,,80,180,,,,,,,,,,,abandoned,Stopped due to poor ground conditions,PQ,\n",
     []
   );
 
@@ -162,7 +169,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
         const { data: sharedHoles, error: holesErr } = await supabase
           .from("holes")
           .select(
-            "id,hole_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state,drilling_diameter,drilling_contractor,project_id,created_at,organization_id,projects(name)"
+            "id,hole_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_easting,collar_northing,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state,drilling_diameter,drilling_contractor,project_id,created_at,organization_id,projects(name,coordinate_crs_code,coordinate_crs_name)"
           )
           .in("project_id", sharedProjectIds)
           .neq("organization_id", orgId)
@@ -174,24 +181,58 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
           if (h.project_id && h.projects?.name) projectMap.set(h.project_id, h.projects.name);
         });
 
-        setHoles(sharedHoles || []);
+        setHoles(
+          (sharedHoles || []).map((hole) => {
+            const derived = deriveHoleCoordinates({
+              collarLongitude: hole.collar_longitude ?? null,
+              collarLatitude: hole.collar_latitude ?? null,
+              collarEasting: hole.collar_easting ?? null,
+              collarNorthing: hole.collar_northing ?? null,
+              projectCrsCode: hole.projects?.coordinate_crs_code || null,
+            });
+
+            return {
+              ...hole,
+              collar_longitude: derived.collarLongitude,
+              collar_latitude: derived.collarLatitude,
+              coordinate_derived: derived.coordinateDerived,
+            };
+          })
+        );
         setProjects(Array.from(projectMap.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)));
       } else {
         const [holesRes, projectsRes] = await Promise.all([
           supabase
             .from("holes")
             .select(
-              "id,hole_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state,drilling_diameter,drilling_contractor,project_id,created_at,projects(name)"
+              "id,hole_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_easting,collar_northing,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state,drilling_diameter,drilling_contractor,project_id,created_at,projects(name,coordinate_crs_code,coordinate_crs_name)"
             )
             .eq("organization_id", orgId)
             .order("created_at", { ascending: false }),
-          supabase.from("projects").select("id,name").eq("organization_id", orgId).order("name", { ascending: true }),
+          supabase.from("projects").select("id,name,coordinate_crs_code,coordinate_crs_name").eq("organization_id", orgId).order("name", { ascending: true }),
         ]);
 
         if (holesRes.error) throw holesRes.error;
         if (projectsRes.error) throw projectsRes.error;
 
-        setHoles(holesRes.data || []);
+        setHoles(
+          (holesRes.data || []).map((hole) => {
+            const derived = deriveHoleCoordinates({
+              collarLongitude: hole.collar_longitude ?? null,
+              collarLatitude: hole.collar_latitude ?? null,
+              collarEasting: hole.collar_easting ?? null,
+              collarNorthing: hole.collar_northing ?? null,
+              projectCrsCode: hole.projects?.coordinate_crs_code || null,
+            });
+
+            return {
+              ...hole,
+              collar_longitude: derived.collarLongitude,
+              collar_latitude: derived.collarLatitude,
+              coordinate_derived: derived.coordinateDerived,
+            };
+          })
+        );
         setProjects(projectsRes.data || []);
       }
     } catch (error) {
@@ -316,6 +357,8 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
       dip: hole.dip ?? "",
       collar_longitude: hole.collar_longitude ?? "",
       collar_latitude: hole.collar_latitude ?? "",
+      collar_easting: hole.collar_easting ?? "",
+      collar_northing: hole.collar_northing ?? "",
       collar_elevation_m: hole.collar_elevation_m ?? "",
       collar_source: hole.collar_source || "",
       started_at: toDateTimeLocal(hole.started_at),
@@ -348,6 +391,8 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
       dip: "",
       collar_longitude: "",
       collar_latitude: "",
+      collar_easting: "",
+      collar_northing: "",
       collar_elevation_m: "",
       collar_source: "",
       started_at: "",
@@ -373,16 +418,32 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
     try {
       const azimuth = toNumOrNull(form.azimuth);
       const dip = toNumOrNull(form.dip);
+      const collarEasting = toNumOrNull(form.collar_easting);
+      const collarNorthing = toNumOrNull(form.collar_northing);
       const collarLongitude = toNumOrNull(form.collar_longitude);
       const collarLatitude = toNumOrNull(form.collar_latitude);
       const startedAt = toIsoOrNull(form.started_at);
       const completedAt = toIsoOrNull(form.completed_at);
+      const selectedProject = projects.find((project) => project.id === (form.project_id || "")) || null;
+      const projectedCoordinates = deriveHoleCoordinates({
+        collarLongitude: null,
+        collarLatitude: null,
+        collarEasting,
+        collarNorthing,
+        projectCrsCode: selectedProject?.coordinate_crs_code || null,
+      });
+      const effectiveLongitude = collarEasting != null && collarNorthing != null ? projectedCoordinates.collarLongitude : collarLongitude;
+      const effectiveLatitude = collarEasting != null && collarNorthing != null ? projectedCoordinates.collarLatitude : collarLatitude;
 
       if (form.azimuth !== "" && azimuth == null) return toast.error("Azimuth must be a number");
       if (form.dip !== "" && dip == null) return toast.error("Dip must be a number");
       if (azimuth != null && (azimuth < 0 || azimuth >= 360)) return toast.error("Azimuth must be between 0 and < 360");
       if (dip != null && (dip < -90 || dip > 90)) return toast.error("Dip must be between -90 and 90");
+      if ((collarEasting == null) !== (collarNorthing == null)) return toast.error("Easting and northing must both be set or both blank");
+      if ((collarEasting != null || collarNorthing != null) && !form.project_id) return toast.error("Select a project before entering easting and northing");
+      if ((collarEasting != null || collarNorthing != null) && !selectedProject?.coordinate_crs_code) return toast.error("Set a project coordinate system before saving projected coordinates");
       if ((collarLongitude == null) !== (collarLatitude == null)) return toast.error("Longitude and latitude must both be set or both blank");
+      if (effectiveLongitude == null || effectiveLatitude == null) return toast.error("Enter either longitude and latitude or easting and northing");
       if (form.started_at && !startedAt) return toast.error("Started at is invalid");
       if (form.completed_at && !completedAt) return toast.error("Completed at is invalid");
 
@@ -393,8 +454,10 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
         water_level_m: toNumOrNull(form.water_level_m),
         azimuth,
         dip,
-        collar_longitude: collarLongitude,
-        collar_latitude: collarLatitude,
+        collar_longitude: effectiveLongitude,
+        collar_latitude: effectiveLatitude,
+        collar_easting: collarEasting,
+        collar_northing: collarNorthing,
         collar_elevation_m: toNumOrNull(form.collar_elevation_m),
         collar_source: toTextOrNull(form.collar_source),
         started_at: startedAt,
@@ -449,6 +512,8 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
         dip: toNumOrNull(row.dip),
         collar_longitude: toNumOrNull(row.collar_longitude),
         collar_latitude: toNumOrNull(row.collar_latitude),
+        collar_easting: toNumOrNull(row.collar_easting),
+        collar_northing: toNumOrNull(row.collar_northing),
         collar_elevation_m: toNumOrNull(row.collar_elevation_m),
         collar_source: toTextOrNull(row.collar_source),
         started_at: toIsoOrNull(row.started_at),
@@ -457,7 +522,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
         completion_notes: toTextOrNull(row.completion_notes),
         drilling_diameter: row.drilling_diameter || null,
         drilling_contractor: toTextOrNull(row.drilling_contractor),
-        project_id: null,
+        project_id: toTextOrNull(row.project_id),
         state: "proposed",
         organization_id: orgId || null,
       }))
@@ -729,6 +794,42 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
                   onChange={(e) => setForm((prev) => ({ ...prev, collar_latitude: e.target.value }))}
                 />
               </label>
+
+              <label className="text-sm">
+                Collar Easting
+                <input
+                  className="input mt-1"
+                  type="number"
+                  step="0.001"
+                  value={form.collar_easting}
+                  onChange={(e) => setForm((prev) => ({ ...prev, collar_easting: e.target.value }))}
+                />
+              </label>
+
+              <label className="text-sm">
+                Collar Northing
+                <input
+                  className="input mt-1"
+                  type="number"
+                  step="0.001"
+                  value={form.collar_northing}
+                  onChange={(e) => setForm((prev) => ({ ...prev, collar_northing: e.target.value }))}
+                />
+              </label>
+
+              {form.project_id ? (
+                <div className="rounded-xl border border-cyan-300/15 bg-cyan-400/5 px-3 py-2 text-xs text-slate-300 md:col-span-2">
+                  {(() => {
+                    const selectedProject = projects.find((project) => project.id === form.project_id) || null;
+                    const selectedProjectCrs = getAustralianProjectCrsByCode(selectedProject?.coordinate_crs_code) || null;
+                    if (selectedProjectCrs) return `Working CRS: ${selectedProjectCrs.name} (${selectedProjectCrs.code})`;
+                    if (selectedProject?.coordinate_crs_code || selectedProject?.coordinate_crs_name) {
+                      return `Working CRS: ${selectedProject.coordinate_crs_name || selectedProject.coordinate_crs_code}`;
+                    }
+                    return "Working CRS: Not set on project yet";
+                  })()}
+                </div>
+              ) : null}
 
               <label className="text-sm">
                 Collar Elevation (m)
