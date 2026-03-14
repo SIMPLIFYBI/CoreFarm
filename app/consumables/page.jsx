@@ -1015,23 +1015,27 @@ export default function ConsumablesPage() {
             <span className="text-sm text-slate-400">All purchase orders</span>
           </div>
           <div className="card p-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="text-sm text-slate-300">Filter by PO</label>
-              <select className="select-gradient-sm w-auto" value={poFilter} onChange={(e) => setPoFilter(e.target.value)}>
-                <option value="">All</option>
-                {poList
-                  .filter((p) => p.po_number)
-                  .map((p) => (
-                    <option key={p.id} value={String(p.po_number)}>{p.po_number}</option>
-                  ))}
-              </select>
-              <label className="text-sm text-slate-300 ml-4">Items status</label>
-              <select className="select-gradient-sm w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                <option value="all">All</option>
-                <option value="outstanding">Outstanding</option>
-                <option value="ordered">Ordered</option>
-                <option value="received">Received</option>
-              </select>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="flex min-w-[180px] flex-col gap-1.5 text-sm text-slate-300">
+                <span>Filter by PO</span>
+                <select className="select-gradient-sm w-auto" value={poFilter} onChange={(e) => setPoFilter(e.target.value)}>
+                  <option value="">All</option>
+                  {poList
+                    .filter((p) => p.po_number)
+                    .map((p) => (
+                      <option key={p.id} value={String(p.po_number)}>{p.po_number}</option>
+                    ))}
+                </select>
+              </label>
+              <label className="flex min-w-[180px] flex-col gap-1.5 text-sm text-slate-300">
+                <span>Items status</span>
+                <select className="select-gradient-sm w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                  <option value="all">All</option>
+                  <option value="outstanding">Outstanding</option>
+                  <option value="ordered">Ordered</option>
+                  <option value="received">Received</option>
+                </select>
+              </label>
             </div>
           </div>
 

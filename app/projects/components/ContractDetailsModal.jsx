@@ -188,7 +188,7 @@ export default function ContractDetailsModal({ contract, orgId, onClose, onSave,
 
           <div className="md:col-span-2 border-t border-white/10 pt-3" />
 
-          <label className="block text-sm md:col-span-2">
+          <label className="flex flex-col gap-1.5 text-sm md:col-span-2">
             Name
             <input
               className="input w-full"
@@ -198,7 +198,7 @@ export default function ContractDetailsModal({ contract, orgId, onClose, onSave,
             />
           </label>
 
-          <label className="block text-sm">
+          <label className="flex flex-col gap-1.5 text-sm">
             Status
             <select
               className="input w-full"
@@ -214,7 +214,7 @@ export default function ContractDetailsModal({ contract, orgId, onClose, onSave,
             </select>
           </label>
 
-          <label className="block text-sm">
+          <label className="flex flex-col gap-1.5 text-sm">
             Contract #
             <input
               className="input w-full"

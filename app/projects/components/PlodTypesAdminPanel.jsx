@@ -25,7 +25,7 @@ function PlodTypeModal({ open, onClose, onSave, saving, form, setForm, isEditing
             onSave();
           }}
         >
-          <label className="block text-sm">
+          <label className="flex flex-col gap-1.5 text-sm">
             Name
             <input
               className="input w-full"
@@ -36,7 +36,7 @@ function PlodTypeModal({ open, onClose, onSave, saving, form, setForm, isEditing
             />
           </label>
 
-          <label className="block text-sm">
+          <label className="flex flex-col gap-1.5 text-sm">
             Description (optional)
             <textarea
               className="input w-full"
@@ -48,7 +48,7 @@ function PlodTypeModal({ open, onClose, onSave, saving, form, setForm, isEditing
           </label>
 
           <div className="grid grid-cols-1 gap-3">
-            <label className="block text-sm">
+            <label className="flex flex-col gap-1.5 text-sm">
               Active
               <select
                 className="input w-full"

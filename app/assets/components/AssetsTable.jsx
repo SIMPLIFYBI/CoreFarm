@@ -349,10 +349,10 @@ export default function AssetsTable({
 
       <div className="glass rounded-xl border border-white/10 p-3 mb-4">
         <div className="flex flex-wrap md:flex-nowrap items-end gap-3">
-          <label className="text-xs text-slate-300 min-w-[180px] flex-1">
+          <label className="text-xs text-slate-300 min-w-[180px] flex-1 space-y-1.5">
             Asset Type
             <select
-              className="select-gradient-sm mt-1"
+              className="select-gradient-sm"
               value={assetTypeFilter}
               onChange={(e) => {
                 setAssetTypeFilter(e.target.value);
@@ -368,10 +368,10 @@ export default function AssetsTable({
             </select>
           </label>
 
-          <label className="text-xs text-slate-300 min-w-[180px] flex-1">
+          <label className="text-xs text-slate-300 min-w-[180px] flex-1 space-y-1.5">
             Location
             <select
-              className="select-gradient-sm mt-1"
+              className="select-gradient-sm"
               value={locationFilter}
               onChange={(e) => {
                 setLocationFilter(e.target.value);

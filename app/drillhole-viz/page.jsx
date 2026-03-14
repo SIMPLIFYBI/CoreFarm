@@ -1686,6 +1686,10 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
 
   const updatePlannedDepth = async () => {
     if (!selectedHole) return;
+    if (!selectedHole.project_id) {
+      toast.error("Assign the hole to a project in Hole Details before saving.");
+      return;
+    }
 
     const trimmed = String(plannedDepthInput ?? "").trim();
     const next = trimmed === "" ? null : Number(trimmed);
@@ -1760,6 +1764,10 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
 
   const saveAdditionalAttributes = async () => {
     if (!selectedHoleId || !selectedHoleOrgId) return;
+    if (!selectedHole?.project_id) {
+      toast.error("Assign the hole to a project in Hole Details before saving.");
+      return;
+    }
 
     const numOrNull = (value) => {
       const raw = String(value ?? "").trim();

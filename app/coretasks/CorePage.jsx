@@ -348,15 +348,23 @@ export default function CorePage({ projectScope = "own" }) {
   }
 
   async function addHole() {
-    // ...existing code (validation)...
+    const holeId = (newHole.hole_id || "").trim();
+    if (!holeId) {
+      toast.error("Hole ID is required.");
+      return;
+    }
+    if (!newHole.project_id) {
+      toast.error("Project is required.");
+      return;
+    }
 
     const payload = {
       organization_id: orgId,
-      hole_id: (newHole.hole_id || "").trim(),
+      hole_id: holeId,
       depth: toNumOrNull(newHole.depth), // actual depth
       planned_depth: toNumOrNull(newHole.planned_depth), // planned depth (optional)
       drilling_diameter: newHole.drilling_diameter || null,
-      project_id: newHole.project_id || null,
+      project_id: newHole.project_id,
       drilling_contractor: (newHole.drilling_contractor || "").trim() || null,
       // state will default to 'proposed' in DB unless you set it here
       // ...existing code...
@@ -788,7 +796,7 @@ export default function CorePage({ projectScope = "own" }) {
         </>
       )}
       {/* 2) In your "Add New Core" modal form, add the Planned depth input */}
-      <label className="block text-sm">
+      <label className="flex flex-col gap-1.5 text-sm">
         Planned Depth (m)
         <input
           className="input"

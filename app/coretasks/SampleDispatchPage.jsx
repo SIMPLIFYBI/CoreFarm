@@ -538,7 +538,7 @@ export default function SampleDispatchPage({ projectScope = "own" }) {
       <div className="card p-4 md:p-5 space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full lg:max-w-3xl">
-            <label className="block text-sm">
+            <label className="flex flex-col gap-1.5 text-sm">
               Dispatch Date
               <input
                 type="date"
@@ -547,7 +547,7 @@ export default function SampleDispatchPage({ projectScope = "own" }) {
                 className="input"
               />
             </label>
-            <label className="block text-sm">
+            <label className="flex flex-col gap-1.5 text-sm">
               Number of Pallets
               <input
                 type="number"
@@ -558,7 +558,7 @@ export default function SampleDispatchPage({ projectScope = "own" }) {
                 className="input"
               />
             </label>
-            <label className="block text-sm">
+            <label className="flex flex-col gap-1.5 text-sm">
               Destination / Lab
               <input
                 type="text"
@@ -568,7 +568,7 @@ export default function SampleDispatchPage({ projectScope = "own" }) {
                 placeholder="e.g. ALS Brisbane"
               />
             </label>
-            <label className="block text-sm">
+            <label className="flex flex-col gap-1.5 text-sm">
               Consignment Number
               <input
                 type="text"
@@ -609,18 +609,21 @@ export default function SampleDispatchPage({ projectScope = "own" }) {
         <div className="card p-4 space-y-3 xl:col-span-2">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-lg font-medium">Eligible Core Intervals</h2>
-            <select
-              className="select-gradient-sm w-auto"
-              value={selectedHoleFilter}
-              onChange={(event) => setSelectedHoleFilter(event.target.value)}
-            >
-              <option value="">All holes</option>
-              {holes.map((hole) => (
-                <option key={hole.id} value={hole.id}>
-                  {hole.hole_id}
-                </option>
-              ))}
-            </select>
+            <label className="flex min-w-[150px] flex-col gap-1.5 text-xs text-slate-300">
+              Hole Filter
+              <select
+                className="select-gradient-sm w-auto"
+                value={selectedHoleFilter}
+                onChange={(event) => setSelectedHoleFilter(event.target.value)}
+              >
+                <option value="">All holes</option>
+                {holes.map((hole) => (
+                  <option key={hole.id} value={hole.id}>
+                    {hole.hole_id}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
           {loading ? (

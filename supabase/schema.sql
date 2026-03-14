@@ -291,6 +291,7 @@ CREATE TABLE public.holes (
   CONSTRAINT holes_pkey PRIMARY KEY (id),
   CONSTRAINT holes_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id),
   CONSTRAINT holes_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT holes_project_required_check CHECK (project_id IS NOT NULL) NOT VALID,
   CONSTRAINT holes_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id),
   CONSTRAINT holes_tenement_id_fkey FOREIGN KEY (tenement_id) REFERENCES public.tenements(id)
 );

@@ -16,7 +16,7 @@ export default function ProjectModal({ editingId, form, setForm, saving, onClose
         </div>
 
         <div className="grid grid-cols-1 gap-4 mb-4">
-          <label className="block text-sm">
+          <label className="flex flex-col gap-1.5 text-sm">
             Name
             <input
               type="text"
@@ -28,7 +28,7 @@ export default function ProjectModal({ editingId, form, setForm, saving, onClose
           </label>
 
           <div className="grid grid-cols-2 gap-4">
-            <label className="block text-sm">
+            <label className="flex flex-col gap-1.5 text-sm">
               Start
               <input
                 type="date"
@@ -37,7 +37,7 @@ export default function ProjectModal({ editingId, form, setForm, saving, onClose
                 className="input"
               />
             </label>
-            <label className="block text-sm">
+            <label className="flex flex-col gap-1.5 text-sm">
               Finish
               <input
                 type="date"
@@ -48,7 +48,7 @@ export default function ProjectModal({ editingId, form, setForm, saving, onClose
             </label>
           </div>
 
-          <label className="block text-sm">
+          <label className="flex flex-col gap-1.5 text-sm">
             Cost Code
             <input
               type="text"
@@ -58,7 +58,7 @@ export default function ProjectModal({ editingId, form, setForm, saving, onClose
             />
           </label>
 
-          <label className="block text-sm">
+          <label className="flex flex-col gap-1.5 text-sm">
             WBS Code
             <input
               type="text"
@@ -75,7 +75,7 @@ export default function ProjectModal({ editingId, form, setForm, saving, onClose
             </div>
 
             <div className="mt-3 space-y-3">
-              <label className="block text-sm">
+              <label className="flex flex-col gap-1.5 text-sm">
                 Australian CRS
                 <select
                   value={form.coordinate_crs_code || ""}

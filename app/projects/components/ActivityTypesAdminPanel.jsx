@@ -62,7 +62,7 @@ function ActivityTypeModal({ form, setForm, saving, onClose, onSave, isEditing, 
             onSave();
           }}
         >
-          <label className="block text-sm">
+          <label className="flex flex-col gap-1.5 text-sm">
             Activity Type
             <input
               className="input w-full"
@@ -107,7 +107,7 @@ function ActivityTypeModal({ form, setForm, saving, onClose, onSave, isEditing, 
             </div>
           </div>
 
-          <label className="block text-sm">
+          <label className="flex flex-col gap-1.5 text-sm">
             Billable
             <select
               className="input w-full"
@@ -131,7 +131,7 @@ function ActivityTypeModal({ form, setForm, saving, onClose, onSave, isEditing, 
           </label>
 
           <div className="grid grid-cols-2 gap-3">
-            <label className="block text-sm">
+            <label className="flex flex-col gap-1.5 text-sm">
               Rate
               <input
                 className="input w-full"
@@ -146,7 +146,7 @@ function ActivityTypeModal({ form, setForm, saving, onClose, onSave, isEditing, 
               />
             </label>
 
-            <label className="block text-sm">
+            <label className="flex flex-col gap-1.5 text-sm">
               Time based rate
               <select
                 className="input w-full"
@@ -170,7 +170,7 @@ function ActivityTypeModal({ form, setForm, saving, onClose, onSave, isEditing, 
           </div>
 
           {billable && timeBasedRate && (
-            <label className="block text-sm">
+            <label className="flex flex-col gap-1.5 text-sm">
               Rate Period
               <select
                 className="input w-full"
@@ -187,7 +187,7 @@ function ActivityTypeModal({ form, setForm, saving, onClose, onSave, isEditing, 
 
           {billable && !timeBasedRate && (
             <div className="grid grid-cols-2 gap-3">
-              <label className="block text-sm">
+              <label className="flex flex-col gap-1.5 text-sm">
                 Unit name
                 <input
                   className="input w-full"
@@ -197,7 +197,7 @@ function ActivityTypeModal({ form, setForm, saving, onClose, onSave, isEditing, 
                 />
               </label>
 
-              <label className="block text-sm">
+              <label className="flex flex-col gap-1.5 text-sm">
                 Unit interval
                 <input
                   className="input w-full"
@@ -213,7 +213,7 @@ function ActivityTypeModal({ form, setForm, saving, onClose, onSave, isEditing, 
             </div>
           )}
 
-          <label className="block text-sm">
+          <label className="flex flex-col gap-1.5 text-sm">
             Description (optional)
             <textarea
               className="input w-full"

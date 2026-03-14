@@ -883,22 +883,22 @@ export function AdminPage({ projectScope = "own" }) {
             </div>
 
             <div className="grid grid-cols-1 gap-4 mb-4">
-              <label className="block text-sm">
+              <label className="flex flex-col gap-1.5 text-sm">
                 Hole ID
                 <input type="text" name="hole_id" value={single.hole_id} onChange={onChangeSingle} className="input" placeholder="HOLE-001" />
               </label>
 
-              <label className="block text-sm">
+              <label className="flex flex-col gap-1.5 text-sm">
                 Depth (m)
                 <input type="number" step="any" name="depth" value={single.depth} onChange={onChangeSingle} className="input" placeholder="e.g. 220" />
               </label>
 
-              <label className="block text-sm">
+              <label className="flex flex-col gap-1.5 text-sm">
                 Planned Depth (m)
                 <input type="number" step="0.1" name="planned_depth" value={single.planned_depth} onChange={onChangeSingle} className="input" placeholder="e.g. 250.0" />
               </label>
 
-              <label className="block text-sm">
+              <label className="flex flex-col gap-1.5 text-sm">
                 Drilling Diameter
                 <select name="drilling_diameter" value={single.drilling_diameter} onChange={onChangeSingle} className="select-gradient-sm">
                   <option value="">Select…</option>
@@ -909,7 +909,7 @@ export function AdminPage({ projectScope = "own" }) {
                 </select>
               </label>
 
-              <label className="block text-sm">
+              <label className="flex flex-col gap-1.5 text-sm">
                 Project
                 <ProjectSelect
                   supabase={supabase}
@@ -919,7 +919,7 @@ export function AdminPage({ projectScope = "own" }) {
                 />
               </label>
 
-              <label className="block text-sm">
+              <label className="flex flex-col gap-1.5 text-sm">
                 Drilling Contractor
                 <input type="text" name="drilling_contractor" value={single.drilling_contractor} onChange={onChangeSingle} className="input" />
               </label>

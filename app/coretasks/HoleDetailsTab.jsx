@@ -12,9 +12,9 @@ const STATE_OPTIONS = ["proposed", "in_progress", "drilled"];
 const DIAMETER_OPTIONS = ["", "NQ", "HQ", "PQ", "Other"];
 const COLLAR_SOURCE_OPTIONS = ["", "gps", "survey", "estimated", "imported"];
 const COMPLETION_STATUS_OPTIONS = ["", "completed", "abandoned", "suspended"];
+const BULK_KEEP_VALUE = "__keep__";
 const BULK_COLUMNS = [
   { key: "hole_id", required: true, description: "Unique hole identifier." },
-  { key: "project_id", required: false, description: "Project UUID for projected collar coordinates." },
   { key: "depth", required: false, description: "Actual drilled depth (m)." },
   { key: "planned_depth", required: false, description: "Planned depth (m)." },
   { key: "water_level_m", required: false, description: "Water level from collar (m)." },
@@ -74,6 +74,23 @@ function formatDegrees(value) {
   return `${n.toFixed(1)}°`;
 }
 
+function resolveDefaultProjectId(projects, preferredProjectId = "") {
+  if (preferredProjectId && projects.some((project) => project.id === preferredProjectId)) {
+    return preferredProjectId;
+  }
+  if (projects.length === 1) return projects[0].id;
+  return "";
+}
+
+function formatProjectCrs(project) {
+  const selectedProjectCrs = getAustralianProjectCrsByCode(project?.coordinate_crs_code) || null;
+  if (selectedProjectCrs) return `${selectedProjectCrs.name} (${selectedProjectCrs.code})`;
+  if (project?.coordinate_crs_code || project?.coordinate_crs_name) {
+    return project.coordinate_crs_name || project.coordinate_crs_code;
+  }
+  return "Not set on project yet";
+}
+
 export default function HoleDetailsTab({ projectScope = "own" }) {
   const supabase = supabaseBrowser();
   const { orgId } = useOrg();
@@ -84,6 +101,8 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [bulkUpdating, setBulkUpdating] = useState(false);
 
   const [search, setSearch] = useState("");
   const [projectFilter, setProjectFilter] = useState("");
@@ -91,10 +110,13 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
   const [diameterFilter, setDiameterFilter] = useState("");
   const [showBulk, setShowBulk] = useState(false);
   const [bulkText, setBulkText] = useState("");
+  const [bulkProjectId, setBulkProjectId] = useState("");
   const [parsed, setParsed] = useState([]);
 
   const [selectedHole, setSelectedHole] = useState(null);
+  const [selectedHoleIds, setSelectedHoleIds] = useState([]);
   const [isCreateMode, setIsCreateMode] = useState(false);
+  const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [form, setForm] = useState({
     hole_id: "",
     depth: "",
@@ -117,13 +139,20 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
     drilling_contractor: "",
     project_id: "",
   });
+  const [bulkEditForm, setBulkEditForm] = useState({
+    project_id: BULK_KEEP_VALUE,
+    state: BULK_KEEP_VALUE,
+    drilling_diameter: BULK_KEEP_VALUE,
+    drilling_contractor_action: "keep",
+    drilling_contractor: "",
+  });
 
   const sampleHeaders = useMemo(
     () =>
-      "hole_id,project_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_easting,collar_northing,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,drilling_diameter,drilling_contractor\n" +
-      "HOLE-001,,150,200,12.5,135.0,-60.0,121.12345,-27.12345,,,385.2,gps,2026-03-01T06:00,2026-03-02T18:00,completed,Completed to planned depth,NQ,North Drilling\n" +
-      "HOLE-002,project-uuid-here,220,250,18.0,142.5,-55.0,,,500120.4,6987450.2,388.1,survey,2026-03-03T07:30,2026-03-04T16:40,completed,Deviation survey complete,HQ,Westline Drilling\n" +
-      "HOLE-003,,80,180,,,,,,,,,,,abandoned,Stopped due to poor ground conditions,PQ,\n",
+      "hole_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_easting,collar_northing,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,drilling_diameter,drilling_contractor\n" +
+      "HOLE-001,150,200,12.5,135.0,-60.0,121.12345,-27.12345,,,385.2,gps,2026-03-01T06:00,2026-03-02T18:00,completed,Completed to planned depth,NQ,North Drilling\n" +
+      "HOLE-002,220,250,18.0,142.5,-55.0,,,500120.4,6987450.2,388.1,survey,2026-03-03T07:30,2026-03-04T16:40,completed,Deviation survey complete,HQ,Westline Drilling\n" +
+      "HOLE-003,80,180,,,,,,,,,,abandoned,Stopped due to poor ground conditions,PQ,\n",
     []
   );
 
@@ -251,8 +280,19 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
   useEffect(() => {
     setProjectFilter("");
     setSelectedHole(null);
+    setSelectedHoleIds([]);
     setIsCreateMode(false);
+    setBulkProjectId("");
+    setShowBulkEdit(false);
   }, [projectScope]);
+
+  useEffect(() => {
+    if (!showBulk || projectScope === "shared") return;
+    setBulkProjectId((current) => {
+      if (current && projects.some((project) => project.id === current)) return current;
+      return resolveDefaultProjectId(projects, projectFilter);
+    });
+  }, [showBulk, projectFilter, projectScope, projects]);
 
   const filteredHoles = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -277,6 +317,11 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
     });
   }, [holes, search, projectFilter, stateFilter, diameterFilter]);
 
+  useEffect(() => {
+    const validIds = new Set((holes || []).map((hole) => hole.id));
+    setSelectedHoleIds((current) => current.filter((id) => validIds.has(id)));
+  }, [holes]);
+
   const bulkAllowedHeaders = useMemo(() => BULK_COLUMNS.map((c) => c.key), []);
   const bulkRequiredHeaders = useMemo(() => BULK_COLUMNS.filter((c) => c.required).map((c) => c.key), []);
   const bulkHeaderCsv = useMemo(() => BULK_COLUMNS.map((c) => c.key).join(","), []);
@@ -298,11 +343,24 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
     [parsed]
   );
 
+  const selectedBulkProject = useMemo(
+    () => projects.find((project) => project.id === bulkProjectId) || null,
+    [projects, bulkProjectId]
+  );
+
+  const filteredHoleIds = useMemo(() => filteredHoles.map((hole) => hole.id), [filteredHoles]);
+
+  const allFilteredSelected = useMemo(
+    () => filteredHoleIds.length > 0 && filteredHoleIds.every((id) => selectedHoleIds.includes(id)),
+    [filteredHoleIds, selectedHoleIds]
+  );
+
   const bulkCanImport =
     !importing &&
     parsed.length > 0 &&
     bulkInvalidHeaders.length === 0 &&
     bulkMissingRequired.length === 0 &&
+    !!bulkProjectId &&
     bulkValidRowsCount > 0;
 
   const copyBulkHeaders = async () => {
@@ -345,6 +403,126 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
     }
   };
 
+  const toggleHoleSelection = (holeId) => {
+    setSelectedHoleIds((current) =>
+      current.includes(holeId) ? current.filter((id) => id !== holeId) : [...current, holeId]
+    );
+  };
+
+  const toggleSelectAllFiltered = () => {
+    if (allFilteredSelected) {
+      setSelectedHoleIds((current) => current.filter((id) => !filteredHoleIds.includes(id)));
+      return;
+    }
+
+    setSelectedHoleIds((current) => Array.from(new Set([...current, ...filteredHoleIds])));
+  };
+
+  const resetBulkEditForm = () => {
+    setBulkEditForm({
+      project_id: BULK_KEEP_VALUE,
+      state: BULK_KEEP_VALUE,
+      drilling_diameter: BULK_KEEP_VALUE,
+      drilling_contractor_action: "keep",
+      drilling_contractor: "",
+    });
+  };
+
+  const closeBulkEdit = (force = false) => {
+    if (bulkUpdating && !force) return;
+    setShowBulkEdit(false);
+    resetBulkEditForm();
+  };
+
+  const openBulkEditModal = () => {
+    if (projectScope === "shared") return;
+    if (!selectedHoleIds.length) {
+      toast.error("Select at least one hole to edit");
+      return;
+    }
+
+    setShowBulkEdit(true);
+    resetBulkEditForm();
+  };
+
+  const deleteHoles = async (holeIds) => {
+    if (projectScope === "shared") {
+      toast.error("Client-shared holes are read-only here");
+      return;
+    }
+    if (!holeIds.length) return;
+
+    const message =
+      holeIds.length === 1
+        ? "Are you sure you want to delete this hole? This action cannot be undone."
+        : `Are you sure you want to delete these ${holeIds.length} holes? This action cannot be undone.`;
+
+    if (typeof window !== "undefined" && !window.confirm(message)) return;
+
+    setDeleting(true);
+    try {
+      const { error } = await supabase.from("holes").delete().in("id", holeIds).eq("organization_id", orgId);
+      if (error) throw error;
+
+      toast.success(holeIds.length === 1 ? "Hole deleted" : `${holeIds.length} holes deleted`);
+      setSelectedHoleIds((current) => current.filter((id) => !holeIds.includes(id)));
+      if (selectedHole?.id && holeIds.includes(selectedHole.id)) {
+        setSelectedHole(null);
+        setIsCreateMode(false);
+      }
+      await loadData();
+    } catch (error) {
+      toast.error(error?.message || "Failed to delete holes");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const applyBulkEdit = async () => {
+    if (projectScope === "shared") return toast.error("Client-shared holes are read-only here");
+    if (!selectedHoleIds.length) return toast.error("Select at least one hole to edit");
+
+    const payload = {};
+
+    if (bulkEditForm.project_id !== BULK_KEEP_VALUE) {
+      const selectedProject = projects.find((project) => project.id === bulkEditForm.project_id) || null;
+      if (!selectedProject) return toast.error("Select a valid project for bulk edit");
+      payload.project_id = bulkEditForm.project_id;
+    }
+
+    if (bulkEditForm.state !== BULK_KEEP_VALUE) payload.state = bulkEditForm.state;
+    if (bulkEditForm.drilling_diameter !== BULK_KEEP_VALUE) payload.drilling_diameter = bulkEditForm.drilling_diameter || null;
+
+    if (bulkEditForm.drilling_contractor_action === "set") {
+      const contractor = toTextOrNull(bulkEditForm.drilling_contractor);
+      if (!contractor) return toast.error("Enter a drilling contractor to set");
+      payload.drilling_contractor = contractor;
+    }
+
+    if (bulkEditForm.drilling_contractor_action === "clear") {
+      payload.drilling_contractor = null;
+    }
+
+    if (Object.keys(payload).length === 0) {
+      toast.error("Choose at least one change to apply");
+      return;
+    }
+
+    setBulkUpdating(true);
+    try {
+      const { error } = await supabase.from("holes").update(payload).in("id", selectedHoleIds).eq("organization_id", orgId);
+      if (error) throw error;
+
+      toast.success(`Updated ${selectedHoleIds.length} holes`);
+      closeBulkEdit(true);
+      await loadData();
+    } catch (error) {
+      toast.error(error?.message || "Failed to update selected holes");
+    } finally {
+      setBulkUpdating(false);
+    }
+  };
+
   const openHole = (hole) => {
     setIsCreateMode(false);
     setSelectedHole(hole);
@@ -373,7 +551,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
   };
 
   const closeHole = () => {
-    if (saving) return;
+    if (saving || deleting) return;
     setIsCreateMode(false);
     setSelectedHole(null);
   };
@@ -402,7 +580,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
       state: "proposed",
       drilling_diameter: "",
       drilling_contractor: "",
-      project_id: "",
+      project_id: resolveDefaultProjectId(projects, projectFilter),
     });
   };
 
@@ -411,6 +589,10 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
     if (!selectedHole) return;
     if (!String(form.hole_id || "").trim()) {
       toast.error("Hole ID is required");
+      return;
+    }
+    if (!form.project_id) {
+      toast.error("Project is required");
       return;
     }
 
@@ -425,6 +607,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
       const startedAt = toIsoOrNull(form.started_at);
       const completedAt = toIsoOrNull(form.completed_at);
       const selectedProject = projects.find((project) => project.id === (form.project_id || "")) || null;
+      if (!selectedProject) return toast.error("Selected project could not be found");
       const projectedCoordinates = deriveHoleCoordinates({
         collarLongitude: null,
         collarLatitude: null,
@@ -467,7 +650,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
         state: form.state || "proposed",
         drilling_diameter: form.drilling_diameter || null,
         drilling_contractor: toTextOrNull(form.drilling_contractor),
-        project_id: form.project_id || null,
+        project_id: form.project_id,
       };
 
       const result = isCreateMode
@@ -493,6 +676,9 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
 
   const onBulkUpload = async () => {
     if (projectScope === "shared") return toast.error("Bulk upload is disabled for client-shared holes");
+    if (!bulkProjectId) return toast.error("Select the project these holes belong to");
+    if (!selectedBulkProject) return toast.error("Selected project could not be found");
+
     const rows = parsed.length ? parsed : parseTable(bulkText);
     if (!rows.length) return toast.error("No rows found");
 
@@ -502,31 +688,67 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
     const missing = bulkRequiredHeaders.filter((key) => !(key in (rows[0] || {})));
     if (missing.length) return toast.error(`Missing required headers: ${missing.join(", ")}`);
 
-    const payloads = rows
-      .map((row) => ({
-        hole_id: String(row.hole_id || "").trim(),
+    const payloads = [];
+
+    for (const [index, row] of rows.entries()) {
+      const holeId = String(row.hole_id || "").trim();
+      if (!holeId) continue;
+
+      const rowLabel = `Row ${index + 2}`;
+      const azimuth = toNumOrNull(row.azimuth);
+      const dip = toNumOrNull(row.dip);
+      const collarEasting = toNumOrNull(row.collar_easting);
+      const collarNorthing = toNumOrNull(row.collar_northing);
+      const collarLongitude = toNumOrNull(row.collar_longitude);
+      const collarLatitude = toNumOrNull(row.collar_latitude);
+      const startedAt = toIsoOrNull(row.started_at);
+      const completedAt = toIsoOrNull(row.completed_at);
+      const projectedCoordinates = deriveHoleCoordinates({
+        collarLongitude: null,
+        collarLatitude: null,
+        collarEasting,
+        collarNorthing,
+        projectCrsCode: selectedBulkProject.coordinate_crs_code || null,
+      });
+      const effectiveLongitude = collarEasting != null && collarNorthing != null ? projectedCoordinates.collarLongitude : collarLongitude;
+      const effectiveLatitude = collarEasting != null && collarNorthing != null ? projectedCoordinates.collarLatitude : collarLatitude;
+
+      if (String(row.azimuth || "").trim() && azimuth == null) return toast.error(`${rowLabel}: azimuth must be a number`);
+      if (String(row.dip || "").trim() && dip == null) return toast.error(`${rowLabel}: dip must be a number`);
+      if (azimuth != null && (azimuth < 0 || azimuth >= 360)) return toast.error(`${rowLabel}: azimuth must be between 0 and < 360`);
+      if (dip != null && (dip < -90 || dip > 90)) return toast.error(`${rowLabel}: dip must be between -90 and 90`);
+      if ((collarEasting == null) !== (collarNorthing == null)) return toast.error(`${rowLabel}: easting and northing must both be set or both blank`);
+      if ((collarEasting != null || collarNorthing != null) && !selectedBulkProject.coordinate_crs_code) {
+        return toast.error(`${rowLabel}: the selected project needs a coordinate system before importing projected coordinates`);
+      }
+      if ((collarLongitude == null) !== (collarLatitude == null)) return toast.error(`${rowLabel}: longitude and latitude must both be set or both blank`);
+      if (String(row.started_at || "").trim() && !startedAt) return toast.error(`${rowLabel}: started_at is invalid`);
+      if (String(row.completed_at || "").trim() && !completedAt) return toast.error(`${rowLabel}: completed_at is invalid`);
+
+      payloads.push({
+        hole_id: holeId,
         depth: toNumOrNull(row.depth),
         planned_depth: toNumOrNull(row.planned_depth),
         water_level_m: toNumOrNull(row.water_level_m),
-        azimuth: toNumOrNull(row.azimuth),
-        dip: toNumOrNull(row.dip),
-        collar_longitude: toNumOrNull(row.collar_longitude),
-        collar_latitude: toNumOrNull(row.collar_latitude),
-        collar_easting: toNumOrNull(row.collar_easting),
-        collar_northing: toNumOrNull(row.collar_northing),
+        azimuth,
+        dip,
+        collar_longitude: effectiveLongitude,
+        collar_latitude: effectiveLatitude,
+        collar_easting: collarEasting,
+        collar_northing: collarNorthing,
         collar_elevation_m: toNumOrNull(row.collar_elevation_m),
         collar_source: toTextOrNull(row.collar_source),
-        started_at: toIsoOrNull(row.started_at),
-        completed_at: toIsoOrNull(row.completed_at),
+        started_at: startedAt,
+        completed_at: completedAt,
         completion_status: toTextOrNull(row.completion_status),
         completion_notes: toTextOrNull(row.completion_notes),
         drilling_diameter: row.drilling_diameter || null,
         drilling_contractor: toTextOrNull(row.drilling_contractor),
-        project_id: toTextOrNull(row.project_id),
+        project_id: bulkProjectId,
         state: "proposed",
         organization_id: orgId || null,
-      }))
-      .filter((payload) => payload.hole_id);
+      });
+    }
 
     if (!payloads.length) return toast.error("No valid rows (missing hole_id)");
 
@@ -550,73 +772,103 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            className="btn hidden md:inline-flex"
+            className="btn btn-3d-glass hidden md:inline-flex"
             disabled={projectScope === "shared"}
             onClick={() => {
               setShowBulk(true);
+              setBulkProjectId(resolveDefaultProjectId(projects, projectFilter));
               setParsed([]);
             }}
           >
             Open bulk uploader
           </button>
-          <button type="button" className="btn btn-primary" onClick={openCreateHole} disabled={projectScope === "shared"}>
+          <button type="button" className="btn btn-3d-primary" onClick={openCreateHole} disabled={projectScope === "shared"}>
             Add New Core
           </button>
         </div>
       </div>
 
-      <div className="glass rounded-xl border border-white/10 p-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="flex-1 min-w-[220px] text-xs text-slate-300">
-            Search
+      {projectScope !== "shared" && selectedHoleIds.length > 0 && (
+        <div className="card p-4 space-y-3">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+            <div>
+              <h3 className="text-base font-medium text-slate-100">Selected Holes</h3>
+              <p className="text-sm text-slate-300 mt-1">
+                {selectedHoleIds.length} hole{selectedHoleIds.length === 1 ? "" : "s"} selected for bulk actions.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 lg:justify-end">
+              <button type="button" className="btn btn-3d-primary" onClick={openBulkEditModal} disabled={bulkUpdating || deleting}>
+                Edit selected
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={() => void deleteHoles(selectedHoleIds)}
+                disabled={bulkUpdating || deleting}
+              >
+                {deleting ? "Deleting..." : "Delete selected"}
+              </button>
+              <button type="button" className="btn btn-3d-glass" onClick={() => setSelectedHoleIds([])} disabled={bulkUpdating || deleting}>
+                Clear selection
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="card p-4 md:p-5 space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
+          <label className="flex min-w-[220px] flex-1 flex-col gap-1.5 text-sm text-slate-200">
+            Search Holes
             <input
-              className="input mt-1 h-10"
+              className="input h-10"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Hole ID, project, contractor..."
             />
           </label>
 
-          <label className="hidden md:flex md:items-center md:gap-2 text-xs text-slate-300">
-            <span className="whitespace-nowrap">Project</span>
-            <select className="select-gradient-sm h-10 min-w-[170px]" value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}>
-              <option value="">All projects</option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1.5 text-sm text-slate-200">
+              Project
+              <select className="select-gradient-sm h-10 min-w-[170px]" value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}>
+                <option value="">All projects</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <label className="hidden md:flex md:items-center md:gap-2 text-xs text-slate-300">
-            <span className="whitespace-nowrap">State</span>
-            <select className="select-gradient-sm h-10 min-w-[150px]" value={stateFilter} onChange={(e) => setStateFilter(e.target.value)}>
-              <option value="">All states</option>
-              {STATE_OPTIONS.map((state) => (
-                <option key={state} value={state}>
-                  {state}
-                </option>
-              ))}
-            </select>
-          </label>
+            <label className="flex flex-col gap-1.5 text-sm text-slate-200">
+              State
+              <select className="select-gradient-sm h-10 min-w-[150px]" value={stateFilter} onChange={(e) => setStateFilter(e.target.value)}>
+                <option value="">All states</option>
+                {STATE_OPTIONS.map((state) => (
+                  <option key={state} value={state}>
+                    {state}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <label className="hidden md:flex md:items-center md:gap-2 text-xs text-slate-300">
-            <span className="whitespace-nowrap">Diameter</span>
-            <select className="select-gradient-sm h-10 min-w-[150px]" value={diameterFilter} onChange={(e) => setDiameterFilter(e.target.value)}>
-              <option value="">All diameters</option>
-              {DIAMETER_OPTIONS.filter(Boolean).map((diameter) => (
-                <option key={diameter} value={diameter}>
-                  {diameter}
-                </option>
-              ))}
-            </select>
-          </label>
+            <label className="flex flex-col gap-1.5 text-sm text-slate-200">
+              Diameter
+              <select className="select-gradient-sm h-10 min-w-[150px]" value={diameterFilter} onChange={(e) => setDiameterFilter(e.target.value)}>
+                <option value="">All diameters</option>
+                {DIAMETER_OPTIONS.filter(Boolean).map((diameter) => (
+                  <option key={diameter} value={diameter}>
+                    {diameter}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <div className="w-full sm:w-auto sm:min-w-[120px]">
             <button
               type="button"
-              className="btn h-10 w-full sm:w-auto sm:px-5"
+              className="btn btn-3d-glass h-10 px-5"
               onClick={() => {
                 setSearch("");
                 setProjectFilter("");
@@ -628,12 +880,26 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
             </button>
           </div>
         </div>
+
+        <div className="text-xs text-slate-400">
+          Tip: use the filters to narrow the table, then select visible rows for bulk edit or delete.
+        </div>
       </div>
 
       <div className="table-container">
         <table className="table">
           <thead>
             <tr>
+              {projectScope !== "shared" && (
+                <th>
+                  <input
+                    type="checkbox"
+                    aria-label="Select all visible holes"
+                    checked={allFilteredSelected}
+                    onChange={toggleSelectAllFiltered}
+                  />
+                </th>
+              )}
               <th>Hole ID</th>
               <th>Project</th>
               <th>State</th>
@@ -647,13 +913,13 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} className="text-center py-8 text-slate-300">
+                <td colSpan={projectScope === "shared" ? 8 : 9} className="text-center py-8 text-slate-300">
                   Loading holes…
                 </td>
               </tr>
             ) : filteredHoles.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center py-8 text-slate-300">
+                <td colSpan={projectScope === "shared" ? 8 : 9} className="text-center py-8 text-slate-300">
                   No holes match your filters.
                 </td>
               </tr>
@@ -664,6 +930,16 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
                   className="cursor-pointer hover:bg-white/5 transition-base"
                   onClick={() => openHole(hole)}
                 >
+                  {projectScope !== "shared" && (
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${hole.hole_id}`}
+                        checked={selectedHoleIds.includes(hole.id)}
+                        onChange={() => toggleHoleSelection(hole.id)}
+                      />
+                    </td>
+                  )}
                   <td className="font-medium">{hole.hole_id}</td>
                   <td>{hole.projects?.name || "—"}</td>
                   <td>{hole.state || "—"}</td>
@@ -684,7 +960,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
           <div className="card w-full max-w-2xl p-5 max-h-[88vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-slate-100">{isCreateMode ? "Add New Core" : "Edit Hole Details"}</h3>
-              <button type="button" className="btn" onClick={closeHole} disabled={saving}>
+              <button type="button" className="btn btn-3d-glass" onClick={closeHole} disabled={saving}>
                 Close
               </button>
             </div>
@@ -821,12 +1097,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
                 <div className="rounded-xl border border-cyan-300/15 bg-cyan-400/5 px-3 py-2 text-xs text-slate-300 md:col-span-2">
                   {(() => {
                     const selectedProject = projects.find((project) => project.id === form.project_id) || null;
-                    const selectedProjectCrs = getAustralianProjectCrsByCode(selectedProject?.coordinate_crs_code) || null;
-                    if (selectedProjectCrs) return `Working CRS: ${selectedProjectCrs.name} (${selectedProjectCrs.code})`;
-                    if (selectedProject?.coordinate_crs_code || selectedProject?.coordinate_crs_name) {
-                      return `Working CRS: ${selectedProject.coordinate_crs_name || selectedProject.coordinate_crs_code}`;
-                    }
-                    return "Working CRS: Not set on project yet";
+                    return `Working CRS: ${formatProjectCrs(selectedProject)}`;
                   })()}
                 </div>
               ) : null}
@@ -927,13 +1198,13 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
               </label>
 
               <label className="text-sm">
-                Project
+                Project *
                 <select
                   className="select-gradient-sm mt-1"
                   value={form.project_id}
                   onChange={(e) => setForm((prev) => ({ ...prev, project_id: e.target.value }))}
                 >
-                  <option value="">Select...</option>
+                  <option value="">Select a project...</option>
                   {projects.map((project) => (
                     <option key={project.id} value={project.id}>
                       {project.name}
@@ -944,11 +1215,121 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
             </div>
 
             <div className="mt-4 flex justify-end gap-2">
-              <button type="button" className="btn" onClick={closeHole} disabled={saving}>
+              {!isCreateMode && projectScope !== "shared" && (
+                <button
+                  type="button"
+                  className="btn btn-danger mr-auto"
+                  onClick={() => void deleteHoles([selectedHole.id])}
+                  disabled={saving || deleting}
+                >
+                  {deleting ? "Deleting..." : "Delete Hole"}
+                </button>
+              )}
+              <button type="button" className="btn btn-3d-glass" onClick={closeHole} disabled={saving || deleting}>
                 Cancel
               </button>
-              <button type="button" className="btn btn-primary" onClick={saveHole} disabled={saving || projectScope === "shared"}>
+              <button type="button" className="btn btn-3d-primary" onClick={saveHole} disabled={saving || projectScope === "shared"}>
                 {saving ? "Saving…" : isCreateMode ? "Add Hole" : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBulkEdit && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <div className="card w-full max-w-xl p-5 max-h-[88vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-100">Edit Selected Holes</h3>
+                <p className="text-sm text-slate-400 mt-1">Apply updates to {selectedHoleIds.length} selected hole{selectedHoleIds.length === 1 ? "" : "s"}.</p>
+              </div>
+              <button type="button" className="btn btn-3d-glass" onClick={() => closeBulkEdit()} disabled={bulkUpdating}>
+                Close
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label className="text-sm">
+                Project
+                <select
+                  className="select-gradient-sm mt-1"
+                  value={bulkEditForm.project_id}
+                  onChange={(e) => setBulkEditForm((prev) => ({ ...prev, project_id: e.target.value }))}
+                >
+                  <option value={BULK_KEEP_VALUE}>Keep current</option>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="text-sm">
+                State
+                <select
+                  className="select-gradient-sm mt-1"
+                  value={bulkEditForm.state}
+                  onChange={(e) => setBulkEditForm((prev) => ({ ...prev, state: e.target.value }))}
+                >
+                  <option value={BULK_KEEP_VALUE}>Keep current</option>
+                  {STATE_OPTIONS.map((state) => (
+                    <option key={state} value={state}>
+                      {state}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="text-sm">
+                Diameter
+                <select
+                  className="select-gradient-sm mt-1"
+                  value={bulkEditForm.drilling_diameter}
+                  onChange={(e) => setBulkEditForm((prev) => ({ ...prev, drilling_diameter: e.target.value }))}
+                >
+                  <option value={BULK_KEEP_VALUE}>Keep current</option>
+                  {DIAMETER_OPTIONS.map((diameter) => (
+                    <option key={diameter || "clear"} value={diameter}>
+                      {diameter || "Clear diameter"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="text-sm">
+                Drilling Contractor
+                <select
+                  className="select-gradient-sm mt-1"
+                  value={bulkEditForm.drilling_contractor_action}
+                  onChange={(e) => setBulkEditForm((prev) => ({ ...prev, drilling_contractor_action: e.target.value }))}
+                >
+                  <option value="keep">Keep current</option>
+                  <option value="set">Set contractor</option>
+                  <option value="clear">Clear contractor</option>
+                </select>
+              </label>
+
+              {bulkEditForm.drilling_contractor_action === "set" && (
+                <label className="text-sm md:col-span-2">
+                  Contractor Name
+                  <input
+                    className="input mt-1"
+                    value={bulkEditForm.drilling_contractor}
+                    onChange={(e) => setBulkEditForm((prev) => ({ ...prev, drilling_contractor: e.target.value }))}
+                    placeholder="Enter contractor name"
+                  />
+                </label>
+              )}
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" className="btn btn-3d-glass" onClick={() => closeBulkEdit()} disabled={bulkUpdating}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-3d-primary" onClick={applyBulkEdit} disabled={bulkUpdating}>
+                {bulkUpdating ? "Applying..." : `Apply to ${selectedHoleIds.length} hole${selectedHoleIds.length === 1 ? "" : "s"}`}
               </button>
             </div>
           </div>
@@ -967,10 +1348,10 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button type="button" className="btn" onClick={downloadBulkSample}>
+                  <button type="button" className="btn btn-3d-glass" onClick={downloadBulkSample}>
                     Download sample
                   </button>
-                  <button className="btn" onClick={() => setShowBulk(false)}>Close</button>
+                  <button className="btn btn-3d-glass" onClick={() => setShowBulk(false)}>Close</button>
                 </div>
               </div>
 
@@ -996,13 +1377,43 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
 
             <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[1.05fr_1.2fr] gap-4 p-4 md:p-6 overflow-hidden">
               <div className="min-h-0 flex flex-col gap-3">
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 space-y-3">
+                  <label className="block text-sm font-medium text-slate-200">
+                    Upload Into Project
+                    <select
+                      className="select-gradient-sm mt-2 w-full"
+                      value={bulkProjectId}
+                      onChange={(e) => setBulkProjectId(e.target.value)}
+                    >
+                      <option value="">Select a project...</option>
+                      {projects.map((project) => (
+                        <option key={project.id} value={project.id}>
+                          {project.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="text-xs text-slate-400">
+                    Every imported hole will be assigned to this project.
+                  </div>
+                  {selectedBulkProject ? (
+                    <div className="rounded-lg border border-cyan-300/15 bg-cyan-400/5 px-3 py-2 text-xs text-slate-300">
+                      Working CRS: {formatProjectCrs(selectedBulkProject)}
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-amber-300/15 bg-amber-400/5 px-3 py-2 text-xs text-amber-200">
+                      Select a project before importing holes.
+                    </div>
+                  )}
+                </div>
+
                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-sm font-medium text-slate-200">Paste CSV/TSV</label>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        className="btn btn-xs"
+                        className="btn btn-3d-glass btn-xs"
                         onClick={copyBulkHeaders}
                         title={bulkHeaderCsv}
                       >
@@ -1033,6 +1444,9 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
 
                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 space-y-2">
                   <div className="text-sm font-medium text-slate-200">Validation</div>
+                  {!bulkProjectId && (
+                    <div className="text-xs text-rose-300">Choose a project to enable import.</div>
+                  )}
                   {bulkInvalidHeaders.length > 0 && (
                     <div className="text-xs text-amber-300">
                       Unexpected headers: {bulkInvalidHeaders.join(", ")}
@@ -1110,14 +1524,14 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
               <button
                 type="button"
                 onClick={onBulkUpload}
-                className="btn btn-primary"
+                className="btn btn-3d-primary"
                 disabled={!bulkCanImport}
               >
                 {importing ? "Importing..." : `Import ${bulkValidRowsCount || 0} rows`}
               </button>
               <button
                 type="button"
-                className="btn"
+                className="btn btn-3d-glass"
                 onClick={() => {
                   setBulkText("");
                   setParsed([]);
@@ -1126,7 +1540,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
                 Clear all
               </button>
               <div className="ml-auto text-xs text-slate-400">
-                Required header: <span className="font-mono text-slate-300">hole_id</span>
+                Required: <span className="font-mono text-slate-300">hole_id</span> header and project selection
               </div>
             </div>
           </div>

@@ -230,7 +230,7 @@ export default function ContractsTab({ orgId, orgLoading }) {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <label className="block text-sm">
+            <label className="flex flex-col gap-1.5 text-sm">
               Contract name
               <input
                 className="input w-full"
@@ -239,7 +239,7 @@ export default function ContractsTab({ orgId, orgLoading }) {
               />
             </label>
 
-            <label className="block text-sm">
+            <label className="flex flex-col gap-1.5 text-sm">
               Vendor organisation
               <select
                 className="input w-full"
@@ -259,7 +259,7 @@ export default function ContractsTab({ orgId, orgLoading }) {
               </select>
             </label>
 
-            <label className="block text-sm">
+            <label className="flex flex-col gap-1.5 text-sm">
               Contract #
               <input
                 className="input w-full"
@@ -268,7 +268,7 @@ export default function ContractsTab({ orgId, orgLoading }) {
               />
             </label>
 
-            <label className="block text-sm">
+            <label className="flex flex-col gap-1.5 text-sm">
               Status
               <select
                 className="input w-full"

@@ -300,22 +300,24 @@ export default function TeamPage() {
       {tab === 'org' && (
         <div className="space-y-6">
           {memberships.length > 0 && (
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-700">Organization</label>
-              <select
-                className="select-gradient-sm w-auto"
-                value={selectedOrgId}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === '__create__') { setShowCreateOrgModal(true); return; }
-                  setSelectedOrgId(val);
-                }}
-              >
-                {memberships.map((m) => (
-                  <option key={m.organization_id} value={m.organization_id}>{m.organizations?.name || m.organization_id}</option>
-                ))}
-                {myRole === 'admin' && <option value="__create__">+ Create New...</option>}
-              </select>
+            <div className="flex items-end gap-3">
+              <label className="flex min-w-[180px] flex-col gap-1.5 text-sm text-gray-700">
+                <span>Organization</span>
+                <select
+                  className="select-gradient-sm w-auto"
+                  value={selectedOrgId}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '__create__') { setShowCreateOrgModal(true); return; }
+                    setSelectedOrgId(val);
+                  }}
+                >
+                  {memberships.map((m) => (
+                    <option key={m.organization_id} value={m.organization_id}>{m.organizations?.name || m.organization_id}</option>
+                  ))}
+                  {myRole === 'admin' && <option value="__create__">+ Create New...</option>}
+                </select>
+              </label>
               <span className="ml-2 text-xs text-gray-600">Your role: {myRole || '—'}</span>
             </div>
           )}
@@ -404,8 +406,8 @@ export default function TeamPage() {
           <div className="card p-4">
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-medium">Invites</h3>
-              <div className="flex items-center gap-3 text-sm">
-                <label className="flex items-center gap-1">
+              <div className="flex items-end gap-3 text-sm">
+                <label className="flex min-w-[140px] flex-col gap-1.5">
                   <span className="text-gray-600">Filter</span>
                   <select className="select-gradient-sm w-auto" value={inviteStatusFilter} onChange={(e)=>setInviteStatusFilter(e.target.value)}>
                     <option value="pending">Pending</option>

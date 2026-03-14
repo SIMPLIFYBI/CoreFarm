@@ -56,7 +56,7 @@ export default function VendorModal({ orgId, onClose, onCreated }) {
             createVendor();
           }}
         >
-          <label className="block text-sm">
+          <label className="flex flex-col gap-1.5 text-sm">
             Vendor name
             <input
               className="input w-full"
@@ -66,7 +66,7 @@ export default function VendorModal({ orgId, onClose, onCreated }) {
             />
           </label>
 
-          <label className="block text-sm">
+          <label className="flex flex-col gap-1.5 text-sm">
             Contact (optional)
             <input
               className="input w-full"

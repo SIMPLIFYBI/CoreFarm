@@ -114,7 +114,7 @@ export default function NewConnectionModal({ orgId, onClose, onCreated }) {
         </div>
 
         <div className="grid grid-cols-1 gap-3">
-          <label className="block text-sm">
+          <label className="flex flex-col gap-1.5 text-sm">
             Find organisation (optional)
             <input
               className="input w-full"
@@ -146,7 +146,7 @@ export default function NewConnectionModal({ orgId, onClose, onCreated }) {
             </div>
           )}
 
-          <label className="block text-sm">
+          <label className="flex flex-col gap-1.5 text-sm">
             Other organisation ID (UUID)
             <input
               className="input w-full"
@@ -167,7 +167,7 @@ export default function NewConnectionModal({ orgId, onClose, onCreated }) {
             </label>
           </div>
 
-          <label className="block text-sm">
+          <label className="flex flex-col gap-1.5 text-sm">
             Status
             <select
               className="input w-full"

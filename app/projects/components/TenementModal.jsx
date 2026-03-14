@@ -12,7 +12,7 @@ export default function TenementModal({ editingId, form, setForm, saving, onClos
         </div>
 
         <div className="grid grid-cols-1 gap-4 mb-4">
-          <label className="block text-sm">
+          <label className="flex flex-col gap-1.5 text-sm">
             Tenement Number *
             <input
               type="text"
@@ -24,7 +24,7 @@ export default function TenementModal({ editingId, form, setForm, saving, onClos
           </label>
 
           <div className="grid grid-cols-2 gap-4">
-            <label className="block text-sm">
+            <label className="flex flex-col gap-1.5 text-sm">
               Type
               <input
                 type="text"
@@ -33,7 +33,7 @@ export default function TenementModal({ editingId, form, setForm, saving, onClos
                 className="input"
               />
             </label>
-            <label className="block text-sm">
+            <label className="flex flex-col gap-1.5 text-sm">
               Application #
               <input
                 type="text"
@@ -45,7 +45,7 @@ export default function TenementModal({ editingId, form, setForm, saving, onClos
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <label className="block text-sm">
+            <label className="flex flex-col gap-1.5 text-sm">
               Status
               <input
                 type="text"
@@ -54,7 +54,7 @@ export default function TenementModal({ editingId, form, setForm, saving, onClos
                 className="input"
               />
             </label>
-            <label className="block text-sm">
+            <label className="flex flex-col gap-1.5 text-sm">
               Expenditure
               <input
                 type="number"
@@ -67,7 +67,7 @@ export default function TenementModal({ editingId, form, setForm, saving, onClos
           </div>
 
           <div className="grid grid-cols-3 gap-4">
-            <label className="block text-sm">
+            <label className="flex flex-col gap-1.5 text-sm">
               Date Applied
               <input
                 type="date"
@@ -76,7 +76,7 @@ export default function TenementModal({ editingId, form, setForm, saving, onClos
                 className="input"
               />
             </label>
-            <label className="block text-sm">
+            <label className="flex flex-col gap-1.5 text-sm">
               Date Granted
               <input
                 type="date"
@@ -85,7 +85,7 @@ export default function TenementModal({ editingId, form, setForm, saving, onClos
                 className="input"
               />
             </label>
-            <label className="block text-sm">
+            <label className="flex flex-col gap-1.5 text-sm">
               Renewal Date
               <input
                 type="date"
@@ -96,7 +96,7 @@ export default function TenementModal({ editingId, form, setForm, saving, onClos
             </label>
           </div>
 
-          <label className="block text-sm">
+          <label className="flex flex-col gap-1.5 text-sm">
             Heritage Agreements
             <textarea
               value={form.heritage_agreements}

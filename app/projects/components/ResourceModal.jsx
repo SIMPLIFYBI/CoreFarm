@@ -32,7 +32,7 @@ export default function ResourceModal({
         </div>
 
         <div className="grid grid-cols-1 gap-4 mb-4">
-          <label className="block text-sm">
+          <label className="flex flex-col gap-1.5 text-sm">
             Name
             <input
               type="text"
@@ -45,7 +45,7 @@ export default function ResourceModal({
             />
           </label>
 
-          <label className="block text-sm">
+          <label className="flex flex-col gap-1.5 text-sm">
             Resource Type
             <select
               value={form.resource_type}
@@ -62,7 +62,7 @@ export default function ResourceModal({
             </select>
           </label>
 
-          <label className="block text-sm">
+          <label className="flex flex-col gap-1.5 text-sm">
             Description
             <textarea
               value={form.description}
@@ -75,7 +75,7 @@ export default function ResourceModal({
             />
           </label>
 
-          <label className="block text-sm">
+          <label className="flex flex-col gap-1.5 text-sm">
             Vendor (optional)
             <select
               value={form.vendor_id || ""}
