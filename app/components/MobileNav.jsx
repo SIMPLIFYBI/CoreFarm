@@ -9,6 +9,7 @@ const tabs = [
   { href: "/map-mobile", label: "Map", icon: IconMap },
   { href: "/dashboard", label: "Reports", icon: IconReport },
   { href: "/activity", label: "Activity", icon: IconClipboard },
+  { href: "/how-to", label: "How To", icon: IconClipboard },
   { href: "/plods", label: "Plods", icon: IconPlods },
   { href: "/coretasks", label: "Drilling", icon: IconCoreTasks },
   { href: "/drillhole-viz", label: "Drillhole Viz", icon: IconCore },

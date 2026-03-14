@@ -154,6 +154,7 @@ export default function Header() {
     { href: "/map", label: "Map", icon: IconMap },
     { href: "/dashboard", label: "Reports", icon: IconReport },
     { href: "/activity", label: "Activity", icon: IconClipboard },
+    { href: "/how-to", label: "How To", icon: IconClipboard },
     { href: "/coretasks", label: "Drilling", icon: IconCoreTasks },
     { href: "/drillhole-viz", label: "Drillhole Viz", icon: IconCore },
     { href: "/consumables", label: "Consumables", icon: IconCore },
