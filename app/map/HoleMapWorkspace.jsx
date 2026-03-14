@@ -32,10 +32,8 @@ const HOLE_STATE_STYLES = [
   { value: "drilled", label: "Drilled", color: "#22c55e" },
 ];
 
-const ASSET_STATUS_STYLES = [
-  { value: "Active", label: "Active", color: "#22d3ee" },
-  { value: "Inactive", label: "Inactive", color: "#94a3b8" },
-];
+const ASSET_COLOR = "#22d3ee";
+const ASSET_STATUS_STYLES = [{ value: "assets", label: "Assets", color: ASSET_COLOR }];
 
 const HOLE_STATE_COLOR_EXPRESSION = [
   "match",
@@ -45,16 +43,6 @@ const HOLE_STATE_COLOR_EXPRESSION = [
   "in_progress",
   "#f59e0b",
   "#38bdf8",
-];
-
-const ASSET_STATUS_COLOR_EXPRESSION = [
-  "match",
-  ["downcase", ["coalesce", ["get", "status"], ""]],
-  "inactive",
-  "#94a3b8",
-  "active",
-  "#22d3ee",
-  "#f97316",
 ];
 
 function cinematicEase(t) {
@@ -764,6 +752,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const [selectedHoleId, setSelectedHoleId] = useState("");
   const [selectedAssetId, setSelectedAssetId] = useState("");
   const [mobilePanelTab, setMobilePanelTab] = useState("projects");
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [schematicHole, setSchematicHole] = useState(null);
   const [schematicLoading, setSchematicLoading] = useState(false);
   const [schematicError, setSchematicError] = useState("");
@@ -786,6 +775,25 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(MAP_SCOPE_STORAGE_KEY, projectScope);
   }, [projectScope]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const mediaQuery = window.matchMedia("(max-width: 1279px)");
+    const syncViewport = (event) => {
+      setIsMobileViewport(event.matches);
+    };
+
+    setIsMobileViewport(mediaQuery.matches);
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", syncViewport);
+      return () => mediaQuery.removeEventListener("change", syncViewport);
+    }
+
+    mediaQuery.addListener(syncViewport);
+    return () => mediaQuery.removeListener(syncViewport);
+  }, []);
 
   useEffect(() => {
     const token = String(publicToken || "").trim();
@@ -1434,7 +1442,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     if (!hole) return;
     setNavigatorTab("holes");
     setSelectedHoleId(hole.id);
-    setMobilePanelTab("hole");
+    setMobilePanelTab("holes");
 
     const map = mapRef.current;
     const mapboxgl = mapboxRef.current;
@@ -1475,7 +1483,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     if (!asset) return;
     setNavigatorTab("assets");
     setSelectedAssetId(asset.id);
-    setMobilePanelTab("asset");
+    setMobilePanelTab("assets");
 
     const map = mapRef.current;
     const mapboxgl = mapboxRef.current;
@@ -1610,7 +1618,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         source: ASSETS_SOURCE_ID,
         paint: {
           "circle-radius": 6,
-          "circle-color": ASSET_STATUS_COLOR_EXPRESSION,
+          "circle-color": ASSET_COLOR,
           "circle-stroke-color": "#cffafe",
           "circle-stroke-width": 2,
           "circle-opacity": 0.92,
@@ -1619,7 +1627,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     }
 
     if (map.getLayer(ASSETS_CIRCLE_LAYER_ID)) {
-      map.setPaintProperty(ASSETS_CIRCLE_LAYER_ID, "circle-color", ASSET_STATUS_COLOR_EXPRESSION);
+      map.setPaintProperty(ASSETS_CIRCLE_LAYER_ID, "circle-color", ASSET_COLOR);
     }
 
     if (!map.getLayer(ASSETS_SELECTED_LAYER_ID)) {
@@ -1688,10 +1696,38 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
 
   useEffect(() => {
     const map = mapRef.current;
+    if (!map || !mapReadyRef.current) return;
+
+    const showAllLayers = !isMobileViewport || mobilePanelTab === "all";
+    const showAssetLayers = showAllLayers || mobilePanelTab === "assets";
+    const showHoleLayers = showAllLayers || mobilePanelTab === "projects" || mobilePanelTab === "holes";
+
+    const setLayerVisibility = (layerId, visible) => {
+      if (!map.getLayer(layerId)) return;
+      map.setLayoutProperty(layerId, "visibility", visible ? "visible" : "none");
+    };
+
+    setLayerVisibility(HOLES_GLOW_LAYER_ID, showHoleLayers);
+    setLayerVisibility(HOLES_CIRCLE_LAYER_ID, showHoleLayers);
+    setLayerVisibility(HOLES_SELECTED_LAYER_ID, showHoleLayers);
+    setLayerVisibility(HOLES_LABEL_LAYER_ID, showHoleLayers);
+    setLayerVisibility(ASSETS_GLOW_LAYER_ID, showAssetLayers);
+    setLayerVisibility(ASSETS_CIRCLE_LAYER_ID, showAssetLayers);
+    setLayerVisibility(ASSETS_SELECTED_LAYER_ID, showAssetLayers);
+  }, [isMobileViewport, mapStatus, mobilePanelTab]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     const mapboxgl = mapboxRef.current;
     if (!map || !mapboxgl || !mapReadyRef.current) return;
 
-    const visibleMapRows = [...visibleHoles, ...visibleAssets];
+    const visibleMapRows = isMobileViewport
+      ? mobilePanelTab === "assets"
+        ? visibleAssets
+        : mobilePanelTab === "all"
+          ? [...visibleHoles, ...visibleAssets]
+          : visibleHoles
+      : [...visibleHoles, ...visibleAssets];
 
     if (!visibleMapRows.length) {
       if (popupRef.current) popupRef.current.remove();
@@ -1700,7 +1736,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     }
 
     frameRowsOnMap(visibleMapRows);
-  }, [mapStatus, visibleAssets, visibleHoles]);
+  }, [isMobileViewport, mapStatus, mobilePanelTab, visibleAssets, visibleHoles]);
 
   const totalProjects = projectOptions.length;
   const totalVisibleProjects = projectFilter ? projectOptions.filter((project) => project.id === projectFilter).length : projectOptions.length;
@@ -1895,16 +1931,16 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Mobile Navigator</div>
-                    <div className="mt-1 text-lg font-semibold text-white">{mobilePanelTab === "projects" ? "Projects and holes" : mobilePanelTab === "hole" ? "Hole attributes" : mobilePanelTab === "assets" ? "Mapped assets" : "Asset attributes"}</div>
+                    <div className="mt-1 text-lg font-semibold text-white">{mobilePanelTab === "projects" ? "Projects and holes" : mobilePanelTab === "holes" ? "Hole attributes" : mobilePanelTab === "assets" ? "Mapped assets" : "All mapped items"}</div>
                   </div>
                   <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-300">
                     {mobilePanelTab === "projects"
                       ? `${totalVisibleProjects} projects`
-                      : mobilePanelTab === "hole"
+                      : mobilePanelTab === "holes"
                         ? selectedHole?.hole_id || "No selection"
                         : mobilePanelTab === "assets"
                           ? `${totalVisibleAssets} assets`
-                          : selectedAsset?.name || "No selection"}
+                        : `${totalVisibleHoles + totalVisibleAssets} items`}
                   </div>
                 </div>
                 <div className="mt-4 flex flex-col gap-3">
@@ -1918,10 +1954,10 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                     </button>
                     <button
                       type="button"
-                      className={`flex-1 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "hole" ? "bg-amber-300 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
-                      onClick={() => setMobilePanelTab("hole")}
+                      className={`flex-1 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "holes" ? "bg-amber-300 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
+                      onClick={() => setMobilePanelTab("holes")}
                     >
-                      Hole
+                      Holes
                     </button>
                     <button
                       type="button"
@@ -1932,10 +1968,10 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                     </button>
                     <button
                       type="button"
-                      className={`flex-1 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "asset" ? "bg-cyan-200 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
-                      onClick={() => setMobilePanelTab("asset")}
+                      className={`flex-1 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "all" ? "bg-cyan-200 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
+                      onClick={() => setMobilePanelTab("all")}
                     >
-                      Asset
+                      All
                     </button>
                   </div>
 
@@ -1990,7 +2026,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   onSelectHole={focusHole}
                   compact
                 />
-              ) : mobilePanelTab === "hole" ? (
+              ) : mobilePanelTab === "holes" ? (
                 <HoleAttributesPanel selectedHole={selectedHole} mobile />
               ) : mobilePanelTab === "assets" ? (
                 <AssetAccordionList
@@ -2003,7 +2039,33 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   compact
                 />
               ) : (
-                <AssetAttributesPanel selectedAsset={selectedAsset} mobile />
+                <div className="space-y-5 p-4">
+                  <div>
+                    <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Hole Programs</div>
+                    <ProjectAccordionList
+                      loading={loading}
+                      projects={filteredProjects}
+                      expandedProjects={expandedProjects}
+                      onToggleProject={toggleProjectExpanded}
+                      selectedHoleId={selectedHole?.id || ""}
+                      onSelectHole={focusHole}
+                      compact
+                    />
+                  </div>
+
+                  <div>
+                    <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Mapped Assets</div>
+                    <AssetAccordionList
+                      loading={loading}
+                      projects={filteredAssetProjects}
+                      expandedProjects={expandedAssetProjects}
+                      onToggleProject={toggleAssetProjectExpanded}
+                      selectedAssetId={selectedAsset?.id || ""}
+                      onSelectAsset={focusAsset}
+                      compact
+                    />
+                  </div>
+                </div>
               )}
             </div>
 
