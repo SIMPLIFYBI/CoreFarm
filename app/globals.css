@@ -280,6 +280,24 @@ button, a {
   border-left-color: rgba(15, 23, 42, 0.98) !important;
 }
 
+.hole-map-popup-mobile.mapboxgl-popup {
+  left: 50% !important;
+  top: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: translate(-50%, -50%) !important;
+  max-width: min(calc(100% - 1.5rem), 20rem) !important;
+}
+
+.hole-map-popup-mobile .mapboxgl-popup-content {
+  width: min(calc(100vw - 2rem), 20rem) !important;
+  max-width: 20rem !important;
+}
+
+.hole-map-popup-mobile .mapboxgl-popup-tip {
+  display: none !important;
+}
+
 /* Success (green) and Warning (orange) button variants for PO item states */
 .btn-success {
   background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);

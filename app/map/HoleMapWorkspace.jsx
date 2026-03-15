@@ -32,7 +32,7 @@ const HOLE_STATE_STYLES = [
   { value: "drilled", label: "Drilled", color: "#22c55e" },
 ];
 
-const ASSET_COLOR = "#22d3ee";
+const ASSET_COLOR = "#f472b6";
 const ASSET_STATUS_STYLES = [{ value: "assets", label: "Assets", color: ASSET_COLOR }];
 
 const HOLE_STATE_COLOR_EXPRESSION = [
@@ -360,7 +360,7 @@ function AssetAccordionList({
                       key={asset.id}
                       type="button"
                       onClick={() => onSelectAsset(asset)}
-                      className={`grid w-full grid-cols-[1fr_auto] items-center gap-3 rounded-2xl border px-3 py-3 text-left transition ${isSelected ? "border-cyan-300/50 bg-cyan-300/12 shadow-[0_10px_32px_rgba(34,211,238,0.14)]" : "border-white/8 bg-white/[0.03] hover:border-cyan-300/30 hover:bg-cyan-300/[0.06]"}`}
+                      className={`grid w-full grid-cols-[1fr_auto] items-center gap-3 rounded-2xl border px-3 py-3 text-left transition ${isSelected ? "border-rose-300/50 bg-rose-300/12 shadow-[0_10px_32px_rgba(244,114,182,0.16)]" : "border-white/8 bg-white/[0.03] hover:border-rose-300/30 hover:bg-rose-300/[0.06]"}`}
                     >
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold text-slate-100">{asset.name}</div>
@@ -1438,6 +1438,13 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     `;
   };
 
+  const applyPopupViewportLayout = (popup) => {
+    const popupElement = popup?.getElement?.();
+    if (!popupElement) return;
+
+    popupElement.classList.toggle("hole-map-popup-mobile", isMobileViewport);
+  };
+
   const focusHole = (hole, options = {}) => {
     if (!hole) return;
     setNavigatorTab("holes");
@@ -1468,6 +1475,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     }
 
     popupRef.current.setLngLat([lng, lat]).setHTML(renderPopupHtml(hole)).addTo(map);
+    applyPopupViewportLayout(popupRef.current);
 
     const schematicButton = popupRef.current.getElement()?.querySelector('[data-popup-action="open-schematic"]');
     if (schematicButton) {
@@ -1509,7 +1517,12 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     }
 
     popupRef.current.setLngLat([lng, lat]).setHTML(renderAssetPopupHtml(asset)).addTo(map);
+    applyPopupViewportLayout(popupRef.current);
   };
+
+  useEffect(() => {
+    applyPopupViewportLayout(popupRef.current);
+  }, [isMobileViewport]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1604,7 +1617,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         source: ASSETS_SOURCE_ID,
         paint: {
           "circle-radius": 16,
-          "circle-color": "#22d3ee",
+          "circle-color": ASSET_COLOR,
           "circle-opacity": 0.12,
           "circle-blur": 0.8,
         },
@@ -1619,7 +1632,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         paint: {
           "circle-radius": 6,
           "circle-color": ASSET_COLOR,
-          "circle-stroke-color": "#cffafe",
+          "circle-stroke-color": "#fbcfe8",
           "circle-stroke-width": 2,
           "circle-opacity": 0.92,
         },
@@ -1637,8 +1650,8 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         source: ASSETS_SOURCE_ID,
         paint: {
           "circle-radius": 11,
-          "circle-color": "rgba(34,211,238,0.18)",
-          "circle-stroke-color": "#67e8f9",
+          "circle-color": "rgba(244,114,182,0.18)",
+          "circle-stroke-color": "#f9a8d4",
           "circle-stroke-width": 3,
         },
         filter: ["==", ["get", "id"], ""],
@@ -1900,6 +1913,53 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
           <div className="space-y-4">
             <div className="relative overflow-hidden rounded-[32px] border border-white/10 bg-slate-950/60 shadow-[0_30px_100px_rgba(2,6,23,0.42)] backdrop-blur-xl">
               <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(180deg,rgba(8,47,73,0.28),transparent)]" />
+              <div className="relative border-b border-white/10 px-4 py-4 md:hidden">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Mobile Map View</div>
+                    <div className="mt-1 text-lg font-semibold text-white">{mobilePanelTab === "projects" ? "Projects and holes" : mobilePanelTab === "holes" ? "Hole attributes" : mobilePanelTab === "assets" ? "Mapped assets" : "All mapped items"}</div>
+                  </div>
+                  <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-300">
+                    {mobilePanelTab === "projects"
+                      ? `${totalVisibleProjects} projects`
+                      : mobilePanelTab === "holes"
+                        ? selectedHole?.hole_id || "No selection"
+                        : mobilePanelTab === "assets"
+                          ? `${totalVisibleAssets} assets`
+                        : `${totalVisibleHoles + totalVisibleAssets} items`}
+                  </div>
+                </div>
+                <div className="mt-4 inline-flex w-full items-center gap-2 rounded-2xl bg-white/[0.04] p-1.5">
+                  <button
+                    type="button"
+                    className={`flex-1 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "projects" ? "bg-cyan-300 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
+                    onClick={() => setMobilePanelTab("projects")}
+                  >
+                    Projects
+                  </button>
+                  <button
+                    type="button"
+                    className={`flex-1 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "holes" ? "bg-amber-300 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
+                    onClick={() => setMobilePanelTab("holes")}
+                  >
+                    Holes
+                  </button>
+                  <button
+                    type="button"
+                    className={`flex-1 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "assets" ? "bg-rose-300 text-slate-950 shadow-[0_12px_28px_rgba(244,114,182,0.22)]" : "text-slate-200 hover:bg-white/8"}`}
+                    onClick={() => setMobilePanelTab("assets")}
+                  >
+                    Assets
+                  </button>
+                  <button
+                    type="button"
+                    className={`flex-1 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "all" ? "bg-slate-200 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
+                    onClick={() => setMobilePanelTab("all")}
+                  >
+                    All
+                  </button>
+                </div>
+              </div>
               <div className="relative hidden items-center justify-between gap-3 border-b border-white/10 px-4 py-4 md:flex md:px-5">
                 <div>
                   <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Map canvas</div>
@@ -1944,37 +2004,6 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   </div>
                 </div>
                 <div className="mt-4 flex flex-col gap-3">
-                  <div className="inline-flex w-full items-center gap-2 rounded-2xl bg-white/[0.04] p-1.5">
-                    <button
-                      type="button"
-                      className={`flex-1 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "projects" ? "bg-cyan-300 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
-                      onClick={() => setMobilePanelTab("projects")}
-                    >
-                      Projects
-                    </button>
-                    <button
-                      type="button"
-                      className={`flex-1 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "holes" ? "bg-amber-300 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
-                      onClick={() => setMobilePanelTab("holes")}
-                    >
-                      Holes
-                    </button>
-                    <button
-                      type="button"
-                      className={`flex-1 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "assets" ? "bg-cyan-300 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
-                      onClick={() => setMobilePanelTab("assets")}
-                    >
-                      Assets
-                    </button>
-                    <button
-                      type="button"
-                      className={`flex-1 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "all" ? "bg-cyan-200 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
-                      onClick={() => setMobilePanelTab("all")}
-                    >
-                      All
-                    </button>
-                  </div>
-
                   <div className="inline-flex w-full items-center gap-2 rounded-2xl border border-white/10 bg-slate-900/45 p-1.5">
                     <button
                       type="button"
