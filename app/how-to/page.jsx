@@ -166,178 +166,127 @@ export default function HowToPage() {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 md:px-6 lg:py-8">
-      <section className="card overflow-hidden p-0">
-        <div className="relative isolate overflow-hidden rounded-[14px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.18),transparent_34%),radial-gradient(circle_at_80%_20%,rgba(99,102,241,0.22),transparent_30%),linear-gradient(135deg,rgba(15,23,42,0.96),rgba(8,12,20,0.96))] px-5 py-6 md:px-8 md:py-8">
-          <div className="absolute inset-y-0 right-0 hidden w-1/3 bg-[linear-gradient(135deg,rgba(34,211,238,0.08),rgba(99,102,241,0.03),transparent)] lg:block" />
-          <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl space-y-4">
-              <div className="inline-flex items-center rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
-                Platform Lessons
-              </div>
-              <div className="space-y-2">
-                <h1 className="text-3xl font-semibold tracking-tight text-slate-50 md:text-4xl">How To Use CoreFarm</h1>
-                <p className="max-w-2xl text-sm leading-6 text-slate-300 md:text-base">
-                  Learn the platform as a connected workflow, from project setup through drilling, visualization, activity,
-                  dispatch, and inventory. Each lesson is designed to get a team productive fast without guessing where data belongs.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid w-full gap-3 sm:grid-cols-2 lg:max-w-xl">
-              <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Lessons</div>
-                <div className="mt-2 text-3xl font-semibold text-white">{LESSONS.length}</div>
-                <div className="mt-1 text-sm text-slate-300">Structured walkthroughs covering the full platform.</div>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Best For</div>
-                <div className="mt-2 text-lg font-semibold text-white">New teams and refreshers</div>
-                <div className="mt-1 text-sm text-slate-300">Use this page for onboarding, handover, or self-guided training.</div>
-              </div>
-            </div>
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 md:px-6 lg:py-8">
+      <section className="card p-6 md:p-7">
+        <div className="max-w-3xl space-y-4">
+          <div className="inline-flex items-center rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
+            Platform Lessons
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-50 md:text-4xl">How To Use CoreFarm</h1>
+            <p className="text-sm leading-6 text-slate-300 md:text-base">
+              Start with the quick setup path, then use the lesson cards below whenever you need help with a specific area of the platform.
+            </p>
           </div>
         </div>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <aside className="space-y-6">
-          <div className="card p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-100">Quick Start</h2>
-                <p className="mt-1 text-sm text-slate-400">If you only need the fastest setup path, start here.</p>
+      <section className="card p-5 md:p-6">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-100">Quick Start</h2>
+            <p className="mt-1 text-sm text-slate-400">The shortest path to getting a project live.</p>
+          </div>
+          <Link href="/projects" className="btn btn-3d-glass w-full justify-center text-xs md:w-auto">
+            Open Projects
+          </Link>
+        </div>
+        <ol className="mt-5 grid gap-3 md:grid-cols-2">
+          {QUICK_START.map((item, index) => (
+            <li key={item} className="flex gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-cyan-300/20 bg-cyan-400/10 text-sm font-semibold text-cyan-100">
+                {index + 1}
               </div>
-              <Link href="/projects" className="btn btn-3d-glass text-xs">
-                Open Projects
-              </Link>
-            </div>
-            <ol className="mt-4 space-y-3">
-              {QUICK_START.map((item, index) => (
-                <li key={item} className="flex gap-3 rounded-2xl border border-white/8 bg-white/[0.03] p-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-cyan-300/20 bg-cyan-400/10 text-sm font-semibold text-cyan-100">
-                    {index + 1}
+              <p className="text-sm leading-6 text-slate-300">{item}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section className="space-y-4">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-lg font-semibold text-slate-100">Lessons</h2>
+          <p className="text-sm text-slate-400">Select a topic for a simple walkthrough and a direct link into the app.</p>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {LESSONS.map((lesson, index) => {
+            const active = lesson.id === activeLesson.id;
+            return (
+              <button
+                key={lesson.id}
+                type="button"
+                onClick={() => setActiveLessonId(lesson.id)}
+                className={[
+                  "rounded-2xl border p-4 text-left transition-base",
+                  active
+                    ? "border-cyan-300/25 bg-cyan-400/10"
+                    : "border-white/10 bg-white/[0.03] hover:border-white/15 hover:bg-white/[0.05]",
+                ].join(" ")}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Lesson {index + 1}</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-100">{lesson.title}</div>
                   </div>
-                  <p className="text-sm leading-6 text-slate-300">{item}</p>
-                </li>
-              ))}
-            </ol>
+                  <div className="rounded-full border border-white/10 px-2 py-1 text-[11px] text-slate-300">{lesson.duration}</div>
+                </div>
+                <p className="mt-3 text-sm leading-5 text-slate-400">{lesson.summary}</p>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="card p-5 md:p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div className="max-w-3xl">
+              <div className="text-xs uppercase tracking-[0.18em] text-cyan-200/80">Current Lesson</div>
+              <h3 className="mt-2 text-2xl font-semibold text-white">{activeLesson.title}</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-300 md:text-base">{activeLesson.summary}</p>
+            </div>
+            <Link href={activeLesson.href} className="btn btn-3d-primary w-full justify-center md:w-auto">
+              Open Lesson Area
+            </Link>
           </div>
 
-          <div className="card p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-100">Lessons</h2>
-                <p className="mt-1 text-sm text-slate-400">Pick a topic to view the walkthrough.</p>
-              </div>
-            </div>
-            <div className="space-y-2">
-              {LESSONS.map((lesson, index) => {
-                const active = lesson.id === activeLesson.id;
-                return (
-                  <button
-                    key={lesson.id}
-                    type="button"
-                    onClick={() => setActiveLessonId(lesson.id)}
-                    className={[
-                      "w-full rounded-2xl border px-4 py-3 text-left transition-base",
-                      active
-                        ? "border-cyan-300/25 bg-[linear-gradient(135deg,rgba(34,211,238,0.14),rgba(15,23,42,0.88))] shadow-[0_12px_30px_rgba(34,211,238,0.14)]"
-                        : "border-white/10 bg-white/[0.03] hover:border-white/15 hover:bg-white/[0.05]",
-                    ].join(" ")}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Lesson {index + 1}</div>
-                        <div className="mt-1 text-sm font-semibold text-slate-100">{lesson.title}</div>
-                      </div>
-                      <div className="rounded-full border border-white/10 px-2 py-1 text-[11px] text-slate-300">{lesson.duration}</div>
-                    </div>
-                    <p className="mt-2 text-sm leading-5 text-slate-400">{lesson.summary}</p>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </aside>
-
-        <section className="space-y-6">
-          <div className="card p-5 md:p-6">
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-              <div>
-                <div className="text-xs uppercase tracking-[0.18em] text-cyan-200/80">Current Lesson</div>
-                <h2 className="mt-2 text-2xl font-semibold text-white md:text-3xl">{activeLesson.title}</h2>
-                <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300 md:text-base">{activeLesson.summary}</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-slate-300">
-                  Estimated time: {activeLesson.duration}
-                </div>
-                <Link href={activeLesson.href} className="btn btn-3d-primary">
-                  Open Lesson Area
-                </Link>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
-            <div className="card p-5 md:p-6">
-              <div className="grid gap-6 md:grid-cols-2">
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-100">What You Will Learn</h3>
-                  <ul className="mt-4 space-y-3">
-                    {activeLesson.goals.map((goal, index) => (
-                      <li key={goal} className="flex gap-3 text-sm leading-6 text-slate-300">
-                        <span className="mt-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-cyan-300/25 bg-cyan-400/10 text-[11px] text-cyan-100">
-                          {index + 1}
-                        </span>
-                        <span>{goal}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-100">Recommended Steps</h3>
-                  <ol className="mt-4 space-y-3">
-                    {activeLesson.steps.map((step, index) => (
-                      <li key={step} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-                        <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Step {index + 1}</div>
-                        <p className="mt-2 text-sm leading-6 text-slate-300">{step}</p>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              </div>
-            </div>
-
+          <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
             <div className="space-y-6">
-              <div className="card p-5">
-                <h3 className="text-lg font-semibold text-slate-100">Field Tip</h3>
-                <p className="mt-3 text-sm leading-6 text-slate-300">{activeLesson.tip}</p>
+              <div>
+                <h4 className="text-base font-semibold text-slate-100">What You Will Learn</h4>
+                <ul className="mt-3 space-y-3">
+                  {activeLesson.goals.map((goal, index) => (
+                    <li key={goal} className="flex gap-3 text-sm leading-6 text-slate-300">
+                      <span className="mt-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-cyan-300/25 bg-cyan-400/10 text-[11px] text-cyan-100">
+                        {index + 1}
+                      </span>
+                      <span>{goal}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
 
-              <div className="card p-5">
-                <h3 className="text-lg font-semibold text-slate-100">Suggested Next Lesson</h3>
-                <p className="mt-2 text-sm text-slate-400">Keep moving through the workflow in order for the smoothest onboarding.</p>
-                <div className="mt-4 space-y-2">
-                  {LESSONS.filter((lesson) => lesson.id !== activeLesson.id)
-                    .slice(0, 3)
-                    .map((lesson) => (
-                      <button
-                        key={lesson.id}
-                        type="button"
-                        onClick={() => setActiveLessonId(lesson.id)}
-                        className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-left transition-base hover:border-white/15 hover:bg-white/[0.05]"
-                      >
-                        <span className="text-sm text-slate-200">{lesson.title}</span>
-                        <span className="text-xs text-slate-400">{lesson.duration}</span>
-                      </button>
-                    ))}
-                </div>
+              <div>
+                <h4 className="text-base font-semibold text-slate-100">Recommended Steps</h4>
+                <ol className="mt-3 space-y-3">
+                  {activeLesson.steps.map((step, index) => (
+                    <li key={step} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                      <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Step {index + 1}</div>
+                      <p className="mt-2 text-sm leading-6 text-slate-300">{step}</p>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Field Tip</div>
+              <p className="mt-3 text-sm leading-6 text-slate-300">{activeLesson.tip}</p>
+              <div className="mt-4 rounded-full border border-white/10 px-3 py-1.5 text-xs text-slate-300">
+                Estimated time: {activeLesson.duration}
               </div>
             </div>
           </div>
-        </section>
+        </div>
       </section>
     </div>
   );

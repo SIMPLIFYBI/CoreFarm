@@ -535,11 +535,11 @@ export function AdminPage({ projectScope = "own" }) {
 
       <section className="card p-4 md:p-5">
         <div className="flex flex-col gap-3 pb-2 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-          <div className="relative" ref={projectMenuRef}>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="relative w-full sm:w-auto" ref={projectMenuRef}>
             <button
               type="button"
-              className="input input-sm w-auto flex items-center gap-1 cursor-pointer"
+              className="input input-sm flex w-full items-center justify-between gap-1 cursor-pointer sm:w-auto"
               onClick={() => setProjectMenuOpen((o) => !o)}
             >
               <span className="text-slate-200">Project:</span>
@@ -547,7 +547,7 @@ export function AdminPage({ projectScope = "own" }) {
               <svg className={`w-3 h-3 ml-1 transition-transform ${projectMenuOpen ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor"><path d="M5.23 7.21a.75.75 0 011.06.02L10 11.189l3.71-3.96a.75.75 0 111.08 1.04l-4.24 4.53a.75.75 0 01-1.08 0l-4.24-4.53a.75.75 0 01.02-1.06z" /></svg>
             </button>
             {projectMenuOpen && (
-              <div className="absolute right-0 mt-1 w-56 rounded-xl border border-white/10 bg-slate-950/95 backdrop-blur-xl shadow-lg z-30 p-2 space-y-1 text-sm max-h-64 overflow-auto">
+              <div className="absolute left-1/2 z-30 mt-1 max-h-64 w-[min(22rem,calc(100vw-2rem))] -translate-x-1/2 overflow-auto rounded-xl border border-white/10 bg-slate-950/95 p-2 text-sm shadow-lg backdrop-blur-xl sm:left-auto sm:right-0 sm:w-56 sm:translate-x-0">
                 <button
                   type="button"
                   onClick={() => { setSelectedProject(""); setProjectMenuOpen(false); }}
@@ -583,10 +583,10 @@ export function AdminPage({ projectScope = "own" }) {
             )}
           </div>
 
-          <div className="relative" ref={statusMenuRef}>
+          <div className="relative w-full sm:w-auto" ref={statusMenuRef}>
             <button
               type="button"
-              className="input input-sm w-auto flex items-center gap-1 cursor-pointer"
+              className="input input-sm flex w-full items-center justify-between gap-1 cursor-pointer sm:w-auto"
               onClick={() => setStatusMenuOpen((o) => !o)}
             >
               <span className="text-slate-200">Status:</span>
@@ -604,7 +604,7 @@ export function AdminPage({ projectScope = "own" }) {
               <svg className={`w-3 h-3 ml-1 transition-transform ${statusMenuOpen ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor"><path d="M5.23 7.21a.75.75 0 011.06.02L10 11.189l3.71-3.96a.75.75 0 111.08 1.04l-4.24 4.53a.75.75 0 01-1.08 0l-4.24-4.53a.75.75 0 01.02-1.06z" /></svg>
             </button>
             {statusMenuOpen && (
-              <div className="absolute right-0 mt-1 w-48 rounded-xl border border-white/10 bg-slate-950/95 backdrop-blur-xl shadow-lg z-30 p-2 space-y-1 text-sm">
+              <div className="absolute left-1/2 z-30 mt-1 w-[min(20rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-white/10 bg-slate-950/95 p-2 text-sm shadow-lg backdrop-blur-xl sm:left-auto sm:right-0 sm:w-48 sm:translate-x-0">
                 {[
                   { key: "complete", label: "Completed", color: "bg-green-500" },
                   { key: "in_progress", label: "In progress", color: "bg-amber-500" },

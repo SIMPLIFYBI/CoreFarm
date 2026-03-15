@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import { EditIconButton } from "@/app/components/ActionIconButton";
+import CoreTaskPanelHeader from "./CoreTaskPanelHeader";
 
 function toNum(value) {
   const n = Number(value);
@@ -333,6 +334,15 @@ export default function SampleDispatchPage({ projectScope = "own" }) {
     return Array.from(map.values()).sort((a, b) => a.hole_label.localeCompare(b.hole_label));
   }, [filteredEligibleSegments]);
 
+  const dispatchHeaderStats = useMemo(
+    () => [
+      { label: "eligible runs", value: loading ? "..." : filteredEligibleSegments.length },
+      { label: "dispatch lines", value: lines.length },
+      { label: "recent dispatches", value: loading ? "..." : dispatches.length },
+    ],
+    [dispatches.length, filteredEligibleSegments.length, lines.length, loading]
+  );
+
   useEffect(() => {
     setExpandedEligibleByHole((prev) => {
       const next = { ...prev };
@@ -530,10 +540,12 @@ export default function SampleDispatchPage({ projectScope = "own" }) {
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-5">
-      <div className="card p-4 md:p-5">
-        <h1 className="text-2xl font-semibold text-slate-100">Sample Dispatch</h1>
-        <p className="text-sm text-slate-300 mt-1">Build dispatches from eligible core intervals across multiple holes.</p>
-      </div>
+      <CoreTaskPanelHeader
+        eyebrow="Sample Dispatch"
+        title="Build dispatches from eligible core intervals across multiple holes."
+        description="Review eligible runs, assemble dispatch lines, and finalise shipment details from the same workspace without losing context."
+        stats={dispatchHeaderStats}
+      />
 
       <div className="card p-4 md:p-5 space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">

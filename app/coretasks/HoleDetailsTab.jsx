@@ -7,6 +7,7 @@ import { useOrg } from "@/lib/OrgContext";
 import { parseTable } from "@/lib/parseTable";
 import { getAustralianProjectCrsByCode } from "@/lib/coordinateSystems";
 import { deriveHoleCoordinates } from "@/lib/holeCoordinates";
+import CoreTaskPanelHeader from "./CoreTaskPanelHeader";
 
 const STATE_OPTIONS = ["proposed", "in_progress", "drilled"];
 const DIAMETER_OPTIONS = ["", "NQ", "HQ", "PQ", "Other"];
@@ -103,11 +104,13 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
   const [importing, setImporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [bulkUpdating, setBulkUpdating] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   const [search, setSearch] = useState("");
   const [projectFilter, setProjectFilter] = useState("");
   const [stateFilter, setStateFilter] = useState("");
   const [diameterFilter, setDiameterFilter] = useState("");
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [showBulk, setShowBulk] = useState(false);
   const [bulkText, setBulkText] = useState("");
   const [bulkProjectId, setBulkProjectId] = useState("");
@@ -278,6 +281,23 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
   }, [orgId, projectScope]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
+    const syncIsMobile = (event) => setIsMobile(event.matches);
+
+    syncIsMobile(mediaQuery);
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", syncIsMobile);
+      return () => mediaQuery.removeEventListener("change", syncIsMobile);
+    }
+
+    mediaQuery.addListener(syncIsMobile);
+    return () => mediaQuery.removeListener(syncIsMobile);
+  }, []);
+
+  useEffect(() => {
     setProjectFilter("");
     setSelectedHole(null);
     setSelectedHoleIds([]);
@@ -285,6 +305,13 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
     setBulkProjectId("");
     setShowBulkEdit(false);
   }, [projectScope]);
+
+  useEffect(() => {
+    if (isMobile) {
+      setSelectedHoleIds([]);
+      setShowBulkEdit(false);
+    }
+  }, [isMobile]);
 
   useEffect(() => {
     if (!showBulk || projectScope === "shared") return;
@@ -346,6 +373,20 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
   const selectedBulkProject = useMemo(
     () => projects.find((project) => project.id === bulkProjectId) || null,
     [projects, bulkProjectId]
+  );
+
+  const activeFilterCount = useMemo(
+    () => [search.trim(), projectFilter, stateFilter, diameterFilter].filter(Boolean).length,
+    [search, projectFilter, stateFilter, diameterFilter]
+  );
+
+  const holeHeaderStats = useMemo(
+    () => [
+      { label: "visible holes", value: loading ? "..." : filteredHoles.length },
+      { label: "projects", value: loading ? "..." : projects.length },
+      { label: "active filters", value: activeFilterCount },
+    ],
+    [activeFilterCount, filteredHoles.length, loading, projects.length]
   );
 
   const filteredHoleIds = useMemo(() => filteredHoles.map((hole) => hole.id), [filteredHoles]);
@@ -767,28 +808,33 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
 
   return (
     <div className="p-4 md:p-5 space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-slate-100">Hole Details</h2>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="btn btn-3d-glass hidden md:inline-flex"
-            disabled={projectScope === "shared"}
-            onClick={() => {
-              setShowBulk(true);
-              setBulkProjectId(resolveDefaultProjectId(projects, projectFilter));
-              setParsed([]);
-            }}
-          >
-            Open bulk uploader
-          </button>
-          <button type="button" className="btn btn-3d-primary" onClick={openCreateHole} disabled={projectScope === "shared"}>
-            Add New Core
-          </button>
-        </div>
-      </div>
+      <CoreTaskPanelHeader
+        eyebrow="Hole Details"
+        title="Manage the hole register, imports, and drill program details in one place."
+        description="Search and filter the register, jump into edits quickly, and keep every hole linked to the right project before it moves downstream into logging and visualization."
+        stats={holeHeaderStats}
+        actions={
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <button
+              type="button"
+              className="btn btn-3d-glass hidden md:inline-flex"
+              disabled={projectScope === "shared"}
+              onClick={() => {
+                setShowBulk(true);
+                setBulkProjectId(resolveDefaultProjectId(projects, projectFilter));
+                setParsed([]);
+              }}
+            >
+              Open bulk uploader
+            </button>
+            <button type="button" className="btn btn-3d-primary" onClick={openCreateHole} disabled={projectScope === "shared"}>
+              Add New Core
+            </button>
+          </div>
+        }
+      />
 
-      {projectScope !== "shared" && selectedHoleIds.length > 0 && (
+      {projectScope !== "shared" && !isMobile && selectedHoleIds.length > 0 && (
         <div className="card p-4 space-y-3">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
             <div>
@@ -817,7 +863,21 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
         </div>
       )}
 
-      <div className="card p-4 md:p-5 space-y-4">
+      <div className="md:hidden">
+        <button
+          type="button"
+          className={[
+            "btn w-full justify-between px-4",
+            showMobileFilters || activeFilterCount > 0 ? "btn-3d-glass" : "",
+          ].join(" ")}
+          onClick={() => setShowMobileFilters((current) => !current)}
+        >
+          <span>Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}</span>
+          <span className="text-xs text-slate-300">{showMobileFilters ? "Hide" : "Show"}</span>
+        </button>
+      </div>
+
+      <div className={["card p-4 md:p-5 space-y-4", showMobileFilters ? "block" : "hidden md:block"].join(" ")}>
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
           <label className="flex min-w-[220px] flex-1 flex-col gap-1.5 text-sm text-slate-200">
             Search Holes
@@ -874,6 +934,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
                 setProjectFilter("");
                 setStateFilter("");
                 setDiameterFilter("");
+                setShowMobileFilters(false);
               }}
             >
               Clear
@@ -887,10 +948,13 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
       </div>
 
       <div className="table-container">
+        <div className="mb-2 px-1 text-xs text-slate-400">
+          Showing {filteredHoles.length} of {holes.length} hole{holes.length === 1 ? "" : "s"}
+        </div>
         <table className="table">
           <thead>
             <tr>
-              {projectScope !== "shared" && (
+              {projectScope !== "shared" && !isMobile && (
                 <th>
                   <input
                     type="checkbox"
@@ -913,13 +977,13 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={projectScope === "shared" ? 8 : 9} className="text-center py-8 text-slate-300">
+                <td colSpan={projectScope === "shared" || isMobile ? 8 : 9} className="text-center py-8 text-slate-300">
                   Loading holes…
                 </td>
               </tr>
             ) : filteredHoles.length === 0 ? (
               <tr>
-                <td colSpan={projectScope === "shared" ? 8 : 9} className="text-center py-8 text-slate-300">
+                <td colSpan={projectScope === "shared" || isMobile ? 8 : 9} className="text-center py-8 text-slate-300">
                   No holes match your filters.
                 </td>
               </tr>
@@ -930,7 +994,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
                   className="cursor-pointer hover:bg-white/5 transition-base"
                   onClick={() => openHole(hole)}
                 >
-                  {projectScope !== "shared" && (
+                  {projectScope !== "shared" && !isMobile && (
                     <td onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
