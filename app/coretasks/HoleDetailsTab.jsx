@@ -810,8 +810,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
     <div className="p-4 md:p-5 space-y-4">
       <CoreTaskPanelHeader
         eyebrow="Hole Details"
-        title="Manage the hole register, imports, and drill program details in one place."
-        description="Search and filter the register, jump into edits quickly, and keep every hole linked to the right project before it moves downstream into logging and visualization."
+        title=""
         stats={holeHeaderStats}
         actions={
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">

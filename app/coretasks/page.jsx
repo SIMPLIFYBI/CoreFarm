@@ -1,16 +1,25 @@
 "use client";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import CorePage from "./CorePage";
 import SampleDispatchPage from "./SampleDispatchPage";
 import DrillholeVizPage from "../drillhole-viz/page";
 import HoleDetailsTab from "./HoleDetailsTab";
+import CoreTasksManagerPage from "./CoreTasksPage";
+import AdminPage from "./AdminPage";
 
 const PROJECT_SCOPE_STORAGE_KEY = "coretasks:projectScope";
 
 export default function CoreTasksPage() {
-  const [tab, setTab] = useState("holedetails");
+  const pathname = usePathname();
+  const initialTab = pathname === "/addcore" ? "addcore" : "holedetails";
+  const [tab, setTab] = useState(initialTab);
   const [projectScope, setProjectScope] = useState("own"); // 'own' | 'shared'
   const isDrillholeVizTab = tab === "drillholeviz";
+
+  useEffect(() => {
+    setTab(pathname === "/addcore" ? "addcore" : "holedetails");
+  }, [pathname]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -65,6 +74,18 @@ export default function CoreTasksPage() {
             Sample Dispatch
           </button>
           <button
+            className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "addcore" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
+            onClick={() => setTab("addcore")}
+          >
+            Add Core
+          </button>
+          <button
+            className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "coretasks" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
+            onClick={() => setTab("coretasks")}
+          >
+            Core Tasks
+          </button>
+          <button
             className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "drillholeviz" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
             onClick={() => setTab("drillholeviz")}
           >
@@ -82,6 +103,14 @@ export default function CoreTasksPage() {
           {tab === "holedetails" ? (
             <div className="card overflow-hidden">
               <HoleDetailsTab projectScope={projectScope} />
+            </div>
+          ) : tab === "addcore" ? (
+            <div className="card overflow-hidden">
+              <AdminPage projectScope={projectScope} />
+            </div>
+          ) : tab === "coretasks" ? (
+            <div className="card overflow-hidden">
+              <CoreTasksManagerPage />
             </div>
           ) : (
             <div className="card overflow-hidden">

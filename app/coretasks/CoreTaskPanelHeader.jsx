@@ -5,7 +5,7 @@ export default function CoreTaskPanelHeader({ eyebrow, title, description, stats
         <div className="relative flex flex-col gap-3 border-b border-white/10 px-4 py-4 md:px-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0 flex-1">
             <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">{eyebrow}</div>
-            <div className="mt-1 text-lg font-semibold text-white md:text-[1.65rem] md:leading-9">{title}</div>
+            {title ? <div className="mt-1 text-lg font-semibold text-white md:text-[1.65rem] md:leading-9">{title}</div> : null}
             {description ? <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">{description}</p> : null}
           </div>
 

@@ -251,20 +251,43 @@ CREATE TABLE public.drillhole_sensors (
   CONSTRAINT drillhole_sensors_hole_fk FOREIGN KEY (organization_id) REFERENCES public.holes(organization_id),
   CONSTRAINT drillhole_sensors_hole_fk FOREIGN KEY (hole_id) REFERENCES public.holes(organization_id)
 );
+CREATE TABLE public.hole_task_types (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  key text NOT NULL,
+  name text NOT NULL,
+  description text,
+  color text,
+  sort_order integer NOT NULL DEFAULT 0,
+  is_active boolean NOT NULL DEFAULT true,
+  created_by uuid DEFAULT auth.uid(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT hole_task_types_pkey PRIMARY KEY (id),
+  CONSTRAINT hole_task_types_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT hole_task_types_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id),
+  CONSTRAINT hole_task_types_organization_id_key_key UNIQUE (organization_id, key),
+  CONSTRAINT hole_task_types_organization_id_name_key UNIQUE (organization_id, name),
+  CONSTRAINT hole_task_types_key_present_check CHECK (btrim(key) <> ''::text),
+  CONSTRAINT hole_task_types_name_present_check CHECK (btrim(name) <> ''::text)
+);
 CREATE TABLE public.hole_task_intervals (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   hole_id uuid NOT NULL,
-  task_type text NOT NULL CHECK (task_type = ANY (ARRAY['orientation'::text, 'magnetic_susceptibility'::text, 'whole_core_sampling'::text, 'cutting'::text, 'rqd'::text, 'specific_gravity'::text])),
+  task_type text NOT NULL CHECK (btrim(task_type) <> ''::text),
+  task_type_id uuid,
   from_m numeric NOT NULL,
   to_m numeric NOT NULL,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT hole_task_intervals_pkey PRIMARY KEY (id),
-  CONSTRAINT hole_task_intervals_hole_id_fkey FOREIGN KEY (hole_id) REFERENCES public.holes(id)
+  CONSTRAINT hole_task_intervals_hole_id_fkey FOREIGN KEY (hole_id) REFERENCES public.holes(id),
+  CONSTRAINT hole_task_intervals_task_type_id_fkey FOREIGN KEY (task_type_id) REFERENCES public.hole_task_types(id)
 );
 CREATE TABLE public.hole_task_progress (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   hole_id uuid NOT NULL,
-  task_type text NOT NULL CHECK (task_type = ANY (ARRAY['orientation'::text, 'magnetic_susceptibility'::text, 'whole_core_sampling'::text, 'cutting'::text, 'rqd'::text, 'specific_gravity'::text])),
+  task_type text NOT NULL CHECK (btrim(task_type) <> ''::text),
+  task_type_id uuid,
   from_m numeric NOT NULL,
   to_m numeric NOT NULL,
   user_id uuid NOT NULL DEFAULT auth.uid(),
@@ -273,6 +296,7 @@ CREATE TABLE public.hole_task_progress (
   logged_on date DEFAULT CURRENT_DATE,
   CONSTRAINT hole_task_progress_pkey PRIMARY KEY (id),
   CONSTRAINT hole_task_progress_hole_id_fkey FOREIGN KEY (hole_id) REFERENCES public.holes(id),
+  CONSTRAINT hole_task_progress_task_type_id_fkey FOREIGN KEY (task_type_id) REFERENCES public.hole_task_types(id),
   CONSTRAINT hole_task_progress_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.holes (

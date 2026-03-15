@@ -6,19 +6,24 @@ import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import { parseTable } from "@/lib/parseTable";
 import { EditIconButton, DeleteIconButton } from "@/app/components/ActionIconButton";
+import { DEFAULT_TASK_TYPE_DEFS, TASK_TYPES as DEFAULT_TASK_TYPES, fetchOrgTaskTypes } from "@/lib/taskTypes";
 
-const TASK_TYPES = [
-  "orientation",
-  "magnetic_susceptibility",
-  "whole_core_sampling",
-  "cutting",
-  "rqd",
-  "specific_gravity",
-];
+function humanizeTaskKey(taskKey) {
+  return String(taskKey || "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
 
 export function AdminPage({ projectScope = "own" }) {
   const supabase = supabaseBrowser();
   const { orgId } = useOrg();
+  const defaultTaskMeta = useMemo(
+    () =>
+      Object.fromEntries(
+        DEFAULT_TASK_TYPE_DEFS.map((task) => [task.key, { label: task.name, color: task.color || "#64748b" }])
+      ),
+    []
+  );
 
   const [holes, setHoles] = useState([]);
   const [holeStatus, setHoleStatus] = useState({});
@@ -52,11 +57,18 @@ export function AdminPage({ projectScope = "own" }) {
   const statusMenuRef = useRef(null);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const projectMenuRef = useRef(null);
+  const [taskMeta, setTaskMeta] = useState(defaultTaskMeta);
+  const [intervalSaveState, setIntervalSaveState] = useState("idle");
+  const [intervalSaveMessage, setIntervalSaveMessage] = useState("Choose a hole to start planning tasks.");
+  const suppressIntervalAutosaveRef = useRef(true);
+  const autosaveTimerRef = useRef(null);
+  const lastSavedIntervalsRef = useRef("");
 
   const [intervals, setIntervals] = useState({});
+  const taskTypeKeys = useMemo(() => Object.keys(taskMeta), [taskMeta]);
   const emptyIntervals = useMemo(
-    () => TASK_TYPES.reduce((acc, t) => ({ ...acc, [t]: [] }), {}),
-    []
+    () => taskTypeKeys.reduce((acc, t) => ({ ...acc, [t]: [] }), {}),
+    [taskTypeKeys]
   );
 
   const sampleHeaders = useMemo(
@@ -105,6 +117,56 @@ export function AdminPage({ projectScope = "own" }) {
 
   const allSelected = holeFilters.length === 3;
 
+  const labelForTask = (taskKey) => taskMeta[taskKey]?.label || humanizeTaskKey(taskKey);
+  const colorForTask = (taskKey) => taskMeta[taskKey]?.color || "#64748b";
+
+  const serialiseIntervals = (value) =>
+    JSON.stringify(
+      taskTypeKeys.map((taskKey) => [
+        taskKey,
+        (value?.[taskKey] || []).map((row) => ({
+          from_m: String(row.from_m ?? "").trim(),
+          to_m: String(row.to_m ?? "").trim(),
+        })),
+      ])
+    );
+
+  const assessIntervals = (value) => {
+    const rows = [];
+    let hasIncompleteDraft = false;
+    let hasInvalidRange = false;
+
+    for (const taskKey of taskTypeKeys) {
+      for (const row of value?.[taskKey] || []) {
+        const rawFrom = String(row.from_m ?? "").trim();
+        const rawTo = String(row.to_m ?? "").trim();
+        const isBlank = rawFrom === "" && rawTo === "";
+        if (isBlank) continue;
+
+        if (rawFrom === "" || rawTo === "") {
+          hasIncompleteDraft = true;
+          continue;
+        }
+
+        const from_m = Number(rawFrom);
+        const to_m = Number(rawTo);
+        if (!Number.isFinite(from_m) || !Number.isFinite(to_m) || to_m <= from_m) {
+          hasInvalidRange = true;
+          continue;
+        }
+
+        rows.push({
+          hole_id: selectedId,
+          task_type: taskKey,
+          from_m,
+          to_m,
+        });
+      }
+    }
+
+    return { rows, hasIncompleteDraft, hasInvalidRange };
+  };
+
   const getStatusMeta = (h) => {
     const status = classifyHole(h);
     if (status === "complete") return { label: "Completed", cls: "badge badge-green" };
@@ -117,6 +179,37 @@ export function AdminPage({ projectScope = "own" }) {
     const n = Number(v);
     return Number.isFinite(n) ? n : null;
   };
+
+  useEffect(() => {
+    let active = true;
+
+    (async () => {
+      try {
+        const tasks = await fetchOrgTaskTypes(supabase, orgId);
+        if (!active) return;
+
+        setTaskMeta(
+          Object.fromEntries(
+            tasks.map((task, index) => [
+              task.key,
+              {
+                label: task.name || humanizeTaskKey(task.key),
+                color: task.color || DEFAULT_TASK_TYPE_DEFS[index % DEFAULT_TASK_TYPE_DEFS.length]?.color || "#64748b",
+              },
+            ])
+          )
+        );
+      } catch (error) {
+        console.error("Could not load task types for Add Core", error);
+        if (!active) return;
+        setTaskMeta(defaultTaskMeta);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [defaultTaskMeta, orgId, supabase]);
 
   const reloadHoles = async () => {
     if (!orgId) {
@@ -323,14 +416,63 @@ export function AdminPage({ projectScope = "own" }) {
         return;
       }
 
-      const grouped = TASK_TYPES.reduce((acc, t) => ({ ...acc, [t]: [] }), {});
+      const grouped = taskTypeKeys.reduce((acc, t) => ({ ...acc, [t]: [] }), {});
       for (const row of data || []) {
         if (!grouped[row.task_type]) grouped[row.task_type] = [];
         grouped[row.task_type].push({ id: row.id, from_m: row.from_m, to_m: row.to_m });
       }
+      suppressIntervalAutosaveRef.current = true;
+      lastSavedIntervalsRef.current = serialiseIntervals(grouped);
+      setIntervalSaveState("saved");
+      setIntervalSaveMessage((data || []).length ? "All interval changes saved." : "No planned intervals yet.");
       setIntervals(grouped);
     })();
-  }, [selectedId, supabase]);
+  }, [selectedId, supabase, taskTypeKeys]);
+
+  useEffect(() => {
+    if (!selectedId) {
+      setIntervalSaveState("idle");
+      setIntervalSaveMessage("Choose a hole to start planning tasks.");
+      return;
+    }
+
+    if (suppressIntervalAutosaveRef.current) {
+      suppressIntervalAutosaveRef.current = false;
+      return;
+    }
+
+    const snapshot = serialiseIntervals(intervals);
+    if (snapshot === lastSavedIntervalsRef.current) {
+      setIntervalSaveState("saved");
+      setIntervalSaveMessage("All interval changes saved.");
+      return;
+    }
+
+    const { hasIncompleteDraft, hasInvalidRange } = assessIntervals(intervals);
+    if (hasIncompleteDraft) {
+      setIntervalSaveState("draft");
+      setIntervalSaveMessage("Complete both From and To before the new interval can save.");
+      return;
+    }
+
+    if (hasInvalidRange) {
+      setIntervalSaveState("error");
+      setIntervalSaveMessage("Each interval needs numeric values and To must be greater than From.");
+      return;
+    }
+
+    setIntervalSaveState("saving");
+    setIntervalSaveMessage("Saving interval changes...");
+
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      void saveIntervals({ silent: true, snapshot });
+    }, 700);
+
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+  }, [intervals, selectedId, taskTypeKeys]);
 
   const selectHole = (h) => {
     setSelectedId(h.id);
@@ -342,12 +484,19 @@ export function AdminPage({ projectScope = "own" }) {
       project_id: h.project_id || "",
       drilling_contractor: h.drilling_contractor || "",
     });
+    suppressIntervalAutosaveRef.current = true;
+    setIntervalSaveState("idle");
+    setIntervalSaveMessage("Loading planned intervals...");
     setIntervals(emptyIntervals);
   };
 
   const toggleExpandHole = (h) => {
     if (selectedId === h.id) {
       setSelectedId(null);
+      suppressIntervalAutosaveRef.current = true;
+      lastSavedIntervalsRef.current = "";
+      setIntervalSaveState("idle");
+      setIntervalSaveMessage("Choose a hole to start planning tasks.");
       setIntervals(emptyIntervals);
       return;
     }
@@ -400,6 +549,10 @@ export function AdminPage({ projectScope = "own" }) {
       await reloadHoles();
 
       setSelectedId(res.data.id);
+      suppressIntervalAutosaveRef.current = true;
+      lastSavedIntervalsRef.current = "";
+      setIntervalSaveState("idle");
+      setIntervalSaveMessage("Loading planned intervals...");
       setIntervals(emptyIntervals);
       setShowHoleModal(false);
       setEditingId(null);
@@ -469,27 +622,39 @@ export function AdminPage({ projectScope = "own" }) {
     });
   };
 
-  const saveIntervals = async () => {
+  const saveIntervals = async ({ silent = false, snapshot = null } = {}) => {
     if (!selectedId) return toast.error("Select a hole first");
 
-    const rows = TASK_TYPES.flatMap((t) =>
-      (intervals[t] || []).map((r) => ({
-        hole_id: selectedId,
-        task_type: t,
-        from_m: parseFloat(r.from_m),
-        to_m: parseFloat(r.to_m),
-      }))
-    ).filter((r) => Number.isFinite(r.from_m) && Number.isFinite(r.to_m));
+    const currentSnapshot = snapshot || serialiseIntervals(intervals);
+    const { rows, hasIncompleteDraft, hasInvalidRange } = assessIntervals(intervals);
+
+    if (hasIncompleteDraft || hasInvalidRange) {
+      return false;
+    }
 
     const { error: delErr } = await supabase.from("hole_task_intervals").delete().eq("hole_id", selectedId);
-    if (delErr) return toast.error(delErr.message);
+    if (delErr) {
+      setIntervalSaveState("error");
+      setIntervalSaveMessage(delErr.message);
+      if (!silent) toast.error(delErr.message);
+      return false;
+    }
 
     if (rows.length) {
       const { error: insErr } = await supabase.from("hole_task_intervals").insert(rows);
-      if (insErr) return toast.error(insErr.message);
+      if (insErr) {
+        setIntervalSaveState("error");
+        setIntervalSaveMessage(insErr.message);
+        if (!silent) toast.error(insErr.message);
+        return false;
+      }
     }
 
-    toast.success("Intervals saved");
+    lastSavedIntervalsRef.current = currentSnapshot;
+    setIntervalSaveState("saved");
+    setIntervalSaveMessage("All interval changes saved.");
+    if (!silent) toast.success("Intervals saved");
+    return true;
   };
 
   const deleteHole = async (id) => {
@@ -508,6 +673,10 @@ export function AdminPage({ projectScope = "own" }) {
 
     if (selectedId === id) {
       setSelectedId(null);
+      suppressIntervalAutosaveRef.current = true;
+      lastSavedIntervalsRef.current = "";
+      setIntervalSaveState("idle");
+      setIntervalSaveMessage("Choose a hole to start planning tasks.");
       setSingle({
         hole_id: "",
         depth: "",
@@ -722,17 +891,28 @@ export function AdminPage({ projectScope = "own" }) {
                           <div className="p-4 space-y-4 border-t">
                             <div className="flex items-center justify-between">
                               <h3 className="font-medium text-sm">Task intervals</h3>
-                              <button type="button" className="btn btn-3d-primary btn-xs" onClick={saveIntervals} disabled={!selectedId}>
-                                Save Tasks
-                              </button>
+                              <div
+                                className={`rounded-full px-3 py-1 text-[11px] ${
+                                  intervalSaveState === "error"
+                                    ? "bg-rose-500/15 text-rose-100"
+                                    : intervalSaveState === "saving"
+                                      ? "bg-amber-500/15 text-amber-100"
+                                      : intervalSaveState === "draft"
+                                        ? "bg-slate-700/70 text-slate-200"
+                                        : "bg-emerald-500/15 text-emerald-100"
+                                }`}
+                              >
+                                {intervalSaveMessage}
+                              </div>
                             </div>
 
                             <div className="grid md:grid-cols-2 gap-4">
-                              {TASK_TYPES.map((t) => (
+                              {taskTypeKeys.map((t) => (
                                 <div key={t} className="glass rounded-xl p-3 space-y-3">
                                   <div className="flex items-center justify-between">
-                                    <span className="font-medium text-xs uppercase tracking-wide">
-                                      {t.replace(/_/g, " ")}
+                                    <span className="inline-flex items-center gap-2 font-medium text-xs uppercase tracking-wide text-slate-100">
+                                      <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colorForTask(t) }} />
+                                      {labelForTask(t)}
                                     </span>
                                     <button
                                       type="button"

@@ -542,8 +542,7 @@ export default function SampleDispatchPage({ projectScope = "own" }) {
     <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-5">
       <CoreTaskPanelHeader
         eyebrow="Sample Dispatch"
-        title="Build dispatches from eligible core intervals across multiple holes."
-        description="Review eligible runs, assemble dispatch lines, and finalise shipment details from the same workspace without losing context."
+        title=""
         stats={dispatchHeaderStats}
       />
 

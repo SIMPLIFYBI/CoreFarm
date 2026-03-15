@@ -4,6 +4,7 @@ import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import toast from "react-hot-toast";
 import CoreTaskPanelHeader from "./CoreTaskPanelHeader";
+import { DEFAULT_TASK_TYPE_DEFS, fetchOrgTaskTypes } from "@/lib/taskTypes";
 
 // Compute whether a set of planned intervals is fully covered by progress intervals
 function isFullyCovered(plannedIntervals, progressByTask) {
@@ -27,9 +28,22 @@ function overlapLen(a1, a2, b1, b2) {
   return Math.max(0, end - start);
 }
 
+function humanizeTaskKey(taskKey) {
+  return String(taskKey || "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 export default function CorePage({ projectScope = "own" }) {
   const supabase = supabaseBrowser();
   const { orgId } = useOrg();
+  const defaultTaskMeta = useMemo(
+    () =>
+      Object.fromEntries(
+        DEFAULT_TASK_TYPE_DEFS.map((task) => [task.key, { label: task.name, color: task.color || "#64748b" }])
+      ),
+    []
+  );
   const [holes, setHoles] = useState([]); // {id, hole_id}
   const [loading, setLoading] = useState(true);
   const [holeStatus, setHoleStatus] = useState({}); // { [holeId]: { hasPlanned: boolean, complete: boolean } }
@@ -47,6 +61,7 @@ export default function CorePage({ projectScope = "own" }) {
   const statusMenuRef = useRef(null);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const projectMenuRef = useRef(null);
+  const [taskMeta, setTaskMeta] = useState(defaultTaskMeta);
 
   const projects = useMemo(() => {
     const set = new Set();
@@ -87,6 +102,37 @@ export default function CorePage({ projectScope = "own" }) {
     [filteredHoles.length, loading, loggedOn, plannedHoleCount]
   );
 
+  useEffect(() => {
+    let active = true;
+
+    (async () => {
+      try {
+        const tasks = await fetchOrgTaskTypes(supabase, orgId);
+        if (!active) return;
+
+        setTaskMeta(
+          Object.fromEntries(
+            tasks.map((task, index) => [
+              task.key,
+              {
+                label: task.name || humanizeTaskKey(task.key),
+                color: task.color || DEFAULT_TASK_TYPE_DEFS[index % DEFAULT_TASK_TYPE_DEFS.length]?.color || "#64748b",
+              },
+            ])
+          )
+        );
+      } catch (error) {
+        console.error("Could not load task labels", error);
+        if (!active) return;
+        setTaskMeta(defaultTaskMeta);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [defaultTaskMeta, orgId, supabase]);
+
   // Click outside to close status menu
   useEffect(() => {
     if (!statusMenuOpen && !projectMenuOpen) return;
@@ -123,6 +169,9 @@ export default function CorePage({ projectScope = "own" }) {
     if (s.hasPlanned || s.hasProgress) return { label: 'In Progress', cls: 'badge badge-amber' };
     return { label: 'Not Started', cls: 'badge badge-gray' };
   };
+
+  const taskLabel = (taskKey) => taskMeta[taskKey]?.label || humanizeTaskKey(taskKey);
+  const taskColor = (taskKey) => taskMeta[taskKey]?.color || "#64748b";
 
   useEffect(() => {
     if (!orgId) return;
@@ -399,8 +448,7 @@ export default function CorePage({ projectScope = "own" }) {
     <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-5">
       <CoreTaskPanelHeader
         eyebrow="Drilling Logging"
-        title="Record task progress against planned intervals by hole."
-        description="Use the logging workspace to filter the active hole list, enter interval progress, and keep daily drilling progress moving against the plan."
+        title=""
         stats={loggingHeaderStats}
       />
 
@@ -593,7 +641,12 @@ export default function CorePage({ projectScope = "own" }) {
                                           {expandedTask[holeKey(h.id, task)] ? "−" : "+"}
                                         </button>
                                       </td>
-                                      <td className="p-2 border">{task.replace(/_/g, " ")}</td>
+                                      <td className="p-2 border">
+                                        <span className="inline-flex items-center gap-2">
+                                          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: taskColor(task) }} />
+                                          {taskLabel(task)}
+                                        </span>
+                                      </td>
                                     </tr>
                                     {expandedTask[holeKey(h.id, task)] && (
                                       <tr>
@@ -738,7 +791,10 @@ export default function CorePage({ projectScope = "own" }) {
                               aria-expanded={!!expandedTask[holeKey(h.id, task)]}
                               aria-controls={`task-${h.id}-${task}`}
                             >
-                              <span>{task.replace(/_/g, " ")}</span>
+                              <span className="inline-flex items-center gap-2">
+                                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: taskColor(task) }} />
+                                {taskLabel(task)}
+                              </span>
                               <span className="ml-2 inline-flex items-center justify-center w-4 h-4 rounded bg-slate-900/70 text-slate-200 text-[11px]">
                                 {expandedTask[holeKey(h.id, task)] ? '−' : '+'}
                               </span>

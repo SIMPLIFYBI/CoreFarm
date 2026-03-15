@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
-import { TASK_TYPES } from "@/lib/taskTypes";
+import { DEFAULT_TASK_TYPE_DEFS, TASK_TYPES, fetchOrgTaskTypes } from "@/lib/taskTypes";
 import { BarChart, DonutChart, StackedColumnChart } from "@/app/components/Charts";
 import { DashboardTabs } from "./components/DashboardTabs";
 import { DashboardFilters } from "./components/DashboardFilters";
@@ -19,6 +19,10 @@ const COLORS = [
 
 export default function UserDashboardPage() {
 	const supabase = supabaseBrowser();
+	const defaultTaskOptions = useMemo(
+		() => DEFAULT_TASK_TYPE_DEFS.map((task) => ({ key: task.key, label: shortLabelForTask(task.key, task.name), color: task.color })),
+		[]
+	);
 	const [user, setUser] = useState(null);
 	const [loading, setLoading] = useState(true);
 	const { orgId } = useOrg();
@@ -34,6 +38,8 @@ export default function UserDashboardPage() {
 	});
 	const [toDate, setToDate] = useState(() => new Date().toISOString().slice(0, 10));
 	const [types, setTypes] = useState(TASK_TYPES);
+	const [typeOptions, setTypeOptions] = useState(defaultTaskOptions);
+	const previousTypeKeysRef = useRef(TASK_TYPES);
 	const [taskSelectOpen, setTaskSelectOpen] = useState(false);
 
 	const [byType, setByType] = useState([]);
@@ -58,6 +64,52 @@ export default function UserDashboardPage() {
 		})();
 		return () => sub?.unsubscribe?.();
 	}, [supabase]);
+
+	useEffect(() => {
+		let active = true;
+		const previousKeys = previousTypeKeysRef.current;
+
+		(async () => {
+			try {
+				const tasks = await fetchOrgTaskTypes(supabase, orgId);
+				if (!active) return;
+
+				const nextOptions = tasks.map((task, index) => ({
+					key: task.key,
+					label: shortLabelForTask(task.key, task.name),
+					color: task.color || COLORS[index % COLORS.length],
+				}));
+				const nextKeys = nextOptions.map((option) => option.key);
+
+				previousTypeKeysRef.current = nextKeys;
+				setTypeOptions(nextOptions);
+				setTypes((prev) => {
+					const wasAllSelected =
+						previousKeys.length > 0 &&
+						prev.length === previousKeys.length &&
+						previousKeys.every((key) => prev.includes(key));
+
+					if (wasAllSelected) return nextKeys;
+
+					const filtered = prev.filter((key) => nextKeys.includes(key));
+					return filtered.length > 0 ? filtered : nextKeys;
+				});
+			} catch (error) {
+				console.error("Could not load org task types", error);
+				if (!active) return;
+				previousTypeKeysRef.current = TASK_TYPES;
+				setTypeOptions(defaultTaskOptions);
+				setTypes((prev) => {
+					const filtered = prev.filter((key) => TASK_TYPES.includes(key));
+					return filtered.length > 0 ? filtered : TASK_TYPES;
+				});
+			}
+		})();
+
+		return () => {
+			active = false;
+		};
+	}, [defaultTaskOptions, orgId, supabase]);
 
 
 	useEffect(() => {
@@ -131,9 +183,10 @@ export default function UserDashboardPage() {
 		})();
 	}, [tab, orgId, supabase]);
 
-	const typeOptions = useMemo(
-		() => TASK_TYPES.map((t, i) => ({ key: t, label: labelForTask(t), color: COLORS[i % COLORS.length] })),
-		[]
+	const allTaskTypes = useMemo(() => typeOptions.map((option) => option.key), [typeOptions]);
+	const taskLabelMap = useMemo(
+		() => Object.fromEntries(typeOptions.map((option) => [option.key, option.label])),
+		[typeOptions]
 	);
 
 	useEffect(() => {
@@ -173,7 +226,7 @@ export default function UserDashboardPage() {
 					.in("hole_id", holeIds)
 					.gte("logged_on", fromDate)
 					.lte("logged_on", toDate);
-				if ((types || []).length > 0 && types.length < TASK_TYPES.length) q = q.in("task_type", types);
+				if ((types || []).length > 0 && types.length < allTaskTypes.length) q = q.in("task_type", types);
 				const { data: rows, error } = await q;
 				if (error) throw error;
 
@@ -183,12 +236,14 @@ export default function UserDashboardPage() {
 					if (!Number.isFinite(m) || m <= 0) continue;
 					metersByType[r.task_type] = (metersByType[r.task_type] || 0) + m;
 				}
-				const pie = TASK_TYPES.map((t, i) => ({
-					key: t,
-					label: labelForTask(t),
-					value: metersByType[t] || 0,
-					color: COLORS[i % COLORS.length],
-				})).filter((d) => types.includes(d.key));
+				const pie = typeOptions
+					.map((option, index) => ({
+						key: option.key,
+						label: option.label,
+						value: metersByType[option.key] || 0,
+						color: option.color || COLORS[index % COLORS.length],
+					}))
+					.filter((d) => types.includes(d.key));
 				setByType(pie);
 
 				const byDateTotal = {};
@@ -214,12 +269,13 @@ export default function UserDashboardPage() {
 					d.setDate(d.getDate() - i);
 					const key = d.toISOString().slice(0, 10);
 					const taskMap = byDateTask[key] || {};
-					const segments = TASK_TYPES.filter((t) => types.includes(t))
-						.map((t, idx) => ({
-							key: t,
-							label: labelForTask(t),
-							color: COLORS[idx % COLORS.length],
-							value: taskMap[t] || 0,
+					const segments = typeOptions
+						.filter((option) => types.includes(option.key))
+						.map((option, idx) => ({
+							key: option.key,
+							label: option.label,
+							color: option.color || COLORS[idx % COLORS.length],
+							value: taskMap[option.key] || 0,
 						}))
 						.filter((s) => s.value > 0);
 					last14.push({ date: key, segments, total: segments.reduce((a, b) => a + b.value, 0) });
@@ -236,7 +292,7 @@ export default function UserDashboardPage() {
 				setLoading(false);
 			}
 		})();
-	}, [orgId, user, fromDate, toDate, types, supabase]);
+	}, [allTaskTypes.length, fromDate, orgId, supabase, toDate, typeOptions, types, user]);
 
 	const toggleType = (t) => {
 		setTypes((prev) => {
@@ -249,7 +305,7 @@ export default function UserDashboardPage() {
 		});
 	};
 
-	const allSelected = types.length === TASK_TYPES.length;
+	const allSelected = types.length === allTaskTypes.length;
 	const selectedLabels = typeOptions.filter((o) => types.includes(o.key)).map((o) => o.label);
 	const buttonLabel = allSelected
 		? `All Tasks (${types.length})`
@@ -269,7 +325,7 @@ export default function UserDashboardPage() {
 						setToDate={setToDate}
 						types={types}
 						setTypes={setTypes}
-						allTaskTypes={TASK_TYPES}
+						allTaskTypes={allTaskTypes}
 						typeOptions={typeOptions}
 						taskSelectOpen={taskSelectOpen}
 						setTaskSelectOpen={setTaskSelectOpen}
@@ -323,7 +379,7 @@ export default function UserDashboardPage() {
 									{activityRows.map((row) => (
 										<tr key={row.id} className="border-t border-slate-800/80 hover:bg-slate-800/70">
 											<td className="p-1 border border-slate-800/80">{row.holes?.hole_id || row.hole_id}</td>
-											<td className="p-1 border border-slate-800/80">{labelForTask(row.task_type)}</td>
+											<td className="p-1 border border-slate-800/80">{taskLabelMap[row.task_type] || shortLabelForTask(row.task_type)}</td>
 											<td className="p-1 border border-slate-800/80">{row.from_m}â€“{row.to_m}</td>
 											<td className="p-1 border border-slate-800/80">{row.logged_on}</td>
 											<td className="p-1 border border-slate-800/80 whitespace-nowrap">
@@ -465,7 +521,7 @@ export default function UserDashboardPage() {
 	);
 }
 
-function labelForTask(t) {
+function shortLabelForTask(t, fallbackLabel) {
 	return (
 		{
 			orientation: "Orientation",
@@ -474,7 +530,7 @@ function labelForTask(t) {
 			cutting: "Cutting",
 			rqd: "RQD",
 			specific_gravity: "SG",
-		}[t] || t
+		}[t] || fallbackLabel || t
 	);
 }
 
