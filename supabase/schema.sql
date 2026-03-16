@@ -211,6 +211,7 @@ CREATE TABLE public.drillhole_lithology_types (
   organization_id uuid NOT NULL,
   name text NOT NULL,
   color text NOT NULL,
+  pattern_key text NOT NULL DEFAULT 'solid',
   sort_order integer NOT NULL DEFAULT 0,
   is_active boolean NOT NULL DEFAULT true,
   created_at timestamp with time zone NOT NULL DEFAULT now(),

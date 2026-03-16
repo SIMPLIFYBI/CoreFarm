@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import HorizontalScrollTabs from "@/app/components/HorizontalScrollTabs";
 import CorePage from "./CorePage";
 import SampleDispatchPage from "./SampleDispatchPage";
 import DrillholeVizPage from "../drillhole-viz/page";
@@ -54,7 +55,7 @@ export default function CoreTasksPage() {
           </button>
         </div>
 
-        <div className="mb-6 flex gap-2 border-b border-white/10">
+        <HorizontalScrollTabs className="mb-6 border-b border-white/10" hint="Swipe tabs" hintClassName="text-slate-500">
           <button
             className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "holedetails" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
             onClick={() => setTab("holedetails")}
@@ -91,7 +92,7 @@ export default function CoreTasksPage() {
           >
             Drillhole Viz
           </button>
-        </div>
+        </HorizontalScrollTabs>
       </div>
 
       {isDrillholeVizTab ? (

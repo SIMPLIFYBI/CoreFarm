@@ -14,6 +14,8 @@ import AttributesTab from "./components/AttributesTab";
 import SchematicArea from "./components/SchematicArea";
 import TypesTabs from "./components/TypesTabs";
 import { exportSchematicPdf } from "./utils/exportSchematicPdf";
+import { normalizeLithologyPatternKey } from "./utils/lithologyPatterns";
+import HorizontalScrollTabs from "@/app/components/HorizontalScrollTabs";
 import { getAustralianProjectCrsByCode } from "@/lib/coordinateSystems";
 import { deriveHoleCoordinates } from "@/lib/holeCoordinates";
 
@@ -380,7 +382,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
 
     const { data, error } = await supabase
       .from("drillhole_lithology_types")
-      .select("id, name, color, sort_order, is_active, created_at")
+      .select("id, name, color, pattern_key, sort_order, is_active, created_at")
       .eq("organization_id", organizationId)
       .order("sort_order", { ascending: true })
       .order("name", { ascending: true });
@@ -399,6 +401,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
         id: t.id,
         name: t.name || "",
         color: t.color || "#64748b",
+        pattern_key: normalizeLithologyPatternKey(t.pattern_key),
         sort_order: t.sort_order ?? 0,
         is_active: t.is_active !== false,
       }))
@@ -525,7 +528,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
   const addLithologyTypeRow = () => {
     setLithologyTypesAll((prev) => [
       ...(prev || []),
-      { id: null, name: "", color: "#64748b", sort_order: (prev?.length || 0) + 1, is_active: true },
+      { id: null, name: "", color: "#64748b", pattern_key: "solid", sort_order: (prev?.length || 0) + 1, is_active: true },
     ]);
   };
 
@@ -570,6 +573,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
       ...t,
       name: String(t.name || "").trim(),
       color: t.color || "#64748b",
+      pattern_key: normalizeLithologyPatternKey(t.pattern_key),
       sort_order: Number.isFinite(Number(t.sort_order)) ? Number(t.sort_order) : 0,
       is_active: t.is_active !== false,
     }));
@@ -588,6 +592,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
           organization_id: selectedOrgId,
           name: t.name,
           color: t.color,
+          pattern_key: t.pattern_key,
           sort_order: t.sort_order,
           is_active: t.is_active,
         }));
@@ -600,7 +605,13 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
       for (const t of cleaned.filter((x) => !!x.id)) {
         const { error } = await supabase
           .from("drillhole_lithology_types")
-          .update({ name: t.name, color: t.color, sort_order: t.sort_order, is_active: t.is_active })
+          .update({
+            name: t.name,
+            color: t.color,
+            pattern_key: t.pattern_key,
+            sort_order: t.sort_order,
+            is_active: t.is_active,
+          })
           .eq("id", t.id);
         if (error) throw error;
       }
@@ -1974,48 +1985,48 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
                   <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Project Navigator</div>
                   <div className="mt-1 text-lg font-semibold text-white">Projects and intervals</div>
                 </div>
-                <div className="mt-4 flex flex-wrap gap-2 border-b border-white/10 pb-1">
-                  <TabButton active={drawerTab === "hole"} onClick={() => setDrawerTab("hole")} label="Hole" />
-                  <TabButton
-                    active={drawerTab === "attributes"}
-                    onClick={() => setDrawerTab("attributes")}
-                    label="Attributes"
-                    disabled={!selectedHoleId}
-                    title={!selectedHoleId ? "Select a hole first" : ""}
-                  />
-                  <TabButton
-                    active={drawerTab === "geology"}
-                    onClick={() => setDrawerTab("geology")}
-                    label="Geology"
-                    disabled={!selectedHoleId}
-                    title={!selectedHoleId ? "Select a hole first" : ""}
-                  />
-                  <TabButton
-                    active={drawerTab === "construction"}
-                    onClick={() => setDrawerTab("construction")}
-                    label="Construction"
-                    disabled={!selectedHoleId}
-                    title={!selectedHoleId ? "Select a hole first" : ""}
-                  />
-                  <TabButton
-                    active={drawerTab === "components"}
-                    onClick={() => setDrawerTab("components")}
-                    label="Components"
-                    disabled={!selectedHoleId}
-                    title={!selectedHoleId ? "Select a hole first" : ""}
-                  />
-                  <TabButton
-                    active={drawerTab === "annulus"}
-                    onClick={() => setDrawerTab("annulus")}
-                    label="Annulus"
-                    disabled={!selectedHoleId}
-                    title={!selectedHoleId ? "Select a hole first" : ""}
-                  />
+                <HorizontalScrollTabs className="mt-4 border-b border-white/10" railClassName="pb-1" hint="Swipe tabs" hintClassName="text-slate-500">
+                    <TabButton active={drawerTab === "hole"} onClick={() => setDrawerTab("hole")} label="Hole" />
+                    <TabButton
+                      active={drawerTab === "attributes"}
+                      onClick={() => setDrawerTab("attributes")}
+                      label="Attributes"
+                      disabled={!selectedHoleId}
+                      title={!selectedHoleId ? "Select a hole first" : ""}
+                    />
+                    <TabButton
+                      active={drawerTab === "geology"}
+                      onClick={() => setDrawerTab("geology")}
+                      label="Geology"
+                      disabled={!selectedHoleId}
+                      title={!selectedHoleId ? "Select a hole first" : ""}
+                    />
+                    <TabButton
+                      active={drawerTab === "construction"}
+                      onClick={() => setDrawerTab("construction")}
+                      label="Construction"
+                      disabled={!selectedHoleId}
+                      title={!selectedHoleId ? "Select a hole first" : ""}
+                    />
+                    <TabButton
+                      active={drawerTab === "components"}
+                      onClick={() => setDrawerTab("components")}
+                      label="Components"
+                      disabled={!selectedHoleId}
+                      title={!selectedHoleId ? "Select a hole first" : ""}
+                    />
+                    <TabButton
+                      active={drawerTab === "annulus"}
+                      onClick={() => setDrawerTab("annulus")}
+                      label="Annulus"
+                      disabled={!selectedHoleId}
+                      title={!selectedHoleId ? "Select a hole first" : ""}
+                    />
 
-                  {canSeeTypesTab && (
-                    <TabButton active={drawerTab === "types"} onClick={() => setDrawerTab("types")} label="Types" />
-                  )}
-                </div>
+                    {canSeeTypesTab && (
+                      <TabButton active={drawerTab === "types"} onClick={() => setDrawerTab("types")} label="Types" />
+                    )}
+                </HorizontalScrollTabs>
               </div>
             )}
 

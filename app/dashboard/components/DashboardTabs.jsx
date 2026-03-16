@@ -1,8 +1,10 @@
 "use client";
 
+import HorizontalScrollTabs from "@/app/components/HorizontalScrollTabs";
+
 export function DashboardTabs({ tab, setTab }) {
 	return (
-		<div className="mb-6 flex gap-2 border-b border-white/5">
+		<HorizontalScrollTabs className="mb-6 border-b border-white/5" hint="Swipe tabs" hintClassName="text-slate-500">
 			<button
 				className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-colors ${
 					tab === "dashboard"
@@ -53,6 +55,6 @@ export function DashboardTabs({ tab, setTab }) {
 			>
 				Consumables
 			</button>
-		</div>
+		</HorizontalScrollTabs>
 	);
 }

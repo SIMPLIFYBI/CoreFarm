@@ -3,6 +3,104 @@
 import { useId, useMemo } from "react";
 import { computeMaxDepth } from "../utils/computeMaxDepth";
 import { DEPTH_PAD_TOP, DEPTH_PAD_BOTTOM, PX_PER_M, svgHeightForMaxDepth } from "../utils/depthScaleConfig";
+import { normalizeLithologyPatternKey } from "../utils/lithologyPatterns";
+
+function makeSvgIdFragment(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "item";
+}
+
+function getLithologyPatternId(uid, typeId, patternKey) {
+  return `lith-pattern-${makeSvgIdFragment(uid)}-${makeSvgIdFragment(typeId)}-${patternKey}`;
+}
+
+function LithologyPatternDefs({ uid, types }) {
+  return (types || []).map((type) => {
+    const patternKey = normalizeLithologyPatternKey(type?.pattern_key);
+    if (patternKey === "solid") return null;
+
+    const patternId = getLithologyPatternId(uid, type?.id, patternKey);
+    const color = type?.color || "#64748b";
+    const shadow = "rgba(15,23,42,0.18)";
+    const overlay = "rgba(15,23,42,0.28)";
+    const accent = "rgba(255,255,255,0.12)";
+    const highlight = "rgba(255,255,255,0.06)";
+
+    if (patternKey === "dots") {
+      return (
+        <pattern key={patternId} id={patternId} width="18" height="18" patternUnits="userSpaceOnUse">
+          <rect width="18" height="18" fill={color} fillOpacity="0.82" />
+          <circle cx="4" cy="4" r="1.1" fill={overlay} />
+          <circle cx="12.5" cy="6.5" r="0.9" fill={shadow} />
+          <circle cx="8" cy="13" r="1" fill={overlay} />
+          <circle cx="15" cy="14.5" r="0.75" fill={highlight} />
+        </pattern>
+      );
+    }
+
+    if (patternKey === "speckle") {
+      return (
+        <pattern key={patternId} id={patternId} width="24" height="18" patternUnits="userSpaceOnUse">
+          <rect width="24" height="18" fill={color} fillOpacity="0.82" />
+          <ellipse cx="5" cy="5.5" rx="2.1" ry="1.35" fill={overlay} transform="rotate(-18 5 5.5)" />
+          <ellipse cx="14" cy="8.5" rx="2.5" ry="1.5" fill={shadow} transform="rotate(12 14 8.5)" />
+          <ellipse cx="20" cy="4.5" rx="1.7" ry="1.1" fill={accent} transform="rotate(-14 20 4.5)" />
+          <ellipse cx="10" cy="14" rx="2.2" ry="1.2" fill={overlay} transform="rotate(9 10 14)" />
+        </pattern>
+      );
+    }
+
+    if (patternKey === "dash") {
+      return (
+        <pattern key={patternId} id={patternId} width="24" height="18" patternUnits="userSpaceOnUse">
+          <rect width="24" height="18" fill={color} fillOpacity="0.82" />
+          <path d="M 2 14 L 8 9" stroke={overlay} strokeWidth="1.4" strokeLinecap="round" fill="none" />
+          <path d="M 10 6 L 16 2" stroke={accent} strokeWidth="1.1" strokeLinecap="round" fill="none" />
+          <path d="M 14 16 L 22 10" stroke={shadow} strokeWidth="1.5" strokeLinecap="round" fill="none" />
+          <path d="M 0 4 L 4 1" stroke={highlight} strokeWidth="0.9" strokeLinecap="round" fill="none" />
+        </pattern>
+      );
+    }
+
+    if (patternKey === "crosshatch") {
+      return (
+        <pattern key={patternId} id={patternId} width="22" height="18" patternUnits="userSpaceOnUse">
+          <rect width="22" height="18" fill={color} fillOpacity="0.8" />
+          <path d="M 3 4 L 9 8 L 14 5 L 19 9" stroke={overlay} strokeWidth="1.05" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          <path d="M 2 14 L 7 11 L 13 14 L 18 10" stroke={shadow} strokeWidth="1.15" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          <path d="M 11 0 L 8 5" stroke={accent} strokeWidth="0.9" strokeLinecap="round" fill="none" />
+          <path d="M 16 18 L 13 13" stroke={highlight} strokeWidth="0.8" strokeLinecap="round" fill="none" />
+        </pattern>
+      );
+    }
+
+    if (patternKey === "bedding") {
+      return (
+        <pattern key={patternId} id={patternId} width="28" height="16" patternUnits="userSpaceOnUse">
+          <rect width="28" height="16" fill={color} fillOpacity="0.82" />
+          <path d="M 0 4 C 4 2, 9 2, 14 4 S 24 6, 28 4" stroke={overlay} strokeWidth="0.95" fill="none" />
+          <path d="M 0 9 C 5 7, 10 7, 15 9 S 24 11, 28 9" stroke={accent} strokeWidth="0.8" fill="none" />
+          <path d="M 0 13 C 4 12, 8 11.5, 14 13 S 23 14.5, 28 13" stroke={shadow} strokeWidth="0.95" fill="none" />
+        </pattern>
+      );
+    }
+
+    if (patternKey === "chevron") {
+      return (
+        <pattern key={patternId} id={patternId} width="26" height="18" patternUnits="userSpaceOnUse">
+          <rect width="26" height="18" fill={color} fillOpacity="0.82" />
+          <path d="M 0 6 C 4 3, 7 3, 10 6 S 17 9, 21 6 S 24 3, 26 4" stroke={overlay} strokeWidth="1" fill="none" />
+          <path d="M 0 13 C 4 10, 8 10, 11 13 S 18 16, 22 13 S 25 10, 26 11" stroke={accent} strokeWidth="0.85" fill="none" />
+          <path d="M 6 0 L 9 18" stroke={highlight} strokeWidth="0.55" fill="none" opacity="0.7" />
+        </pattern>
+      );
+    }
+
+    return null;
+  });
+}
 
 export default function BoreholeSchematicPreview({
   plannedDepth,
@@ -228,10 +326,18 @@ export default function BoreholeSchematicPreview({
     };
   }, [compact, componentById, componentCalloutX, holeX, padBottom, padTop, selectedComponent, sidePad, W, H]);
 
+  const lithologyPatternTypes = useMemo(() => {
+    const typeIds = new Set(normGeology.map((interval) => interval.typeId));
+    return Array.from(typeIds)
+      .map((typeId) => lithById?.get?.(typeId))
+      .filter(Boolean);
+  }, [lithById, normGeology]);
+
   return (
     <div className="shrink-0">
       <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMinYMin meet" className="block">
         <defs>
+          <LithologyPatternDefs uid={uid} types={lithologyPatternTypes} />
           <clipPath id={clipId}>
             <rect x="0" y={padTop} width={W} height={H - padTop - padBottom} />
           </clipPath>
@@ -296,6 +402,8 @@ export default function BoreholeSchematicPreview({
             const t = lithById?.get?.(it.typeId);
             const color = t?.color || "#64748b";
             const label = t?.name || "Geology";
+            const patternKey = normalizeLithologyPatternKey(t?.pattern_key);
+            const fill = patternKey === "solid" ? color : `url(#${getLithologyPatternId(uid, it.typeId, patternKey)})`;
             const fittedLabel = fitLabel(label, geologyLeftW, compact);
 
             const y1 = yForDepth(it.from);
@@ -305,12 +413,12 @@ export default function BoreholeSchematicPreview({
 
             return (
               <g key={it.id || `g-${it.typeId}-${it.from}-${it.to}-${i}`}>
-                <rect x={geologyLeftX + 2} y={y1} width={geologyLeftW - 4} height={h} fill={color} fillOpacity="0.75">
+                <rect x={geologyLeftX + 2} y={y1} width={geologyLeftW - 4} height={h} fill={fill} fillOpacity={patternKey === "solid" ? "0.75" : undefined}>
                   <title>
                     {label} · {it.from.toFixed(1)}–{it.to.toFixed(1)}m{it.notes ? ` · ${it.notes}` : ""}
                   </title>
                 </rect>
-                {showRightGeology && <rect x={geologyRightX + 2} y={y1} width={geologyRightW - 4} height={h} fill={color} fillOpacity="0.75" />}
+                {showRightGeology && <rect x={geologyRightX + 2} y={y1} width={geologyRightW - 4} height={h} fill={fill} fillOpacity={patternKey === "solid" ? "0.75" : undefined} />}
                 {h >= 18 && (
                   <text
                     x={geologyLeftX + 8}

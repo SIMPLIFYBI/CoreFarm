@@ -5,6 +5,7 @@ import { useOrg } from "@/lib/OrgContext";
 import { redirectTo } from "@/lib/siteUrl";
 import toast from "react-hot-toast";
 import { DeleteIconButton } from "@/app/components/ActionIconButton";
+import HorizontalScrollTabs from "@/app/components/HorizontalScrollTabs";
 import OrganizationConnectionsTab from "@/app/components/OrganizationConnectionsTab";
 
 export default function TeamPage() {
@@ -282,7 +283,13 @@ export default function TeamPage() {
   <div className="max-w-6xl mx-auto p-4 md:p-6">
       <h1 className="text-2xl font-semibold mb-4">Team Management</h1>
       {/* Tabs */}
-      <div className="mb-6 flex gap-2 border-b">
+      <HorizontalScrollTabs
+        className="mb-6 border-b border-slate-200/80"
+        hint="Swipe tabs"
+        edgeFadeLeftClassName="from-white via-white/78 to-transparent"
+        edgeFadeRightClassName="from-transparent via-white/78 to-white"
+        hintClassName="text-slate-500"
+      >
         {[{k:'members',label:'Team Members'},{k:'invites',label:'Invites'},{k:'connections',label:'Connections'},{k:'org',label:'Organisation'}].map(t => (
           <button
             key={t.k}
@@ -290,7 +297,7 @@ export default function TeamPage() {
             className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-colors ${tab===t.k ? 'border-indigo-500 text-indigo-700' : 'border-transparent text-gray-600 hover:text-indigo-600'}`}
           >{t.label}</button>
         ))}
-      </div>
+      </HorizontalScrollTabs>
 
       {/* Content */}
       {memberships.length === 0 && tab !== 'org' && (

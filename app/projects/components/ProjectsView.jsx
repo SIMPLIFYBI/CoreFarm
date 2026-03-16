@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import { getAustralianProjectCrsByCode } from "@/lib/coordinateSystems";
+import HorizontalScrollTabs from "@/app/components/HorizontalScrollTabs";
 import ProjectsTable from "./ProjectsTable";
 import TenementsTable from "./TenementsTable";
 import ProjectModal from "./ProjectModal";
@@ -454,7 +455,7 @@ export default function ProjectsView() {
     <div className="max-w-6xl mx-auto p-4 md:p-6">
       <h1 className="text-2xl font-semibold mb-4">Projects</h1>
 
-      <div className="mb-6 flex gap-2 border-b border-white/10">
+      <HorizontalScrollTabs className="mb-6 border-b border-white/10" hint="Swipe tabs" hintClassName="text-slate-500">
         <button
           className={`px-4 py-2 -mb-px font-medium text-sm ${
             activeTab === "projects" ? "border-b-2 border-indigo-500 text-indigo-300" : "text-slate-300/70"
@@ -534,7 +535,7 @@ export default function ProjectsView() {
         >
           Plod Types
         </button>
-      </div>
+      </HorizontalScrollTabs>
 
       {/* header actions per tab */}
       {activeTab === "projects" && (

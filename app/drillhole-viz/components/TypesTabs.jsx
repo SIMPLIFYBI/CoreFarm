@@ -1,13 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import HorizontalScrollTabs from "@/app/components/HorizontalScrollTabs";
+import { LITHOLOGY_PATTERN_OPTIONS, normalizeLithologyPatternKey } from "../utils/lithologyPatterns";
 
 function SubTabButton({ active, onClick, label }) {
   return (
     <button
       type="button"
       className={[
-        "btn btn-xs",
+        "btn btn-xs shrink-0 whitespace-nowrap",
         active ? "btn-primary" : "bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200",
       ].join(" ")}
       onClick={onClick}
@@ -24,6 +26,7 @@ function TypesList({
   loading,
   saving,
   rows,
+  showPatternSelect = false,
   onAdd,
   onSave,
   onUpdate,
@@ -77,6 +80,24 @@ function TypesList({
                       style={{ width: 42, padding: 2 }}
                     />
                   </div>
+
+                  {showPatternSelect ? (
+                    <label className="flex items-center gap-2 text-xs text-slate-400">
+                      <span>Texture</span>
+                      <select
+                        className="select-gradient-sm min-w-[120px]"
+                        value={normalizeLithologyPatternKey(t.pattern_key)}
+                        disabled={!canEdit}
+                        onChange={(e) => onUpdate?.(idx, { pattern_key: e.target.value })}
+                      >
+                        {LITHOLOGY_PATTERN_OPTIONS.map((option) => (
+                          <option key={option.key} value={option.key}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
 
                   <label className="text-xs text-slate-300 flex items-center gap-2">
                     <input
@@ -158,28 +179,29 @@ export default function TypesTabs({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <div className="text-sm font-medium text-slate-100">Types</div>
           <div className="text-[11px] text-slate-400 truncate">Section: {header.title}</div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <SubTabButton active={subTab === "geology"} onClick={() => setSubTab("geology")} label="Geology" />
-          <SubTabButton active={subTab === "construction"} onClick={() => setSubTab("construction")} label="Construction" />
-          <SubTabButton active={subTab === "annulus"} onClick={() => setSubTab("annulus")} label="Annulus" />
-          <SubTabButton active={subTab === "components"} onClick={() => setSubTab("components")} label="Components" />
-        </div>
+        <HorizontalScrollTabs className="sm:min-w-0" innerClassName="sm:min-w-0" hint="Swipe sections" hintClassName="text-slate-500">
+            <SubTabButton active={subTab === "geology"} onClick={() => setSubTab("geology")} label="Geology" />
+            <SubTabButton active={subTab === "construction"} onClick={() => setSubTab("construction")} label="Construction" />
+            <SubTabButton active={subTab === "annulus"} onClick={() => setSubTab("annulus")} label="Annulus" />
+            <SubTabButton active={subTab === "components"} onClick={() => setSubTab("components")} label="Components" />
+        </HorizontalScrollTabs>
       </div>
 
       {subTab === "geology" ? (
         <TypesList
           title="Lithology types"
-          description="Used by Geology intervals."
+          description="Used by Geology intervals. Color remains primary, texture adds a second visual cue."
           canEdit={canEdit}
           loading={lithologyLoading}
           saving={lithologySaving}
           rows={lithologyTypesAll}
+          showPatternSelect
           onAdd={onAddLithologyType}
           onSave={onSaveLithologyTypes}
           onUpdate={onUpdateLithologyType}

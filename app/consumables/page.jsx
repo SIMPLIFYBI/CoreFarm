@@ -1,5 +1,6 @@
 "use client";
 import { Fragment, useEffect, useMemo, useState } from "react";
+import HorizontalScrollTabs from "@/app/components/HorizontalScrollTabs";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { DEFAULT_CONSUMABLE_ITEMS } from "@/lib/consumablesDefaults";
 import { useOrg } from "@/lib/OrgContext";
@@ -688,15 +689,15 @@ export default function ConsumablesPage() {
 
   const tabButtonClass = (key) =>
     [
-      "inline-flex items-center justify-center rounded-full border px-4 py-2 text-sm font-medium transition-base",
+      "inline-flex items-center justify-center -mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors",
       tab === key
-        ? "border-cyan-300/35 bg-gradient-to-r from-cyan-400/20 via-sky-400/14 to-indigo-500/20 text-white shadow-[0_0_0_1px_rgba(34,211,238,0.14),0_12px_30px_rgba(14,116,144,0.18)]"
-        : "border-white/10 bg-white/[0.03] text-slate-400 hover:border-white/16 hover:bg-white/[0.06] hover:text-slate-200",
+        ? "border-indigo-400 text-slate-50"
+        : "border-transparent text-slate-400 hover:text-slate-200",
     ].join(" ");
 
   return (
   <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-6 text-slate-200">
-      <div className="flex flex-wrap gap-2 border-b border-white/10 pb-3">
+      <HorizontalScrollTabs className="border-b border-white/10" hint="Swipe tabs" hintClassName="text-slate-500">
         <button
           className={tabButtonClass('inventory')}
           onClick={() => setTab('inventory')}
@@ -715,7 +716,7 @@ export default function ConsumablesPage() {
         >
           Purchase Orders
         </button>
-      </div>
+      </HorizontalScrollTabs>
 
       {tab === "inventory" && (
         <div className="card p-4">

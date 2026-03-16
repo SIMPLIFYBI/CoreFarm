@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
@@ -120,6 +121,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
   const [selectedHoleIds, setSelectedHoleIds] = useState([]);
   const [isCreateMode, setIsCreateMode] = useState(false);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
+  const [portalMounted, setPortalMounted] = useState(false);
   const [form, setForm] = useState({
     hole_id: "",
     depth: "",
@@ -149,6 +151,23 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
     drilling_contractor_action: "keep",
     drilling_contractor: "",
   });
+
+  useEffect(() => {
+    setPortalMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!portalMounted) return undefined;
+    const hasOverlayOpen = Boolean(selectedHole || showBulkEdit || showBulk);
+    if (!hasOverlayOpen) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [portalMounted, selectedHole, showBulkEdit, showBulk]);
 
   const sampleHeaders = useMemo(
     () =>
@@ -473,6 +492,11 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
     if (bulkUpdating && !force) return;
     setShowBulkEdit(false);
     resetBulkEditForm();
+  };
+
+  const renderOverlay = (content) => {
+    if (!portalMounted) return null;
+    return createPortal(content, document.body);
   };
 
   const openBulkEditModal = () => {
@@ -1018,7 +1042,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
         </table>
       </div>
 
-      {selectedHole && (
+      {selectedHole && renderOverlay(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="card w-full max-w-2xl p-5 max-h-[88vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
@@ -1299,7 +1323,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
         </div>
       )}
 
-      {showBulkEdit && (
+      {showBulkEdit && renderOverlay(
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
           <div className="card w-full max-w-xl p-5 max-h-[88vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
@@ -1399,7 +1423,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
         </div>
       )}
 
-      {showBulk && (
+      {showBulk && renderOverlay(
         <div className="fixed inset-0 z-[70] bg-slate-950/70 backdrop-blur-md p-3 md:p-5">
           <div className="glass h-full w-full rounded-2xl border border-white/15 bg-slate-950/85 shadow-[0_30px_90px_rgba(2,6,23,0.65)] overflow-hidden flex flex-col">
             <div className="border-b border-white/10 px-4 py-3 md:px-6 md:py-4">
