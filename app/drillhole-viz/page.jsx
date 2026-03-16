@@ -1856,7 +1856,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
   const totalShared = holes.filter((hole) => hole.organization_id !== selectedOrgId).length;
 
   return (
-    <div className="min-h-screen bg-transparent px-3 pb-24 pt-2 md:px-5 md:pb-8 md:pt-5">
+    <div className="min-h-screen overflow-x-hidden bg-transparent px-3 pb-24 pt-2 md:px-5 md:pb-8 md:pt-5">
       <div className="mx-auto max-w-[1600px] space-y-4">
         <section className="hidden overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/40 shadow-[0_30px_120px_rgba(2,6,23,0.45)] backdrop-blur-xl xl:block">
           <div className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(15,23,42,0.82),rgba(8,47,73,0.65)_45%,rgba(120,53,15,0.48))] px-4 py-5 md:px-6">
@@ -1954,12 +1954,15 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
             </div>
           </div>
 
-          <div className="flex min-h-[68svh] flex-1">
+          <div className="flex min-h-[68svh] flex-col xl:flex-row xl:flex-1">
         {/* Left drawer */}
         <div
           className={[
-            "h-full shrink-0 overflow-hidden border-r border-white/10 bg-slate-950/55 shadow-[0_24px_80px_rgba(2,6,23,0.24)] backdrop-blur-xl",
-            drawerOpen ? "w-[460px] xl:w-[520px] max-w-[92vw]" : "w-0 border-r-0",
+            "overflow-hidden bg-slate-950/55 backdrop-blur-xl transition-all duration-200",
+            "xl:h-full xl:shrink-0 xl:shadow-[0_24px_80px_rgba(2,6,23,0.24)]",
+            drawerOpen
+              ? "w-full max-h-[72svh] border-b border-white/10 xl:max-h-none xl:w-[460px] xl:max-w-[92vw] xl:border-b-0 xl:border-r"
+              : "w-full max-h-0 border-b-0 xl:w-0 xl:max-h-none xl:border-r-0",
             "transition-all duration-200 overflow-hidden",
           ].join(" ")}
         >
