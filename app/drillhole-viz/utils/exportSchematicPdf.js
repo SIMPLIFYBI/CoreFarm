@@ -85,6 +85,8 @@ export async function exportSchematicPdf({
     ["Actual depth (m)", hole?.depth ?? "—"],
     ["Planned depth (m)", hole?.planned_depth ?? "—"],
     ["Water level (m)", hole?.water_level_m ?? "—"],
+    ["Azimuth (deg)", hole?.azimuth ?? "—"],
+    ["Dip (deg)", hole?.dip ?? "—"],
   ];
 
   autoTable(pdf, {
