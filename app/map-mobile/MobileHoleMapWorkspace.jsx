@@ -14,11 +14,30 @@ const HOLES_SELECTED_LAYER_ID = "mobile-hole-map-selected";
 const DEFAULT_CENTER = [133.7751, -25.2744];
 const DEFAULT_ZOOM = 3;
 const MAPBOX_STYLE_URL = "mapbox://styles/jamesblue/cmmhkajfi000w01shgzr5c1op";
+const MAPBOX_FALLBACK_STYLE_URL = "mapbox://styles/mapbox/satellite-streets-v12";
+const MAP_REFOCUS_SPEED = 0.52;
+const MAP_REFOCUS_CURVE = 1.5;
+const MAP_SELECTION_ZOOM = 15.8;
 const SHEET_SNAP_OFFSETS = {
   full: 0,
   mid: 0.28,
   peek: 0.54,
 };
+
+function cinematicEase(t) {
+  return 1 - Math.pow(1 - t, 3);
+}
+
+function getSelectionFlyTo(map, center, minimumZoom) {
+  return {
+    center,
+    zoom: Math.max(map.getZoom(), minimumZoom),
+    speed: MAP_REFOCUS_SPEED,
+    curve: MAP_REFOCUS_CURVE,
+    easing: cinematicEase,
+    essential: true,
+  };
+}
 
 function formatValue(value, suffix = "") {
   if (value == null || value === "") return "-";
@@ -302,11 +321,13 @@ export default function MobileHoleMapWorkspace({ publicToken = "" }) {
   const visibleHolesRef = useRef([]);
   const handlersBoundRef = useRef(false);
   const mapReadyRef = useRef(false);
+  const fallbackStyleActiveRef = useRef(false);
 
   const [projectScope, setProjectScope] = useState("own");
   const [loading, setLoading] = useState(true);
   const [mapStatus, setMapStatus] = useState("initializing");
   const [error, setError] = useState("");
+  const [mapNotice, setMapNotice] = useState("");
   const [allHoles, setAllHoles] = useState([]);
   const [expandedProjects, setExpandedProjects] = useState({});
   const [projectFilter, setProjectFilter] = useState("");
@@ -334,6 +355,7 @@ export default function MobileHoleMapWorkspace({ publicToken = "" }) {
     if (!token) {
       setMapStatus("error");
       setError("Missing NEXT_PUBLIC_MAPBOX_TOKEN in environment.");
+      setMapNotice("");
       return undefined;
     }
 
@@ -347,34 +369,70 @@ export default function MobileHoleMapWorkspace({ publicToken = "" }) {
         mapboxRef.current = mapboxgl;
         mapboxgl.accessToken = token;
 
-        const map = new mapboxgl.Map({
-          container: mapContainerRef.current,
-          style: MAPBOX_STYLE_URL,
-          center: DEFAULT_CENTER,
-          zoom: DEFAULT_ZOOM,
-          pitch: 34,
-          bearing: -14,
-          cooperativeGestures: true,
-        });
+        const createMap = (styleUrl, { isFallback = false } = {}) => {
+          let mapLoaded = false;
+          const map = new mapboxgl.Map({
+            container: mapContainerRef.current,
+            style: styleUrl,
+            center: DEFAULT_CENTER,
+            zoom: DEFAULT_ZOOM,
+            pitch: 34,
+            bearing: -14,
+            cooperativeGestures: true,
+          });
 
-        mapRef.current = map;
-        map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), "top-right");
+          mapRef.current = map;
+          map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), "top-right");
 
-        map.on("load", () => {
-          if (disposed) return;
-          mapReadyRef.current = true;
-          setMapStatus("ready");
-        });
+          map.on("load", () => {
+            if (disposed) return;
+            mapLoaded = true;
+            mapReadyRef.current = true;
+            fallbackStyleActiveRef.current = isFallback;
+            setMapStatus("ready");
+            setError("");
+            setMapNotice(isFallback ? "Custom Mapbox style is unavailable locally. Showing the standard basemap instead." : "");
+          });
 
-        map.on("error", (evt) => {
-          if (disposed) return;
-          setMapStatus("error");
-          setError(evt?.error?.message || "Mapbox runtime error.");
-        });
+          map.on("error", (evt) => {
+            if (disposed) return;
+            const message = evt?.error?.message || "Mapbox runtime error.";
+            const shouldFallback = !isFallback && !fallbackStyleActiveRef.current && (!mapLoaded || /composite/i.test(message));
+
+            if (shouldFallback) {
+              fallbackStyleActiveRef.current = true;
+              handlersBoundRef.current = false;
+              mapReadyRef.current = false;
+              if (popupRef.current) {
+                popupRef.current.remove();
+                popupRef.current = null;
+              }
+              try {
+                map.remove();
+              } catch {
+                // Ignore teardown failures during style fallback.
+              }
+              if (mapRef.current === map) mapRef.current = null;
+              setMapStatus("initializing");
+              setError("");
+              setMapNotice("Custom Mapbox style failed to load. Falling back to the standard basemap.");
+              createMap(MAPBOX_FALLBACK_STYLE_URL, { isFallback: true });
+              return;
+            }
+
+            setMapStatus("error");
+            setError(message);
+          });
+        };
+
+        fallbackStyleActiveRef.current = false;
+        setMapNotice("");
+        createMap(MAPBOX_STYLE_URL);
       } catch (evt) {
         if (disposed) return;
         setMapStatus("error");
         setError(evt?.message || "Failed to initialize Mapbox.");
+        setMapNotice("");
       }
     };
 
@@ -622,7 +680,7 @@ export default function MobileHoleMapWorkspace({ publicToken = "" }) {
     if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
 
     if (options.flyTo !== false) {
-      map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 12), speed: 0.8, curve: 1.2 });
+      map.flyTo(getSelectionFlyTo(map, [lng, lat], typeof options.zoom === "number" ? options.zoom : MAP_SELECTION_ZOOM));
     }
 
     if (!popupRef.current) {
@@ -720,7 +778,7 @@ export default function MobileHoleMapWorkspace({ publicToken = "" }) {
         if (!feature) return;
         const hole = visibleHolesRef.current.find((row) => String(row.id) === String(feature.properties?.id));
         if (!hole) return;
-        focusHole(hole, { flyTo: false });
+        focusHole(hole, { flyTo: true });
       });
       handlersBoundRef.current = true;
     }
@@ -763,7 +821,7 @@ export default function MobileHoleMapWorkspace({ publicToken = "" }) {
   const totalVisibleHoles = visibleHoles.length;
 
   return (
-    <div className="md:hidden overflow-hidden bg-[linear-gradient(180deg,#03101d_0%,#020617_100%)] px-0 pb-0 pt-0">
+    <div className="md:hidden overflow-hidden bg-transparent px-0 pb-0 pt-0">
       <div className="relative overflow-hidden border-y border-white/10 bg-slate-950" style={{ height: mobileHeight }}>
         <div ref={mapContainerRef} className="absolute inset-0" />
 
@@ -854,6 +912,12 @@ export default function MobileHoleMapWorkspace({ publicToken = "" }) {
         {error ? (
           <div className="absolute left-3 right-3 top-[164px] z-20 rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200 backdrop-blur-xl">
             {error}
+          </div>
+        ) : null}
+
+        {mapNotice ? (
+          <div className="absolute left-3 right-3 top-[164px] z-20 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100 backdrop-blur-xl">
+            {mapNotice}
           </div>
         ) : null}
 

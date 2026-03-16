@@ -1856,7 +1856,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
   const totalShared = holes.filter((hole) => hole.organization_id !== selectedOrgId).length;
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.16),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(251,191,36,0.12),_transparent_24%),linear-gradient(180deg,_#04111f_0%,_#020617_42%,_#02030a_100%)] px-3 pb-24 pt-2 md:px-5 md:pb-8 md:pt-5">
+    <div className="min-h-screen bg-transparent px-3 pb-24 pt-2 md:px-5 md:pb-8 md:pt-5">
       <div className="mx-auto max-w-[1600px] space-y-4">
         <section className="hidden overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/40 shadow-[0_30px_120px_rgba(2,6,23,0.45)] backdrop-blur-xl xl:block">
           <div className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(15,23,42,0.82),rgba(8,47,73,0.65)_45%,rgba(120,53,15,0.48))] px-4 py-5 md:px-6">

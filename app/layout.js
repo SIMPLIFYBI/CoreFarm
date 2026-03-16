@@ -44,7 +44,7 @@ export default function RootLayout({ children }) {
             <Header />
           </Suspense>
           <AuthGuard>
-            <main className="min-h-screen md:pt-[72px] md:pb-0 pb-[calc(env(safe-area-inset-bottom)+64px)] bg-transparent">
+            <main className="app-shell-gradient min-h-screen md:pt-[72px] md:pb-0 pb-[calc(env(safe-area-inset-bottom)+64px)] bg-transparent">
               {children}
             </main>
           </AuthGuard>

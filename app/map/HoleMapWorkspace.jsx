@@ -23,8 +23,11 @@ const ASSETS_SELECTED_LAYER_ID = "prod-asset-map-selected";
 const DEFAULT_CENTER = [133.7751, -25.2744];
 const DEFAULT_ZOOM = 3;
 const MAPBOX_STYLE_URL = "mapbox://styles/jamesblue/cmmhkajfi000w01shgzr5c1op";
-const MAP_REFOCUS_SPEED = 0.38;
+const MAPBOX_FALLBACK_STYLE_URL = "mapbox://styles/mapbox/satellite-streets-v12";
+const MAP_REFOCUS_SPEED = 0.52;
 const MAP_REFOCUS_CURVE = 1.5;
+const MAP_SELECTION_ZOOM = 15.8;
+const MAP_ASSET_SELECTION_ZOOM = 16.3;
 const MAP_PROJECT_FRAME_DURATION = 2800;
 const HOLE_STATE_STYLES = [
   { value: "proposed", label: "Proposed", color: "#38bdf8" },
@@ -47,6 +50,17 @@ const HOLE_STATE_COLOR_EXPRESSION = [
 
 function cinematicEase(t) {
   return 1 - Math.pow(1 - t, 3);
+}
+
+function getSelectionFlyTo(map, center, minimumZoom) {
+  return {
+    center,
+    zoom: Math.max(map.getZoom(), minimumZoom),
+    speed: MAP_REFOCUS_SPEED,
+    curve: MAP_REFOCUS_CURVE,
+    easing: cinematicEase,
+    essential: true,
+  };
 }
 
 function getHoleStateTone(state) {
@@ -735,6 +749,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const popupRef = useRef(null);
   const handlersBoundRef = useRef(false);
   const mapReadyRef = useRef(false);
+  const fallbackStyleActiveRef = useRef(false);
   const visibleHolesRef = useRef([]);
   const visibleAssetsRef = useRef([]);
   const schematicRequestRef = useRef(0);
@@ -743,6 +758,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const [loading, setLoading] = useState(true);
   const [mapStatus, setMapStatus] = useState("initializing");
   const [error, setError] = useState("");
+  const [mapNotice, setMapNotice] = useState("");
   const [allHoles, setAllHoles] = useState([]);
   const [allAssets, setAllAssets] = useState([]);
   const [projectFilter, setProjectFilter] = useState("");
@@ -801,6 +817,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     if (!token) {
       setMapStatus("error");
       setError("Missing NEXT_PUBLIC_MAPBOX_TOKEN in environment.");
+      setMapNotice("");
       return undefined;
     }
 
@@ -814,34 +831,70 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         mapboxRef.current = mapboxgl;
         mapboxgl.accessToken = token;
 
-        const map = new mapboxgl.Map({
-          container: mapContainerRef.current,
-          style: MAPBOX_STYLE_URL,
-          center: DEFAULT_CENTER,
-          zoom: DEFAULT_ZOOM,
-          pitch: 28,
-          bearing: -12,
-          cooperativeGestures: true,
-        });
+        const createMap = (styleUrl, { isFallback = false } = {}) => {
+          let mapLoaded = false;
+          const map = new mapboxgl.Map({
+            container: mapContainerRef.current,
+            style: styleUrl,
+            center: DEFAULT_CENTER,
+            zoom: DEFAULT_ZOOM,
+            pitch: 28,
+            bearing: -12,
+            cooperativeGestures: true,
+          });
 
-        mapRef.current = map;
-        map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), "top-right");
+          mapRef.current = map;
+          map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), "top-right");
 
-        map.on("load", () => {
-          if (disposed) return;
-          mapReadyRef.current = true;
-          setMapStatus("ready");
-        });
+          map.on("load", () => {
+            if (disposed) return;
+            mapLoaded = true;
+            mapReadyRef.current = true;
+            fallbackStyleActiveRef.current = isFallback;
+            setMapStatus("ready");
+            setError("");
+            setMapNotice(isFallback ? "Custom Mapbox style is unavailable locally. Showing the standard basemap instead." : "");
+          });
 
-        map.on("error", (evt) => {
-          if (disposed) return;
-          setMapStatus("error");
-          setError(evt?.error?.message || "Mapbox runtime error.");
-        });
+          map.on("error", (evt) => {
+            if (disposed) return;
+            const message = evt?.error?.message || "Mapbox runtime error.";
+            const shouldFallback = !isFallback && !fallbackStyleActiveRef.current && (!mapLoaded || /composite/i.test(message));
+
+            if (shouldFallback) {
+              fallbackStyleActiveRef.current = true;
+              handlersBoundRef.current = false;
+              mapReadyRef.current = false;
+              if (popupRef.current) {
+                popupRef.current.remove();
+                popupRef.current = null;
+              }
+              try {
+                map.remove();
+              } catch {
+                // Ignore teardown failures during style fallback.
+              }
+              if (mapRef.current === map) mapRef.current = null;
+              setMapStatus("initializing");
+              setError("");
+              setMapNotice("Custom Mapbox style failed to load. Falling back to the standard basemap.");
+              createMap(MAPBOX_FALLBACK_STYLE_URL, { isFallback: true });
+              return;
+            }
+
+            setMapStatus("error");
+            setError(message);
+          });
+        };
+
+        fallbackStyleActiveRef.current = false;
+        setMapNotice("");
+        createMap(MAPBOX_STYLE_URL);
       } catch (evt) {
         if (disposed) return;
         setMapStatus("error");
         setError(evt?.message || "Failed to initialize Mapbox.");
+        setMapNotice("");
       }
     };
 
@@ -1460,14 +1513,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
 
     if (options.flyTo !== false) {
-      map.flyTo({
-        center: [lng, lat],
-        zoom: typeof options.zoom === "number" ? options.zoom : Math.max(map.getZoom(), 11.5),
-        offset: [0, 120],
-        speed: MAP_REFOCUS_SPEED,
-        curve: MAP_REFOCUS_CURVE,
-        easing: cinematicEase,
-      });
+      map.flyTo(getSelectionFlyTo(map, [lng, lat], typeof options.zoom === "number" ? options.zoom : MAP_SELECTION_ZOOM));
     }
 
     if (!popupRef.current) {
@@ -1502,14 +1548,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
 
     if (options.flyTo !== false) {
-      map.flyTo({
-        center: [lng, lat],
-        zoom: typeof options.zoom === "number" ? options.zoom : Math.max(map.getZoom(), 12),
-        offset: [0, 120],
-        speed: MAP_REFOCUS_SPEED,
-        curve: MAP_REFOCUS_CURVE,
-        easing: cinematicEase,
-      });
+      map.flyTo(getSelectionFlyTo(map, [lng, lat], typeof options.zoom === "number" ? options.zoom : MAP_ASSET_SELECTION_ZOOM));
     }
 
     if (!popupRef.current) {
@@ -1673,14 +1712,14 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         if (!feature) return;
         const hole = visibleHolesRef.current.find((row) => String(row.id) === String(feature.properties?.id));
         if (!hole) return;
-        focusHole(hole, { zoom: map.getZoom() });
+        focusHole(hole);
       };
       const handleAssetLayerClick = (event) => {
         const feature = event.features?.[0];
         if (!feature) return;
         const asset = visibleAssetsRef.current.find((row) => String(row.id) === String(feature.properties?.id));
         if (!asset) return;
-        focusAsset(asset, { zoom: map.getZoom() });
+        focusAsset(asset);
       };
 
       map.on("mouseenter", HOLES_CIRCLE_LAYER_ID, setPointerCursor);
@@ -1779,7 +1818,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   };
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.16),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(251,191,36,0.12),_transparent_24%),linear-gradient(180deg,_#04111f_0%,_#020617_42%,_#02030a_100%)] px-3 pb-24 pt-2 md:px-5 md:pb-8 md:pt-5">
+    <div className="min-h-screen bg-transparent px-3 pb-24 pt-0 md:px-5 md:pb-8 md:pt-0">
       <div className="mx-auto max-w-[1600px] space-y-4">
         <section className="hidden overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/40 shadow-[0_30px_120px_rgba(2,6,23,0.45)] backdrop-blur-xl xl:block">
           <div className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(15,23,42,0.82),rgba(8,47,73,0.65)_45%,rgba(120,53,15,0.48))] px-4 py-5 md:px-6">
@@ -1860,6 +1899,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                 </label>
               </div>
             </div>
+            {mapNotice ? <div className="mt-3 text-sm text-amber-300">{mapNotice}</div> : null}
             {error ? <div className="mt-3 text-sm text-rose-300">{error}</div> : null}
           </div>
         </section>
