@@ -5,21 +5,21 @@ import HorizontalScrollTabs from "@/app/components/HorizontalScrollTabs";
 import CorePage from "./CorePage";
 import SampleDispatchPage from "./SampleDispatchPage";
 import DrillholeVizPage from "../drillhole-viz/page";
-import HoleDetailsTab from "./HoleDetailsTab";
 import CoreTasksManagerPage from "./CoreTasksPage";
-import AdminPage from "./AdminPage";
+import TestTab from "./TestTab";
+import BulkUploaderTab from "./BulkUploaderTab";
 
 const PROJECT_SCOPE_STORAGE_KEY = "coretasks:projectScope";
 
 export default function CoreTasksPage() {
   const pathname = usePathname();
-  const initialTab = pathname === "/addcore" ? "addcore" : "holedetails";
+  const initialTab = pathname === "/addcore" || pathname === "/coretasks" ? "coreworkbench" : "coreworkbench";
   const [tab, setTab] = useState(initialTab);
   const [projectScope, setProjectScope] = useState("own"); // 'own' | 'shared'
   const isDrillholeVizTab = tab === "drillholeviz";
 
   useEffect(() => {
-    setTab(pathname === "/addcore" ? "addcore" : "holedetails");
+    setTab(pathname === "/addcore" || pathname === "/coretasks" ? "coreworkbench" : "coreworkbench");
   }, [pathname]);
 
   useEffect(() => {
@@ -57,10 +57,16 @@ export default function CoreTasksPage() {
 
         <HorizontalScrollTabs className="mb-6 border-b border-white/10" hint="Swipe tabs" hintClassName="text-slate-500">
           <button
-            className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "holedetails" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
-            onClick={() => setTab("holedetails")}
+            className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "coreworkbench" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
+            onClick={() => setTab("coreworkbench")}
           >
-            Hole Details
+            Core Workbench
+          </button>
+          <button
+            className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "bulkuploader" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
+            onClick={() => setTab("bulkuploader")}
+          >
+            Bulk Uploader
           </button>
           <button
             className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "logging" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
@@ -73,12 +79,6 @@ export default function CoreTasksPage() {
             onClick={() => setTab("sampledispatch")}
           >
             Sample Dispatch
-          </button>
-          <button
-            className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "addcore" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
-            onClick={() => setTab("addcore")}
-          >
-            Add Core
           </button>
           <button
             className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "coretasks" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
@@ -101,13 +101,13 @@ export default function CoreTasksPage() {
         </div>
       ) : (
         <div className="max-w-6xl mx-auto">
-          {tab === "holedetails" ? (
+          {tab === "coreworkbench" ? (
             <div className="card overflow-hidden">
-              <HoleDetailsTab projectScope={projectScope} />
+              <TestTab projectScope={projectScope} />
             </div>
-          ) : tab === "addcore" ? (
+          ) : tab === "bulkuploader" ? (
             <div className="card overflow-hidden">
-              <AdminPage projectScope={projectScope} />
+              <BulkUploaderTab projectScope={projectScope} />
             </div>
           ) : tab === "coretasks" ? (
             <div className="card overflow-hidden">

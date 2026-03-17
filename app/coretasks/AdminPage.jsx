@@ -52,6 +52,7 @@ export function AdminPage({ projectScope = "own" }) {
   const [importing, setImporting] = useState(false);
 
   const [selectedProject, setSelectedProject] = useState("");
+  const [search, setSearch] = useState("");
   const [holeFilters, setHoleFilters] = useState(["complete", "in_progress", "not_started"]);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const statusMenuRef = useRef(null);
@@ -98,13 +99,31 @@ export function AdminPage({ projectScope = "own" }) {
   };
 
   const filteredHoles = useMemo(() => {
+    const term = search.trim().toLowerCase();
     const byProject = !selectedProject
       ? holes
       : (holes || []).filter((h) => h.projects?.name === selectedProject);
     const active = holeFilters || [];
-    if (active.length === 0 || active.length === 3) return byProject;
-    return byProject.filter((h) => active.includes(classifyHole(h)));
-  }, [holes, selectedProject, holeFilters, holeStatus]);
+    const byStatus = active.length === 0 || active.length === 3
+      ? byProject
+      : byProject.filter((h) => active.includes(classifyHole(h)));
+
+    if (!term) return byStatus;
+
+    return byStatus.filter((hole) =>
+      [
+        hole.hole_id,
+        hole.projects?.name,
+        hole.drilling_contractor,
+        hole.drilling_diameter,
+        hole.depth,
+        hole.planned_depth,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(term)
+    );
+  }, [holes, search, selectedProject, holeFilters, holeStatus]);
 
   const toggleStatusFilter = (status) => {
     setHoleFilters((prev) => {
@@ -173,6 +192,88 @@ export function AdminPage({ projectScope = "own" }) {
     if (status === "in_progress") return { label: "In Progress", cls: "badge badge-amber" };
     return { label: "Not Started", cls: "badge badge-gray" };
   };
+
+  const openEditHole = (hole) => {
+    if (projectScope === "shared") return;
+    setEditingId(hole.id);
+    setSingle({
+      hole_id: hole.hole_id || "",
+      depth: hole.depth ?? "",
+      planned_depth: hole.planned_depth ?? "",
+      drilling_diameter: hole.drilling_diameter || "",
+      project_id: hole.project_id || "",
+      drilling_contractor: hole.drilling_contractor || "",
+    });
+    setShowHoleModal(true);
+  };
+
+  const renderIntervalsPanel = () => (
+    <div className="space-y-4 border-t p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="font-medium text-sm">Task intervals</h3>
+        <div
+          className={`rounded-full px-3 py-1 text-[11px] ${
+            intervalSaveState === "error"
+              ? "bg-rose-500/15 text-rose-100"
+              : intervalSaveState === "saving"
+                ? "bg-amber-500/15 text-amber-100"
+                : intervalSaveState === "draft"
+                  ? "bg-slate-700/70 text-slate-200"
+                  : "bg-emerald-500/15 text-emerald-100"
+          }`}
+        >
+          {intervalSaveMessage}
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {taskTypeKeys.map((t) => (
+          <div key={t} className="glass rounded-xl p-3 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="inline-flex items-center gap-2 font-medium text-xs uppercase tracking-wide text-slate-100">
+                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colorForTask(t) }} />
+                {labelForTask(t)}
+              </span>
+              <button
+                type="button"
+                className="btn btn-3d-primary btn-xs shrink-0 w-20 text-[10px] justify-center"
+                onClick={() => addInterval(t)}
+                style={{ letterSpacing: "0.5px" }}
+              >
+                + Interval
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {(intervals[t] || []).map((row, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <input
+                    className="input input-xs w-8 md:w-20"
+                    placeholder="From"
+                    value={row.from_m}
+                    onChange={(e) => changeInterval(t, idx, "from_m", e.target.value)}
+                  />
+                  <span className="text-xs">→</span>
+                  <input
+                    className="input input-xs w-8 md:w-20"
+                    placeholder="To"
+                    value={row.to_m}
+                    onChange={(e) => changeInterval(t, idx, "to_m", e.target.value)}
+                  />
+                  <button type="button" className="btn btn-3d-glass btn-xs" onClick={() => removeInterval(t, idx)}>
+                    ×
+                  </button>
+                </div>
+              ))}
+              {!intervals[t]?.length && (
+                <div className="text-xs text-gray-500 italic">None</div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   const toNumOrNull = (v) => {
     if (v === "" || v == null) return null;
@@ -705,6 +806,15 @@ export function AdminPage({ projectScope = "own" }) {
       <section className="card p-4 md:p-5">
         <div className="flex flex-col gap-3 pb-2 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
+          <label className="w-full sm:w-72 flex flex-col gap-1 text-sm text-slate-200">
+            <span>Search Holes</span>
+            <input
+              className="input input-sm w-full"
+              placeholder="Search holes by ID, project, contractor..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </label>
           <div className="relative w-full sm:w-auto" ref={projectMenuRef}>
             <button
               type="button"
@@ -818,12 +928,73 @@ export function AdminPage({ projectScope = "own" }) {
           <div className="flex items-start justify-end gap-3 lg:ml-3" />
         </div>
 
+        <div className="pb-2 text-xs text-slate-400">
+          Showing {filteredHoles.length} of {holes.length} hole{holes.length === 1 ? "" : "s"}
+        </div>
+
         {loading ? (
           <p>Loading…</p>
         ) : filteredHoles.length === 0 ? (
           <p className="text-sm text-slate-300">No holes match the selected filters.</p>
         ) : (
-          <div className="table-container">
+          <>
+          <div className="space-y-3 md:hidden">
+            {filteredHoles.map((h) => (
+              <Fragment key={h.id}>
+                <button
+                  type="button"
+                  className={`w-full rounded-2xl border p-4 text-left transition-base ${selectedId === h.id ? "border-indigo-400/60 bg-indigo-500/10" : "border-white/10 bg-slate-950/35 hover:bg-white/5"}`}
+                  onClick={() => toggleExpandHole(h)}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-base font-semibold text-slate-100">{h.hole_id}</span>
+                        <span className={getStatusMeta(h).cls}>{getStatusMeta(h).label}</span>
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-300">
+                        <div>
+                          <div className="text-slate-500">Depth</div>
+                          <div>{h.depth ?? "—"}</div>
+                        </div>
+                        <div>
+                          <div className="text-slate-500">Planned</div>
+                          <div>{h.planned_depth ?? "—"}</div>
+                        </div>
+                        <div>
+                          <div className="text-slate-500">Diameter</div>
+                          <div>{h.drilling_diameter || "—"}</div>
+                        </div>
+                        <div>
+                          <div className="text-slate-500">Project</div>
+                          <div className="truncate">{h.projects?.name || "—"}</div>
+                        </div>
+                      </div>
+                    </div>
+                    <span className="shrink-0 rounded-full border border-white/10 px-2 py-1 text-[11px] text-slate-300">
+                      {selectedId === h.id ? "Hide" : "Open"}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/10 pt-3">
+                    <div className="min-w-0 text-xs text-slate-400 truncate">{h.drilling_contractor || "No contractor"}</div>
+                    <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                      <EditIconButton disabled={projectScope === "shared"} onClick={() => openEditHole(h)} />
+                      <DeleteIconButton disabled={projectScope === "shared"} onClick={() => deleteHole(h.id)} />
+                    </div>
+                  </div>
+                </button>
+
+                {selectedId === h.id && (
+                  <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/35">
+                    {renderIntervalsPanel()}
+                  </div>
+                )}
+              </Fragment>
+            ))}
+          </div>
+
+          <div className="hidden md:block table-container">
             <table className="table">
               <thead>
                 <tr>
@@ -840,12 +1011,18 @@ export function AdminPage({ projectScope = "own" }) {
               <tbody>
                 {filteredHoles.map((h) => (
                   <Fragment key={h.id}>
-                    <tr className={`${selectedId === h.id ? "row-selected" : ""}`}>
+                    <tr
+                      className={`${selectedId === h.id ? "row-selected" : ""} cursor-pointer transition-base hover:bg-white/5`}
+                      onClick={() => toggleExpandHole(h)}
+                    >
                       <td>
                         <button
                           type="button"
                           className="btn btn-xs"
-                          onClick={() => toggleExpandHole(h)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleExpandHole(h);
+                          }}
                           title={selectedId === h.id ? "Collapse" : "Expand"}
                         >
                           {selectedId === h.id ? "−" : "+"}
@@ -863,22 +1040,13 @@ export function AdminPage({ projectScope = "own" }) {
                       <td className="hidden md:table-cell">{h.projects?.name || ""}</td>
                       <td className="hidden md:table-cell">{h.drilling_contractor}</td>
                       <td className="hidden md:table-cell">
-                        <div className="flex gap-2">
+                        <div
+                          className="flex gap-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <EditIconButton
                             disabled={projectScope === "shared"}
-                            onClick={() => {
-                              if (projectScope === "shared") return;
-                              setEditingId(h.id);
-                              setSingle({
-                                hole_id: h.hole_id || "",
-                                depth: h.depth ?? "",
-                                planned_depth: h.planned_depth ?? "",
-                                drilling_diameter: h.drilling_diameter || "",
-                                project_id: h.project_id || "",
-                                drilling_contractor: h.drilling_contractor || "",
-                              });
-                              setShowHoleModal(true);
-                            }}
+                            onClick={() => openEditHole(h)}
                           />
                           <DeleteIconButton disabled={projectScope === "shared"} onClick={() => deleteHole(h.id)} />
                         </div>
@@ -888,72 +1056,7 @@ export function AdminPage({ projectScope = "own" }) {
                     {selectedId === h.id && (
                       <tr className="bg-slate-900/35">
                         <td colSpan={8} className="p-0">
-                          <div className="p-4 space-y-4 border-t">
-                            <div className="flex items-center justify-between">
-                              <h3 className="font-medium text-sm">Task intervals</h3>
-                              <div
-                                className={`rounded-full px-3 py-1 text-[11px] ${
-                                  intervalSaveState === "error"
-                                    ? "bg-rose-500/15 text-rose-100"
-                                    : intervalSaveState === "saving"
-                                      ? "bg-amber-500/15 text-amber-100"
-                                      : intervalSaveState === "draft"
-                                        ? "bg-slate-700/70 text-slate-200"
-                                        : "bg-emerald-500/15 text-emerald-100"
-                                }`}
-                              >
-                                {intervalSaveMessage}
-                              </div>
-                            </div>
-
-                            <div className="grid md:grid-cols-2 gap-4">
-                              {taskTypeKeys.map((t) => (
-                                <div key={t} className="glass rounded-xl p-3 space-y-3">
-                                  <div className="flex items-center justify-between">
-                                    <span className="inline-flex items-center gap-2 font-medium text-xs uppercase tracking-wide text-slate-100">
-                                      <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colorForTask(t) }} />
-                                      {labelForTask(t)}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      className="btn btn-3d-primary btn-xs shrink-0 w-20 text-[10px] justify-center"
-                                      onClick={() => addInterval(t)}
-                                      style={{ letterSpacing: "0.5px" }}
-                                    >
-                                      + Interval
-                                    </button>
-                                  </div>
-
-                                  <div className="space-y-2">
-                                    {(intervals[t] || []).map((row, idx) => (
-                                      <div key={idx} className="flex items-center gap-2">
-                                        <input
-                                          className="input input-xs w-8 md:w-20"
-                                          placeholder="From"
-                                          value={row.from_m}
-                                          onChange={(e) => changeInterval(t, idx, "from_m", e.target.value)}
-                                        />
-                                        <span className="text-xs">→</span>
-                                        <input
-                                          className="input input-xs w-8 md:w-20"
-                                          placeholder="To"
-                                          value={row.to_m}
-                                          onChange={(e) => changeInterval(t, idx, "to_m", e.target.value)}
-                                        />
-                                        <button type="button" className="btn btn-3d-glass btn-xs" onClick={() => removeInterval(t, idx)}>
-                                          ×
-                                        </button>
-                                      </div>
-                                    ))}
-                                    {!intervals[t]?.length && (
-                                      <div className="text-xs text-gray-500 italic">None</div>
-                                    )}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-
-                          </div>
+                          {renderIntervalsPanel()}
                         </td>
                       </tr>
                     )}
@@ -962,6 +1065,7 @@ export function AdminPage({ projectScope = "own" }) {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </section>
 
