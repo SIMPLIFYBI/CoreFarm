@@ -4,6 +4,7 @@ import HorizontalScrollTabs from "@/app/components/HorizontalScrollTabs";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { DEFAULT_CONSUMABLE_ITEMS } from "@/lib/consumablesDefaults";
 import { useOrg } from "@/lib/OrgContext";
+import { buildConsumableInventoryRows, getConsumableStatusMeta } from "@/lib/consumableInventory";
 import toast from "react-hot-toast";
 
 // Data model (Supabase suggested tables):
@@ -14,7 +15,7 @@ import toast from "react-hot-toast";
 export default function ConsumablesPage() {
   const supabase = supabaseBrowser();
   const [user, setUser] = useState(null);
-  const { orgId, setOrgId, memberships } = useOrg();
+  const { orgId, memberships } = useOrg();
   const [tab, setTab] = useState("inventory"); // 'inventory' | 'requests' | 'orders'
 
   // Inventory
@@ -32,6 +33,9 @@ export default function ConsumablesPage() {
     cost_per_unit: 0,
   });
   const [addingItem, setAddingItem] = useState(false);
+  const [locations, setLocations] = useState([]);
+  const [selectedLocationId, setSelectedLocationId] = useState("all");
+  const [locationInventoryRows, setLocationInventoryRows] = useState([]);
   // No order number captured at inventory level anymore
 
   // Purchase requests
@@ -61,15 +65,40 @@ export default function ConsumablesPage() {
 
   // Seed inventory if empty and then load
   const isAdmin = useMemo(() => memberships.some((m) => m.organization_id === orgId && m.role === 'admin'), [memberships, orgId]);
+  const selectedLocation = useMemo(
+    () => locations.find((location) => location.id === selectedLocationId) || null,
+    [locations, selectedLocationId]
+  );
+  const inventoryRows = useMemo(
+    () => buildConsumableInventoryRows(items, locationInventoryRows, selectedLocationId),
+    [items, locationInventoryRows, selectedLocationId]
+  );
+  const locationsConfigured = locations.length > 0;
+  const editingAggregateInventory = selectedLocationId === "all" && locationsConfigured;
 
   const loadInventory = async (org, opts = {}) => {
     setLoadingItems(true);
     try {
-      // Try load existing
-      const { data: existing } = await supabase
-        .from("consumable_items")
-        .select("id, key, label, count, include_in_report, reorder_value, cost_per_unit, unit_size")
-        .eq("organization_id", org);
+      const [itemsRes, locationsRes, inventoryRes] = await Promise.all([
+        supabase
+          .from("consumable_items")
+          .select("id, key, label, count, include_in_report, reorder_value, cost_per_unit, unit_size")
+          .eq("organization_id", org),
+        supabase
+          .from("asset_locations")
+          .select("id, name, description")
+          .eq("organization_id", org)
+          .order("name", { ascending: true }),
+        supabase
+          .from("consumable_location_inventory")
+          .select("id, consumable_item_id, location_id, count, reorder_value")
+          .eq("organization_id", org),
+      ]);
+
+      const existing = itemsRes.data || [];
+      setLocations(locationsRes.data || []);
+      setLocationInventoryRows(inventoryRes.data || []);
+
       if ((existing || []).length > 0) {
         setItems(existing);
         return;
@@ -97,30 +126,112 @@ export default function ConsumablesPage() {
     }
   };
 
-  const saveItemCount = async (key, count) => {
-    setItems((arr) => arr.map((it) => (it.key === key ? { ...it, count } : it)));
+  const saveLegacyItemCount = async (item, count) => {
+    setItems((arr) => arr.map((it) => (it.id === item.id ? { ...it, count } : it)));
     if (!orgId) return;
+    if ((item.id || "").startsWith("temp-")) return;
     try {
       const { error } = await supabase
         .from("consumable_items")
-        .upsert({ organization_id: orgId, key, label: items.find((i) => i.key === key)?.label || key, count }, { onConflict: "organization_id,key" });
+        .update({ count })
+        .eq("id", item.id)
+        .eq("organization_id", orgId);
       if (error) throw error;
     } catch {
       // swallow for now, optimistic UI
     }
   };
 
-  const saveReorderValue = async (key, reorder_value) => {
-    setItems(arr => arr.map(it => it.key === key ? { ...it, reorder_value } : it));
+  const saveLegacyReorderValue = async (item, reorder_value) => {
+    setItems(arr => arr.map(it => it.id === item.id ? { ...it, reorder_value } : it));
     if (!orgId) return;
+    if ((item.id || "").startsWith("temp-")) return;
     try {
       const { error } = await supabase
         .from('consumable_items')
-        .upsert({ organization_id: orgId, key, label: items.find(i=>i.key===key)?.label || key, reorder_value }, { onConflict: 'organization_id,key' });
+        .update({ reorder_value })
+        .eq('id', item.id)
+        .eq('organization_id', orgId);
       if (error) throw error;
     } catch {
       /* ignore */
     }
+  };
+
+  const upsertLocationInventory = async (item, changes) => {
+    if (!orgId || !selectedLocationId || selectedLocationId === "all") return;
+
+    const existingRow = locationInventoryRows.find(
+      (row) => row.consumable_item_id === item.id && row.location_id === selectedLocationId
+    );
+    const nextRow = {
+      id: existingRow?.id,
+      organization_id: orgId,
+      consumable_item_id: item.id,
+      location_id: selectedLocationId,
+      count: Number(changes.count ?? existingRow?.count ?? 0) || 0,
+      reorder_value: Number(changes.reorder_value ?? existingRow?.reorder_value ?? 0) || 0,
+    };
+
+    const previousRows = locationInventoryRows;
+    setLocationInventoryRows((current) => {
+      const matchIndex = current.findIndex(
+        (row) => row.consumable_item_id === item.id && row.location_id === selectedLocationId
+      );
+
+      if (matchIndex >= 0) {
+        const next = [...current];
+        next[matchIndex] = { ...next[matchIndex], ...nextRow };
+        return next;
+      }
+
+      return [...current, nextRow];
+    });
+
+    try {
+      const { data, error } = await supabase
+        .from("consumable_location_inventory")
+        .upsert(nextRow, { onConflict: "organization_id,consumable_item_id,location_id" })
+        .select("id, consumable_item_id, location_id, count, reorder_value")
+        .single();
+
+      if (error) throw error;
+
+      setLocationInventoryRows((current) => {
+        const matchIndex = current.findIndex(
+          (row) => row.consumable_item_id === item.id && row.location_id === selectedLocationId
+        );
+
+        if (matchIndex >= 0) {
+          const next = [...current];
+          next[matchIndex] = data;
+          return next;
+        }
+
+        return [...current, data];
+      });
+    } catch {
+      setLocationInventoryRows(previousRows);
+      toast.error("Could not save inventory for this location");
+    }
+  };
+
+  const saveItemCount = async (item, count) => {
+    if (locationsConfigured && selectedLocationId !== "all") {
+      await upsertLocationInventory(item, { count });
+      return;
+    }
+
+    await saveLegacyItemCount(item, count);
+  };
+
+  const saveReorderValue = async (item, reorder_value) => {
+    if (locationsConfigured && selectedLocationId !== "all") {
+      await upsertLocationInventory(item, { reorder_value });
+      return;
+    }
+
+    await saveLegacyReorderValue(item, reorder_value);
   };
 
   // include_in_report toggle removed; dashboard derives low/reorder automatically.
@@ -299,6 +410,13 @@ export default function ConsumablesPage() {
   loadInventory(orgId);
     loadPurchaseData(orgId);
   }, [orgId]);
+
+  useEffect(() => {
+    if (selectedLocationId === "all") return;
+    if (!locations.some((location) => location.id === selectedLocationId)) {
+      setSelectedLocationId("all");
+    }
+  }, [locations, selectedLocationId]);
 
   const filteredPoIds = useMemo(() => {
     let ids = poList.map((p) => p.id);
@@ -720,15 +838,43 @@ export default function ConsumablesPage() {
 
       {tab === "inventory" && (
         <div className="card p-4">
-          <div className="flex items-center mb-3 gap-3">
+          <div className="flex flex-col gap-3 mb-3 md:flex-row md:items-end md:justify-between">
             <div>
               <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Consumables</div>
               <h2 className="font-medium text-slate-50">Inventory</h2>
             </div>
-            {isAdmin && (
-              <button className="btn btn-3d-primary text-xs" onClick={addConsumableItem}>Add Item</button>
-            )}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <label className="flex min-w-[220px] flex-col gap-1 text-xs text-slate-300">
+                <span className="uppercase tracking-[0.18em] text-slate-400">Location</span>
+                <select
+                  className="select-gradient-sm"
+                  value={selectedLocationId}
+                  onChange={(e) => setSelectedLocationId(e.target.value)}
+                >
+                  <option value="all">All locations</option>
+                  {locations.map((location) => (
+                    <option key={location.id} value={location.id}>{location.name}</option>
+                  ))}
+                </select>
+              </label>
+              {isAdmin && (
+                <button className="btn btn-3d-primary text-xs" onClick={addConsumableItem}>Add Item</button>
+              )}
+            </div>
           </div>
+          {!locationsConfigured ? (
+            <div className="mb-4 rounded-2xl border border-amber-300/15 bg-amber-400/5 px-4 py-3 text-xs text-amber-100">
+              No locations are configured yet. Inventory is still using org-wide totals. Add locations in Projects to manage consumables by site.
+            </div>
+          ) : editingAggregateInventory ? (
+            <div className="mb-4 rounded-2xl border border-cyan-300/15 bg-cyan-400/5 px-4 py-3 text-xs text-cyan-100">
+              Viewing aggregate stock across all locations. Select a single location to edit counts and reorder thresholds.
+            </div>
+          ) : selectedLocation ? (
+            <div className="mb-4 rounded-2xl border border-emerald-300/15 bg-emerald-400/5 px-4 py-3 text-xs text-emerald-100">
+              Editing inventory for {selectedLocation.name}. Counts and reorder levels saved here apply only to this location.
+            </div>
+          ) : null}
           {loadingItems ? (
             <div className="text-sm text-slate-400">Loading…</div>
           ) : (
@@ -746,7 +892,7 @@ export default function ConsumablesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((it) => (
+                  {inventoryRows.map((it) => (
                     <tr key={it.id || it.key}>
                       <td className="align-middle py-1">
                         {isAdmin && !(it.id || '').startsWith('temp-') ? (
@@ -762,7 +908,7 @@ export default function ConsumablesPage() {
                       </td>
                       {/* Reorder threshold (desktop only) */}
                       <td className="align-middle py-1 hidden md:table-cell text-center">
-                        {isAdmin ? (
+                        {isAdmin && !editingAggregateInventory ? (
                           <input
                             type="number"
                             min={0}
@@ -771,10 +917,11 @@ export default function ConsumablesPage() {
                             onFocus={(e)=>e.target.select()}
                             onChange={(e)=>{
                               const v=e.target.value;
-                              if(v===''){ saveReorderValue(it.key,0); return; }
+                              if(v===''){ saveReorderValue(it,0); return; }
                               const num=Math.max(0, parseInt(v,10));
-                              saveReorderValue(it.key, Number.isFinite(num)?num:0);
+                              saveReorderValue(it, Number.isFinite(num)?num:0);
                             }}
+                            disabled={editingAggregateInventory}
                           />
                         ) : (
                           <span>{it.reorder_value ?? 0}</span>
@@ -791,13 +938,18 @@ export default function ConsumablesPage() {
                           onChange={(e) => {
                             const v = e.target.value;
                             if (v === "") {
-                              setItems(arr => arr.map(x => x.key === it.key ? { ...x, count: "" } : x));
+                              if (!editingAggregateInventory) {
+                                saveItemCount(it, 0);
+                              }
                               return;
                             }
                             const num = Math.max(0, parseInt(v, 10));
-                            saveItemCount(it.key, Number.isFinite(num) ? num : 0);
+                            if (!editingAggregateInventory) {
+                              saveItemCount(it, Number.isFinite(num) ? num : 0);
+                            }
                           }}
-                          onBlur={(e) => { if (e.target.value === "") saveItemCount(it.key, 0); }}
+                          onBlur={(e) => { if (e.target.value === "" && !editingAggregateInventory) saveItemCount(it, 0); }}
+                          disabled={editingAggregateInventory}
                         />
                       </td>
                       <td className="align-middle py-1 text-right hidden md:table-cell">
@@ -808,15 +960,7 @@ export default function ConsumablesPage() {
                       </td>
                       <td className="align-middle py-1">
                         {(() => {
-                          const rv = it.reorder_value || 0;
-                          const c = Number(it.count) || 0;
-                          let badgeClass = 'badge-gray';
-                          let label = '—';
-                          if (rv > 0) {
-                            if (c <= rv) { badgeClass='badge-red'; label='Reorder'; }
-                            else if (c <= rv * 1.5) { badgeClass='badge-amber'; label='Low'; }
-                            else { badgeClass='badge-green'; label='OK'; }
-                          }
+                          const { badgeClass, label } = getConsumableStatusMeta(it.count, it.reorder_value);
                           return (
                             <span
                               className={[
@@ -849,7 +993,7 @@ export default function ConsumablesPage() {
                       </td>
                     </tr>
                   ))}
-                  {items.length === 0 && (
+                  {inventoryRows.length === 0 && (
                     <tr>
                       <td colSpan={7} className="text-xs md:text-sm text-slate-500 text-center py-4">
                         {isAdmin ? 'No items yet. Add your first item.' : 'No consumable items configured. Ask an admin to add items.'}
@@ -887,7 +1031,7 @@ export default function ConsumablesPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
-                  <label className="text-sm text-slate-300">Reorder threshold</label>
+                  <label className="text-sm text-slate-300">{locationsConfigured ? 'Default reorder threshold (fallback only)' : 'Reorder threshold'}</label>
                   <input
                     type="number"
                     min={0}
@@ -1214,7 +1358,7 @@ export default function ConsumablesPage() {
                 <input className="input input-sm" value={editDraft.label} onChange={e => setEditDraft(d => ({ ...d, label: e.target.value }))} />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-slate-300">Reorder threshold</label>
+                <label className="text-slate-300">{locationsConfigured ? 'Default reorder threshold (fallback only)' : 'Reorder threshold'}</label>
                 <input type="number" min={0} className="input input-sm" value={editDraft.reorder_value} onChange={e => setEditDraft(d => ({ ...d, reorder_value: e.target.value }))} />
               </div>
               <div className="flex flex-col gap-1">

@@ -86,6 +86,25 @@ CREATE TABLE public.consumable_items (
   CONSTRAINT consumable_items_pkey PRIMARY KEY (id),
   CONSTRAINT consumable_items_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id)
 );
+CREATE TABLE public.contract_activity_type_rates (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  contract_id uuid NOT NULL,
+  activity_type_id uuid NOT NULL,
+  effective_from date NOT NULL,
+  effective_to date,
+  rate numeric NOT NULL CHECK (rate >= 0::numeric),
+  rate_period text NOT NULL CHECK (rate_period = ANY (ARRAY['hourly'::text, 'daily'::text, 'weekly'::text, 'fortnightly'::text, 'monthly'::text])),
+  billable boolean NOT NULL DEFAULT true,
+  created_by uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT contract_activity_type_rates_pkey PRIMARY KEY (id),
+  CONSTRAINT contract_activity_type_rates_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id),
+  CONSTRAINT fk_cat_rates_contract_activity_types FOREIGN KEY (contract_id) REFERENCES public.contract_activity_types(contract_id),
+  CONSTRAINT fk_cat_rates_contract_activity_types FOREIGN KEY (activity_type_id) REFERENCES public.contract_activity_types(contract_id),
+  CONSTRAINT fk_cat_rates_contract_activity_types FOREIGN KEY (contract_id) REFERENCES public.contract_activity_types(activity_type_id),
+  CONSTRAINT fk_cat_rates_contract_activity_types FOREIGN KEY (activity_type_id) REFERENCES public.contract_activity_types(activity_type_id)
+);
 CREATE TABLE public.contract_activity_types (
   contract_id uuid NOT NULL,
   activity_type_id uuid NOT NULL,
@@ -123,6 +142,36 @@ CREATE TABLE public.contracts (
   CONSTRAINT contracts_client_organization_id_fkey FOREIGN KEY (client_organization_id) REFERENCES public.organizations(id),
   CONSTRAINT contracts_vendor_organization_id_fkey FOREIGN KEY (vendor_organization_id) REFERENCES public.organizations(id)
 );
+CREATE TABLE public.dispatch_items (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  dispatch_id uuid NOT NULL,
+  organization_id uuid NOT NULL,
+  hole_id uuid NOT NULL,
+  from_m numeric NOT NULL,
+  to_m numeric NOT NULL,
+  dispatched_range numrange DEFAULT numrange(from_m, to_m, '[)'::text),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT dispatch_items_pkey PRIMARY KEY (id),
+  CONSTRAINT dispatch_items_dispatch_id_fkey FOREIGN KEY (dispatch_id) REFERENCES public.dispatches(id),
+  CONSTRAINT dispatch_items_hole_id_fkey FOREIGN KEY (hole_id) REFERENCES public.holes(id)
+);
+CREATE TABLE public.dispatches (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  dispatch_date date NOT NULL DEFAULT CURRENT_DATE,
+  pallet_count integer NOT NULL CHECK (pallet_count > 0),
+  prepared_by_user_id uuid NOT NULL,
+  destination_lab text NOT NULL,
+  consignment_number text,
+  notes text,
+  created_by uuid NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT dispatches_pkey PRIMARY KEY (id),
+  CONSTRAINT dispatches_prepared_by_user_id_fkey FOREIGN KEY (prepared_by_user_id) REFERENCES auth.users(id),
+  CONSTRAINT dispatches_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
+);
 CREATE TABLE public.drillhole_annulus_intervals (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL,
@@ -137,8 +186,8 @@ CREATE TABLE public.drillhole_annulus_intervals (
   CONSTRAINT drillhole_annulus_intervals_pkey PRIMARY KEY (id),
   CONSTRAINT drillhole_annulus_intervals_annulus_type_id_fkey FOREIGN KEY (annulus_type_id) REFERENCES public.drillhole_annulus_types(id),
   CONSTRAINT drillhole_annulus_intervals_hole_fk FOREIGN KEY (organization_id) REFERENCES public.holes(id),
-  CONSTRAINT drillhole_annulus_intervals_hole_fk FOREIGN KEY (organization_id) REFERENCES public.holes(organization_id),
   CONSTRAINT drillhole_annulus_intervals_hole_fk FOREIGN KEY (hole_id) REFERENCES public.holes(id),
+  CONSTRAINT drillhole_annulus_intervals_hole_fk FOREIGN KEY (organization_id) REFERENCES public.holes(organization_id),
   CONSTRAINT drillhole_annulus_intervals_hole_fk FOREIGN KEY (hole_id) REFERENCES public.holes(organization_id),
   CONSTRAINT drillhole_annulus_intervals_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
@@ -169,8 +218,8 @@ CREATE TABLE public.drillhole_construction_intervals (
   CONSTRAINT drillhole_construction_intervals_pkey PRIMARY KEY (id),
   CONSTRAINT drillhole_construction_intervals_construction_type_id_fkey FOREIGN KEY (construction_type_id) REFERENCES public.drillhole_construction_types(id),
   CONSTRAINT drillhole_construction_intervals_hole_fk FOREIGN KEY (organization_id) REFERENCES public.holes(id),
-  CONSTRAINT drillhole_construction_intervals_hole_fk FOREIGN KEY (organization_id) REFERENCES public.holes(organization_id),
   CONSTRAINT drillhole_construction_intervals_hole_fk FOREIGN KEY (hole_id) REFERENCES public.holes(id),
+  CONSTRAINT drillhole_construction_intervals_hole_fk FOREIGN KEY (organization_id) REFERENCES public.holes(organization_id),
   CONSTRAINT drillhole_construction_intervals_hole_fk FOREIGN KEY (hole_id) REFERENCES public.holes(organization_id),
   CONSTRAINT drillhole_construction_intervals_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
@@ -201,8 +250,8 @@ CREATE TABLE public.drillhole_geology_intervals (
   CONSTRAINT drillhole_geology_intervals_pkey PRIMARY KEY (id),
   CONSTRAINT drillhole_geology_intervals_lithology_type_id_fkey FOREIGN KEY (lithology_type_id) REFERENCES public.drillhole_lithology_types(id),
   CONSTRAINT drillhole_geology_intervals_hole_fk FOREIGN KEY (organization_id) REFERENCES public.holes(id),
-  CONSTRAINT drillhole_geology_intervals_hole_fk FOREIGN KEY (organization_id) REFERENCES public.holes(organization_id),
   CONSTRAINT drillhole_geology_intervals_hole_fk FOREIGN KEY (hole_id) REFERENCES public.holes(id),
+  CONSTRAINT drillhole_geology_intervals_hole_fk FOREIGN KEY (organization_id) REFERENCES public.holes(organization_id),
   CONSTRAINT drillhole_geology_intervals_hole_fk FOREIGN KEY (hole_id) REFERENCES public.holes(organization_id),
   CONSTRAINT drillhole_geology_intervals_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
@@ -211,6 +260,7 @@ CREATE TABLE public.drillhole_lithology_types (
   organization_id uuid NOT NULL,
   name text NOT NULL,
   color text NOT NULL,
+  pattern_key text NOT NULL DEFAULT 'solid',
   sort_order integer NOT NULL DEFAULT 0,
   is_active boolean NOT NULL DEFAULT true,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
@@ -246,8 +296,8 @@ CREATE TABLE public.drillhole_sensors (
   CONSTRAINT drillhole_sensors_pkey PRIMARY KEY (id),
   CONSTRAINT drillhole_sensors_sensor_type_id_fkey FOREIGN KEY (sensor_type_id) REFERENCES public.drillhole_sensor_types(id),
   CONSTRAINT drillhole_sensors_hole_fk FOREIGN KEY (organization_id) REFERENCES public.holes(id),
-  CONSTRAINT drillhole_sensors_hole_fk FOREIGN KEY (organization_id) REFERENCES public.holes(organization_id),
   CONSTRAINT drillhole_sensors_hole_fk FOREIGN KEY (hole_id) REFERENCES public.holes(id),
+  CONSTRAINT drillhole_sensors_hole_fk FOREIGN KEY (organization_id) REFERENCES public.holes(organization_id),
   CONSTRAINT drillhole_sensors_hole_fk FOREIGN KEY (hole_id) REFERENCES public.holes(organization_id),
   CONSTRAINT drillhole_sensors_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
@@ -289,8 +339,19 @@ CREATE TABLE public.holes (
   planned_depth numeric CHECK (planned_depth IS NULL OR planned_depth >= 0::numeric),
   state text NOT NULL DEFAULT 'proposed'::text CHECK (state = ANY (ARRAY['proposed'::text, 'in_progress'::text, 'drilled'::text])),
   water_level_m numeric CHECK (water_level_m IS NULL OR water_level_m >= 0::numeric),
+  azimuth numeric CHECK (azimuth IS NULL OR azimuth >= 0::numeric AND azimuth < 360::numeric),
+  dip numeric CHECK (dip IS NULL OR dip >= '-90'::integer::numeric AND dip <= 90::numeric),
+  collar_longitude double precision CHECK (collar_longitude IS NULL OR collar_longitude >= '-180'::integer::double precision AND collar_longitude <= 180::double precision),
+  collar_latitude double precision CHECK (collar_latitude IS NULL OR collar_latitude >= '-90'::integer::double precision AND collar_latitude <= 90::double precision),
+  collar_elevation_m numeric CHECK (collar_elevation_m IS NULL OR collar_elevation_m > '-10000'::integer::numeric),
+  collar_source text CHECK (collar_source IS NULL OR (collar_source = ANY (ARRAY['gps'::text, 'survey'::text, 'estimated'::text, 'imported'::text]))),
+  started_at timestamp with time zone,
+  completed_at timestamp with time zone,
+  completion_status text CHECK (completion_status IS NULL OR (completion_status = ANY (ARRAY['completed'::text, 'abandoned'::text, 'suspended'::text]))),
+  completion_notes text,
   CONSTRAINT holes_pkey PRIMARY KEY (id),
   CONSTRAINT holes_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT holes_project_required_check CHECK (project_id IS NOT NULL) NOT VALID,
   CONSTRAINT holes_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id),
   CONSTRAINT holes_tenement_id_fkey FOREIGN KEY (tenement_id) REFERENCES public.tenements(id),
   CONSTRAINT holes_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
@@ -299,7 +360,7 @@ CREATE TABLE public.organization_invites (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL,
   email text NOT NULL,
-  role text NOT NULL DEFAULT 'member'::text CHECK (role = ANY (ARRAY['admin'::text, 'member'::text])),
+  role text NOT NULL DEFAULT 'member'::text CHECK (role = ANY (ARRAY['admin'::text, 'member'::text, 'contractor'::text])),
   invited_by uuid,
   status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'accepted'::text, 'revoked'::text])),
   created_at timestamp with time zone DEFAULT now(),
@@ -310,7 +371,7 @@ CREATE TABLE public.organization_invites (
 CREATE TABLE public.organization_members (
   organization_id uuid NOT NULL,
   user_id uuid NOT NULL,
-  role text NOT NULL DEFAULT 'member'::text CHECK (role = ANY (ARRAY['admin'::text, 'member'::text])),
+  role text NOT NULL DEFAULT 'member'::text CHECK (role = ANY (ARRAY['admin'::text, 'member'::text, 'contractor'::text])),
   added_by uuid,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT organization_members_pkey PRIMARY KEY (organization_id, user_id),
@@ -333,6 +394,17 @@ CREATE TABLE public.organization_relationships (
   CONSTRAINT organization_relationships_vendor_fkey FOREIGN KEY (vendor_organization_id) REFERENCES public.organizations(id),
   CONSTRAINT organization_relationships_invited_by_fkey FOREIGN KEY (invited_by) REFERENCES auth.users(id),
   CONSTRAINT organization_relationships_client_fkey FOREIGN KEY (client_organization_id) REFERENCES public.organizations(id)
+);
+CREATE TABLE public.organization_shared_projects (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  relationship_id uuid NOT NULL,
+  project_id uuid NOT NULL,
+  created_by uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT organization_shared_projects_pkey PRIMARY KEY (id),
+  CONSTRAINT organization_shared_projects_relationship_id_fkey FOREIGN KEY (relationship_id) REFERENCES public.organization_relationships(id),
+  CONSTRAINT organization_shared_projects_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id),
+  CONSTRAINT organization_shared_projects_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
 CREATE TABLE public.organization_subscriptions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -358,6 +430,8 @@ CREATE TABLE public.organizations (
   owner_id uuid,
   created_at timestamp with time zone DEFAULT now(),
   organization_type text NOT NULL DEFAULT 'client'::text CHECK (organization_type = ANY (ARRAY['client'::text, 'vendor'::text, 'both'::text])),
+  currency text CHECK (currency IS NULL OR currency ~ '^[A-Z]{3}$'::text),
+  tax_rate numeric CHECK (tax_rate IS NULL OR tax_rate >= 0::numeric AND tax_rate <= 100::numeric),
   CONSTRAINT organizations_pkey PRIMARY KEY (id),
   CONSTRAINT organizations_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES auth.users(id)
 );
@@ -371,10 +445,29 @@ CREATE TABLE public.plod_activities (
   notes text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  machine_hours numeric CHECK (machine_hours IS NULL OR machine_hours >= 0::numeric),
+  unit_quantity numeric CHECK (unit_quantity IS NULL OR unit_quantity >= 0::numeric),
+  project_id uuid,
   CONSTRAINT plod_activities_pkey PRIMARY KEY (id),
   CONSTRAINT plod_activities_plod_id_fkey FOREIGN KEY (plod_id) REFERENCES public.plods(id),
   CONSTRAINT plod_activities_activity_type_id_fkey FOREIGN KEY (activity_type_id) REFERENCES public.plod_activity_types(id),
-  CONSTRAINT plod_activities_hole_id_fkey FOREIGN KEY (hole_id) REFERENCES public.holes(id)
+  CONSTRAINT plod_activities_hole_id_fkey FOREIGN KEY (hole_id) REFERENCES public.holes(id),
+  CONSTRAINT plod_activities_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id)
+);
+CREATE TABLE public.plod_activity_type_rates (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  plod_activity_type_id uuid NOT NULL,
+  effective_from date NOT NULL,
+  effective_to date,
+  rate numeric NOT NULL CHECK (rate >= 0::numeric),
+  rate_period text NOT NULL CHECK (rate_period = ANY (ARRAY['hourly'::text, 'daily'::text, 'weekly'::text, 'fortnightly'::text, 'monthly'::text])),
+  billable boolean NOT NULL DEFAULT true,
+  created_by uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT plod_activity_type_rates_pkey PRIMARY KEY (id),
+  CONSTRAINT plod_activity_type_rates_plod_activity_type_id_fkey FOREIGN KEY (plod_activity_type_id) REFERENCES public.plod_activity_types(id),
+  CONSTRAINT plod_activity_type_rates_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
 CREATE TABLE public.plod_activity_types (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -389,9 +482,50 @@ CREATE TABLE public.plod_activity_types (
   billable boolean NOT NULL DEFAULT false,
   rate numeric,
   rate_period text CHECK (rate_period IS NULL OR (rate_period = ANY (ARRAY['hourly'::text, 'daily'::text, 'weekly'::text, 'monthly'::text]))),
+  rate_mode text NOT NULL DEFAULT 'time'::text CHECK (rate_mode = ANY (ARRAY['time'::text, 'unit'::text])),
+  rate_unit_name text,
+  rate_unit_interval numeric CHECK (rate_unit_interval IS NULL OR rate_unit_interval > 0::numeric),
   CONSTRAINT plod_activity_types_pkey PRIMARY KEY (id),
   CONSTRAINT plod_activity_types_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
   CONSTRAINT plod_activity_types_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
+);
+CREATE TABLE public.plod_pricing_snapshot_lines (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  snapshot_id uuid NOT NULL,
+  line_kind USER-DEFINED NOT NULL,
+  source_table text,
+  source_id uuid,
+  description text,
+  quantity numeric NOT NULL CHECK (quantity >= 0::numeric),
+  unit text,
+  unit_rate numeric NOT NULL CHECK (unit_rate >= 0::numeric),
+  rate_period text CHECK (rate_period = ANY (ARRAY['hourly'::text, 'daily'::text, 'weekly'::text, 'fortnightly'::text, 'monthly'::text])),
+  line_ex_tax numeric NOT NULL DEFAULT 0,
+  line_tax numeric NOT NULL DEFAULT 0,
+  line_inc_tax numeric NOT NULL DEFAULT 0,
+  meta jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT plod_pricing_snapshot_lines_pkey PRIMARY KEY (id),
+  CONSTRAINT plod_pricing_snapshot_lines_snapshot_id_fkey FOREIGN KEY (snapshot_id) REFERENCES public.plod_pricing_snapshots(id)
+);
+CREATE TABLE public.plod_pricing_snapshots (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  plod_id uuid NOT NULL,
+  organization_id uuid NOT NULL,
+  currency text,
+  tax_rate numeric,
+  rounding_mode USER-DEFINED NOT NULL DEFAULT 'nearest'::billing_round_mode,
+  duration_block_minutes integer NOT NULL DEFAULT 15 CHECK (duration_block_minutes > 0),
+  total_ex_tax numeric NOT NULL DEFAULT 0,
+  total_tax numeric NOT NULL DEFAULT 0,
+  total_inc_tax numeric NOT NULL DEFAULT 0,
+  calc_version integer NOT NULL DEFAULT 1,
+  locked_at timestamp with time zone NOT NULL DEFAULT now(),
+  locked_by uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT plod_pricing_snapshots_pkey PRIMARY KEY (id),
+  CONSTRAINT plod_pricing_snapshots_plod_id_fkey FOREIGN KEY (plod_id) REFERENCES public.plods(id),
+  CONSTRAINT plod_pricing_snapshots_locked_by_fkey FOREIGN KEY (locked_by) REFERENCES auth.users(id)
 );
 CREATE TABLE public.plod_type_activity_types (
   plod_type_id uuid NOT NULL,
@@ -431,6 +565,14 @@ CREATE TABLE public.plods (
   resource_id uuid,
   plod_type_id uuid,
   shift_date date,
+  pricing_locked_at timestamp with time zone,
+  pricing_locked_by uuid,
+  approval_status text DEFAULT 'submitted'::text CHECK (approval_status = ANY (ARRAY['submitted'::text, 'approved'::text, 'rejected'::text])),
+  submitted_at timestamp with time zone,
+  submitted_by uuid,
+  decision_at timestamp with time zone,
+  decision_by uuid,
+  decision_comment text,
   CONSTRAINT plods_pkey PRIMARY KEY (id),
   CONSTRAINT plods_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
   CONSTRAINT plods_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.vendors(id),
@@ -440,7 +582,10 @@ CREATE TABLE public.plods (
   CONSTRAINT plods_client_organization_id_fkey FOREIGN KEY (client_organization_id) REFERENCES public.organizations(id),
   CONSTRAINT plods_vendor_organization_id_fkey FOREIGN KEY (vendor_organization_id) REFERENCES public.organizations(id),
   CONSTRAINT plods_resource_id_fkey FOREIGN KEY (resource_id) REFERENCES public.resources(id),
-  CONSTRAINT plods_plod_type_id_fkey FOREIGN KEY (plod_type_id) REFERENCES public.plod_types(id)
+  CONSTRAINT plods_plod_type_id_fkey FOREIGN KEY (plod_type_id) REFERENCES public.plod_types(id),
+  CONSTRAINT plods_pricing_locked_by_fkey FOREIGN KEY (pricing_locked_by) REFERENCES auth.users(id),
+  CONSTRAINT plods_submitted_by_fkey FOREIGN KEY (submitted_by) REFERENCES auth.users(id),
+  CONSTRAINT plods_decision_by_fkey FOREIGN KEY (decision_by) REFERENCES auth.users(id)
 );
 CREATE TABLE public.projects (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -553,6 +698,15 @@ CREATE TABLE public.tenements (
   CONSTRAINT tenements_pkey PRIMARY KEY (id),
   CONSTRAINT tenements_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
   CONSTRAINT tenements_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
+);
+CREATE TABLE public.user_profiles (
+  user_id uuid NOT NULL,
+  display_name text,
+  email text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT user_profiles_pkey PRIMARY KEY (user_id),
+  CONSTRAINT user_profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.vendor_resources (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

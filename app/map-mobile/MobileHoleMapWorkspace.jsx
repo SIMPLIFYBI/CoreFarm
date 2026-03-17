@@ -821,14 +821,14 @@ export default function MobileHoleMapWorkspace({ publicToken = "" }) {
   const totalVisibleHoles = visibleHoles.length;
 
   return (
-    <div className="md:hidden overflow-hidden bg-transparent px-0 pb-0 pt-0">
+    <div className="md:hidden overflow-x-hidden overflow-y-hidden bg-transparent px-0 pb-0 pt-0">
       <div className="relative overflow-hidden border-y border-white/10 bg-slate-950" style={{ height: mobileHeight }}>
         <div ref={mapContainerRef} className="absolute inset-0" />
 
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-40 bg-[linear-gradient(180deg,rgba(2,6,23,0.88),rgba(2,6,23,0.48),transparent)]" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-44 bg-[linear-gradient(180deg,transparent,rgba(2,6,23,0.55),rgba(2,6,23,0.92))]" />
 
-        <div className="absolute inset-x-0 top-0 z-20 px-3 pt-3">
+        <div className="absolute inset-x-0 top-0 z-20 overflow-x-hidden px-3 pt-3">
           <div className="rounded-[28px] border border-white/10 bg-slate-950/72 p-3 shadow-[0_16px_44px_rgba(2,6,23,0.35)] backdrop-blur-xl">
             <div className="flex items-start gap-3">
               <div className="min-w-0">
@@ -865,7 +865,7 @@ export default function MobileHoleMapWorkspace({ publicToken = "" }) {
           </div>
         </div>
 
-        <div className="absolute bottom-4 left-3 right-3 z-20 flex items-end justify-between gap-3">
+        <div className="absolute bottom-4 left-3 right-3 z-20 flex items-end justify-between gap-2">
           <div className="min-w-0 flex-1 rounded-[28px] border border-white/10 bg-slate-950/76 p-3 shadow-[0_16px_44px_rgba(2,6,23,0.38)] backdrop-blur-xl">
             <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Selected</div>
             <div className="mt-1 truncate text-base font-semibold text-white">{selectedHole?.hole_id || "No hole selected"}</div>
@@ -885,7 +885,7 @@ export default function MobileHoleMapWorkspace({ publicToken = "" }) {
             <button
               type="button"
               onClick={recenterSelectedHole}
-              className="inline-flex min-h-[64px] min-w-[88px] flex-col items-center justify-center rounded-[24px] border border-white/20 bg-white/12 px-4 py-3 text-slate-50 shadow-[0_16px_36px_rgba(15,23,42,0.24)] backdrop-blur-xl"
+              className="inline-flex min-h-[60px] w-20 flex-col items-center justify-center rounded-[24px] border border-white/20 bg-white/12 px-3 py-3 text-slate-50 shadow-[0_16px_36px_rgba(15,23,42,0.24)] backdrop-blur-xl"
             >
               <span className="text-[11px] uppercase tracking-[0.18em] text-slate-200/80">Focus</span>
               <span className="mt-1 text-sm font-semibold">Recenter</span>
@@ -893,7 +893,7 @@ export default function MobileHoleMapWorkspace({ publicToken = "" }) {
             <button
               type="button"
               onClick={() => setActiveSheet("filters")}
-              className="inline-flex min-h-[64px] min-w-[88px] flex-col items-center justify-center rounded-[24px] border border-cyan-300/20 bg-cyan-300/14 px-4 py-3 text-slate-50 shadow-[0_16px_36px_rgba(34,211,238,0.18)] backdrop-blur-xl"
+              className="inline-flex min-h-[60px] w-20 flex-col items-center justify-center rounded-[24px] border border-cyan-300/20 bg-cyan-300/14 px-3 py-3 text-slate-50 shadow-[0_16px_36px_rgba(34,211,238,0.18)] backdrop-blur-xl"
             >
               <span className="text-[11px] uppercase tracking-[0.18em] text-cyan-100/80">Tune</span>
               <span className="mt-1 text-sm font-semibold">Filters</span>
@@ -901,7 +901,7 @@ export default function MobileHoleMapWorkspace({ publicToken = "" }) {
             <button
               type="button"
               onClick={() => setActiveSheet("projects")}
-              className="inline-flex min-h-[72px] min-w-[88px] flex-col items-center justify-center rounded-[24px] border border-amber-300/20 bg-amber-300/14 px-4 py-3 text-slate-50 shadow-[0_16px_36px_rgba(251,191,36,0.18)] backdrop-blur-xl"
+              className="inline-flex min-h-[68px] w-20 flex-col items-center justify-center rounded-[24px] border border-amber-300/20 bg-amber-300/14 px-3 py-3 text-slate-50 shadow-[0_16px_36px_rgba(251,191,36,0.18)] backdrop-blur-xl"
             >
               <span className="text-[11px] uppercase tracking-[0.18em] text-amber-100/80">Browse</span>
               <span className="mt-1 text-sm font-semibold">Projects</span>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
@@ -22,10 +23,15 @@ import { deriveHoleCoordinates } from "@/lib/holeCoordinates";
 const PROJECT_SCOPE_STORAGE_KEY = "coretasks:projectScope";
 
 export default function DrillholeVizPage({ projectScope: externalProjectScope }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = supabaseBrowser();
   const { orgId: selectedOrgId, memberships } = useOrg();
   const [localProjectScope, setLocalProjectScope] = useState("own");
   const projectScope = externalProjectScope ?? localProjectScope;
+  const requestedHoleId = searchParams.get("holeId") || "";
+  const requestedProjectScope = searchParams.get("scope") || "";
+  const showBackToMap = searchParams.get("from") === "map";
 
   const myRole = useMemo(() => {
     const m = (memberships || []).find((m) => m.organization_id === selectedOrgId);
@@ -136,6 +142,12 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
     window.localStorage.setItem(PROJECT_SCOPE_STORAGE_KEY, localProjectScope);
   }, [externalProjectScope, localProjectScope]);
 
+  useEffect(() => {
+    if (externalProjectScope) return;
+    if (requestedProjectScope !== "own" && requestedProjectScope !== "shared") return;
+    setLocalProjectScope((prev) => (prev === requestedProjectScope ? prev : requestedProjectScope));
+  }, [externalProjectScope, requestedProjectScope]);
+
   // Keep the planned depth editor in sync with the selected hole
   useEffect(() => {
     if (!selectedHole) {
@@ -177,6 +189,13 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
       completion_notes: selectedHole.completion_notes ?? "",
     });
   }, [selectedHole?.id, selectedHole?.planned_depth, selectedHole?.water_level_m, selectedHole?.azimuth, selectedHole?.dip, selectedHole?.collar_longitude, selectedHole?.collar_latitude, selectedHole?.collar_easting, selectedHole?.collar_northing, selectedHole?.collar_elevation_m, selectedHole?.collar_source, selectedHole?.started_at, selectedHole?.completed_at, selectedHole?.completion_status, selectedHole?.completion_notes]);
+
+  useEffect(() => {
+    if (!requestedHoleId || !(holes || []).some((hole) => hole.id === requestedHoleId)) return;
+    setSelectedHoleId((prev) => (prev === requestedHoleId ? prev : requestedHoleId));
+    setDrawerOpen(true);
+    setDrawerTab("attributes");
+  }, [holes, requestedHoleId]);
 
   // Group holes by project
   const projects = useMemo(() => {
@@ -1644,6 +1663,15 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
     setDrawerOpen(true);
   };
 
+  const onBackToMap = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    router.push("/map");
+  };
+
   const [exportingPdf, setExportingPdf] = useState(false);
 
   const exportDisabledReason = useMemo(() => {
@@ -1934,6 +1962,16 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
             </div>
 
             <div className="flex flex-col gap-3 md:flex-row md:items-center">
+              {showBackToMap ? (
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-2xl border border-white/15 bg-white/[0.05] px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1]"
+                  onClick={onBackToMap}
+                >
+                  Back to Map
+                </button>
+              ) : null}
+
               {!externalProjectScope && (
                 <div className="inline-flex w-full flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-slate-900/45 p-1.5 md:w-auto">
                   <button

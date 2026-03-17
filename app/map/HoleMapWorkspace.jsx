@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { supabaseBrowser } from "@/lib/supabaseClient";
@@ -11,6 +12,7 @@ import { convertProjectedToWgs84 } from "@/lib/coordinateTransforms";
 import { deriveHoleCoordinates } from "@/lib/holeCoordinates";
 
 const MAP_SCOPE_STORAGE_KEY = "map:projectScope";
+const MAP_RETURN_STATE_STORAGE_KEY = "map:returnState";
 const HOLES_SOURCE_ID = "prod-hole-map-source";
 const HOLES_GLOW_LAYER_ID = "prod-hole-map-glow";
 const HOLES_CIRCLE_LAYER_ID = "prod-hole-map-circles";
@@ -740,6 +742,7 @@ function HoleSchematicModal({
 }
 
 export default function HoleMapWorkspace({ publicToken = "" }) {
+  const router = useRouter();
   const supabase = useMemo(() => supabaseBrowser(), []);
   const { orgId } = useOrg();
 
@@ -752,7 +755,8 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const fallbackStyleActiveRef = useRef(false);
   const visibleHolesRef = useRef([]);
   const visibleAssetsRef = useRef([]);
-  const schematicRequestRef = useRef(0);
+  const pendingMapRestoreRef = useRef(null);
+  const applyingMapRestoreRef = useRef(false);
 
   const [projectScope, setProjectScope] = useState("own");
   const [loading, setLoading] = useState(true);
@@ -784,6 +788,43 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     const stored = window.localStorage.getItem(MAP_SCOPE_STORAGE_KEY);
     if (stored === "own" || stored === "shared") {
       setProjectScope(stored);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const raw = window.sessionStorage.getItem(MAP_RETURN_STATE_STORAGE_KEY);
+    if (!raw) return;
+
+    window.sessionStorage.removeItem(MAP_RETURN_STATE_STORAGE_KEY);
+
+    try {
+      const snapshot = JSON.parse(raw);
+      if (!snapshot || typeof snapshot !== "object") return;
+
+      pendingMapRestoreRef.current = snapshot;
+
+      if (snapshot.projectScope === "own" || snapshot.projectScope === "shared") {
+        setProjectScope(snapshot.projectScope);
+      }
+      if (typeof snapshot.projectFilter === "string") {
+        setProjectFilter(snapshot.projectFilter);
+      }
+      if (snapshot.navigatorTab === "holes" || snapshot.navigatorTab === "assets") {
+        setNavigatorTab(snapshot.navigatorTab);
+      }
+      if (["projects", "holes", "assets", "all"].includes(snapshot.mobilePanelTab)) {
+        setMobilePanelTab(snapshot.mobilePanelTab);
+      }
+      if (typeof snapshot.selectedHoleId === "string") {
+        setSelectedHoleId(snapshot.selectedHoleId);
+      }
+      if (typeof snapshot.selectedAssetId === "string") {
+        setSelectedAssetId(snapshot.selectedAssetId);
+      }
+    } catch {
+      pendingMapRestoreRef.current = null;
     }
   }, []);
 
@@ -1315,130 +1356,37 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     setSchematicError("");
   };
 
+  const storeMapReturnState = (nextSelectedHoleId = selectedHoleId) => {
+    if (typeof window === "undefined") return;
+
+    const map = mapRef.current;
+    const center = map?.getCenter?.();
+    const snapshot = {
+      projectScope,
+      projectFilter,
+      navigatorTab,
+      mobilePanelTab,
+      selectedHoleId: nextSelectedHoleId || "",
+      selectedAssetId: selectedAssetId || "",
+      center: center ? [center.lng, center.lat] : null,
+      zoom: map?.getZoom?.() ?? null,
+      bearing: map?.getBearing?.() ?? null,
+      pitch: map?.getPitch?.() ?? null,
+      savedAt: Date.now(),
+    };
+
+    window.sessionStorage.setItem(MAP_RETURN_STATE_STORAGE_KEY, JSON.stringify(snapshot));
+  };
+
   const openSchematicModal = async (hole) => {
     if (!hole?.id || !hole.organization_id) return;
-
-    schematicRequestRef.current += 1;
-    const requestId = schematicRequestRef.current;
-
-    if (popupRef.current) popupRef.current.remove();
-
-    setSchematicHole(hole);
-    setSchematicLoading(true);
-    setSchematicError("");
-    setSchematicGeologyRows([]);
-    setSchematicConstructionRows([]);
-    setSchematicAnnulusRows([]);
-
-    try {
-      const [lithologyRes, constructionTypeRes, annulusTypeRes, geologyRes, constructionRes, annulusRes] = await Promise.all([
-        supabase
-          .from("drillhole_lithology_types")
-          .select("id, name, color, sort_order, is_active")
-          .eq("organization_id", hole.organization_id)
-          .order("sort_order", { ascending: true })
-          .order("name", { ascending: true }),
-        supabase
-          .from("drillhole_construction_types")
-          .select("id, name, color, sort_order, is_active")
-          .eq("organization_id", hole.organization_id)
-          .order("sort_order", { ascending: true })
-          .order("name", { ascending: true }),
-        supabase
-          .from("drillhole_annulus_types")
-          .select("id, name, color, sort_order, is_active")
-          .eq("organization_id", hole.organization_id)
-          .order("sort_order", { ascending: true })
-          .order("name", { ascending: true }),
-        supabase
-          .from("drillhole_geology_intervals")
-          .select("id, from_m, to_m, lithology_type_id, notes")
-          .eq("organization_id", hole.organization_id)
-          .eq("hole_id", hole.id)
-          .order("from_m", { ascending: true }),
-        supabase
-          .from("drillhole_construction_intervals")
-          .select("id, from_m, to_m, construction_type_id, notes")
-          .eq("organization_id", hole.organization_id)
-          .eq("hole_id", hole.id)
-          .order("from_m", { ascending: true }),
-        supabase
-          .from("drillhole_annulus_intervals")
-          .select("id, from_m, to_m, annulus_type_id, notes")
-          .eq("organization_id", hole.organization_id)
-          .eq("hole_id", hole.id)
-          .order("from_m", { ascending: true }),
-      ]);
-
-      const responses = [lithologyRes, constructionTypeRes, annulusTypeRes, geologyRes, constructionRes, annulusRes];
-      const firstError = responses.find((response) => response.error)?.error;
-      if (firstError) throw firstError;
-      if (requestId !== schematicRequestRef.current) return;
-
-      setSchematicLithologyTypes(
-        (lithologyRes.data || []).map((type) => ({
-          id: type.id,
-          name: type.name || "",
-          color: type.color || "#64748b",
-          sort_order: type.sort_order ?? 0,
-          is_active: type.is_active !== false,
-        }))
-      );
-      setSchematicConstructionTypes(
-        (constructionTypeRes.data || []).map((type) => ({
-          id: type.id,
-          name: type.name || "",
-          color: type.color || "#64748b",
-          sort_order: type.sort_order ?? 0,
-          is_active: type.is_active !== false,
-        }))
-      );
-      setSchematicAnnulusTypes(
-        (annulusTypeRes.data || []).map((type) => ({
-          id: type.id,
-          name: type.name || "",
-          color: type.color || "#64748b",
-          sort_order: type.sort_order ?? 0,
-          is_active: type.is_active !== false,
-        }))
-      );
-      setSchematicGeologyRows(
-        (geologyRes.data || []).map((row) => ({
-          id: row.id,
-          from_m: row.from_m ?? "",
-          to_m: row.to_m ?? "",
-          lithology_type_id: row.lithology_type_id || "",
-          notes: row.notes || "",
-        }))
-      );
-      setSchematicConstructionRows(
-        (constructionRes.data || []).map((row) => ({
-          id: row.id,
-          from_m: row.from_m ?? "",
-          to_m: row.to_m ?? "",
-          construction_type_id: row.construction_type_id || "",
-          notes: row.notes || "",
-        }))
-      );
-      setSchematicAnnulusRows(
-        (annulusRes.data || []).map((row) => ({
-          id: row.id,
-          from_m: row.from_m ?? "",
-          to_m: row.to_m ?? "",
-          annulus_type_id: row.annulus_type_id || "",
-          notes: row.notes || "",
-        }))
-      );
-    } catch (evt) {
-      if (requestId !== schematicRequestRef.current) return;
-      const message = evt?.message || "Could not load hole schematic.";
-      setSchematicError(message);
-      toast.error(message);
-    } finally {
-      if (requestId === schematicRequestRef.current) {
-        setSchematicLoading(false);
-      }
-    }
+    storeMapReturnState(hole.id);
+    const params = new URLSearchParams({
+      holeId: hole.id,
+      from: "map",
+      scope: projectScope,
+    });
+    router.push(`/drillhole-viz?${params.toString()}`);
   };
 
   const renderPopupHtml = (hole) => {
@@ -1773,6 +1721,8 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     const mapboxgl = mapboxRef.current;
     if (!map || !mapboxgl || !mapReadyRef.current) return;
 
+    if (pendingMapRestoreRef.current || applyingMapRestoreRef.current) return;
+
     const visibleMapRows = isMobileViewport
       ? mobilePanelTab === "assets"
         ? visibleAssets
@@ -1789,6 +1739,48 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
 
     frameRowsOnMap(visibleMapRows);
   }, [isMobileViewport, mapStatus, mobilePanelTab, visibleAssets, visibleHoles]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const snapshot = pendingMapRestoreRef.current;
+    if (!map || !mapReadyRef.current || !snapshot || loading) return;
+
+    applyingMapRestoreRef.current = true;
+
+    const center = Array.isArray(snapshot.center) && snapshot.center.length === 2
+      ? snapshot.center.map((value) => Number(value))
+      : null;
+    const zoom = Number(snapshot.zoom);
+    const bearing = Number(snapshot.bearing);
+    const pitch = Number(snapshot.pitch);
+
+    if (center && center.every((value) => Number.isFinite(value))) {
+      map.jumpTo({
+        center,
+        zoom: Number.isFinite(zoom) ? zoom : map.getZoom(),
+        bearing: Number.isFinite(bearing) ? bearing : map.getBearing(),
+        pitch: Number.isFinite(pitch) ? pitch : map.getPitch(),
+      });
+    }
+
+    const nextHole = snapshot.selectedHoleId
+      ? visibleHoles.find((hole) => hole.id === snapshot.selectedHoleId)
+      : null;
+    const nextAsset = snapshot.selectedAssetId
+      ? visibleAssets.find((asset) => asset.id === snapshot.selectedAssetId)
+      : null;
+
+    if (nextHole) {
+      focusHole(nextHole, { flyTo: false });
+    } else if (nextAsset) {
+      focusAsset(nextAsset, { flyTo: false });
+    } else if (popupRef.current) {
+      popupRef.current.remove();
+    }
+
+    pendingMapRestoreRef.current = null;
+    applyingMapRestoreRef.current = false;
+  }, [loading, visibleAssets, visibleHoles]);
 
   const totalProjects = projectOptions.length;
   const totalVisibleProjects = projectFilter ? projectOptions.filter((project) => project.id === projectFilter).length : projectOptions.length;
@@ -1818,8 +1810,8 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   };
 
   return (
-    <div className="min-h-screen bg-transparent px-3 pb-24 pt-0 md:px-5 md:pb-8 md:pt-0">
-      <div className="mx-auto max-w-[1600px] space-y-4">
+    <div className="min-h-screen overflow-x-hidden bg-transparent px-0 pb-24 pt-0 md:px-5 md:pb-8 md:pt-0">
+      <div className="mx-auto max-w-[1600px] space-y-4 overflow-x-hidden">
         <section className="hidden overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/40 shadow-[0_30px_120px_rgba(2,6,23,0.45)] backdrop-blur-xl xl:block">
           <div className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(15,23,42,0.82),rgba(8,47,73,0.65)_45%,rgba(120,53,15,0.48))] px-4 py-5 md:px-6">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
@@ -1954,12 +1946,12 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
             <div className="relative overflow-hidden rounded-[32px] border border-white/10 bg-slate-950/60 shadow-[0_30px_100px_rgba(2,6,23,0.42)] backdrop-blur-xl">
               <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(180deg,rgba(8,47,73,0.28),transparent)]" />
               <div className="relative border-b border-white/10 px-4 py-4 md:hidden">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col items-start gap-3 min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
                   <div>
                     <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Mobile Map View</div>
                     <div className="mt-1 text-lg font-semibold text-white">{mobilePanelTab === "projects" ? "Projects and holes" : mobilePanelTab === "holes" ? "Hole attributes" : mobilePanelTab === "assets" ? "Mapped assets" : "All mapped items"}</div>
                   </div>
-                  <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-300">
+                  <div className="self-start rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-300 min-[360px]:self-auto">
                     {mobilePanelTab === "projects"
                       ? `${totalVisibleProjects} projects`
                       : mobilePanelTab === "holes"
@@ -1969,31 +1961,31 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                         : `${totalVisibleHoles + totalVisibleAssets} items`}
                   </div>
                 </div>
-                <div className="mt-4 inline-flex w-full items-center gap-2 rounded-2xl bg-white/[0.04] p-1.5">
+                <div className="mt-4 grid w-full grid-cols-2 gap-2 rounded-2xl bg-white/[0.04] p-1.5">
                   <button
                     type="button"
-                    className={`flex-1 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "projects" ? "bg-cyan-300 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
+                    className={`min-w-0 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "projects" ? "bg-cyan-300 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
                     onClick={() => setMobilePanelTab("projects")}
                   >
                     Projects
                   </button>
                   <button
                     type="button"
-                    className={`flex-1 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "holes" ? "bg-amber-300 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
+                    className={`min-w-0 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "holes" ? "bg-amber-300 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
                     onClick={() => setMobilePanelTab("holes")}
                   >
                     Holes
                   </button>
                   <button
                     type="button"
-                    className={`flex-1 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "assets" ? "bg-rose-300 text-slate-950 shadow-[0_12px_28px_rgba(244,114,182,0.22)]" : "text-slate-200 hover:bg-white/8"}`}
+                    className={`min-w-0 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "assets" ? "bg-rose-300 text-slate-950 shadow-[0_12px_28px_rgba(244,114,182,0.22)]" : "text-slate-200 hover:bg-white/8"}`}
                     onClick={() => setMobilePanelTab("assets")}
                   >
                     Assets
                   </button>
                   <button
                     type="button"
-                    className={`flex-1 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "all" ? "bg-slate-200 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
+                    className={`min-w-0 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "all" ? "bg-slate-200 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
                     onClick={() => setMobilePanelTab("all")}
                   >
                     All
@@ -2028,12 +2020,12 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
 
             <div className="xl:hidden overflow-hidden rounded-[32px] border border-white/10 bg-slate-950/60 shadow-[0_24px_80px_rgba(2,6,23,0.32)] backdrop-blur-xl">
               <div className="border-b border-white/10 px-4 py-4">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col items-start gap-3 min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
                   <div>
                     <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Mobile Navigator</div>
                     <div className="mt-1 text-lg font-semibold text-white">{mobilePanelTab === "projects" ? "Projects and holes" : mobilePanelTab === "holes" ? "Hole attributes" : mobilePanelTab === "assets" ? "Mapped assets" : "All mapped items"}</div>
                   </div>
-                  <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-300">
+                  <div className="self-start rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-300 min-[360px]:self-auto">
                     {mobilePanelTab === "projects"
                       ? `${totalVisibleProjects} projects`
                       : mobilePanelTab === "holes"
@@ -2044,10 +2036,10 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   </div>
                 </div>
                 <div className="mt-4 flex flex-col gap-3">
-                  <div className="inline-flex w-full items-center gap-2 rounded-2xl border border-white/10 bg-slate-900/45 p-1.5">
+                  <div className="grid w-full grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-slate-900/45 p-1.5">
                     <button
                       type="button"
-                      className={`flex-1 rounded-2xl px-3 py-2.5 text-sm font-medium transition ${projectScope === "own" ? "bg-amber-400 text-slate-950 shadow-[0_12px_28px_rgba(251,191,36,0.28)]" : "text-slate-200 hover:bg-white/8"}`}
+                      className={`min-w-0 rounded-2xl px-3 py-2.5 text-sm font-medium transition ${projectScope === "own" ? "bg-amber-400 text-slate-950 shadow-[0_12px_28px_rgba(251,191,36,0.28)]" : "text-slate-200 hover:bg-white/8"}`}
                       onClick={() => {
                         setProjectScope("own");
                         setProjectFilter("");
@@ -2057,7 +2049,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                     </button>
                     <button
                       type="button"
-                      className={`flex-1 rounded-2xl px-3 py-2.5 text-sm font-medium transition ${projectScope === "shared" ? "bg-cyan-300 text-slate-950 shadow-[0_12px_28px_rgba(34,211,238,0.25)]" : "text-slate-200 hover:bg-white/8"}`}
+                      className={`min-w-0 rounded-2xl px-3 py-2.5 text-sm font-medium transition ${projectScope === "shared" ? "bg-cyan-300 text-slate-950 shadow-[0_12px_28px_rgba(34,211,238,0.25)]" : "text-slate-200 hover:bg-white/8"}`}
                       onClick={() => {
                         setProjectScope("shared");
                         setProjectFilter("");

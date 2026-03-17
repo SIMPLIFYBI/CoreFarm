@@ -2,9 +2,12 @@
 
 import React, { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
+import { useOrg } from "@/lib/OrgContext";
 import { EditIconButton, DeleteIconButton } from "@/app/components/ActionIconButton";
 
 export default function LocationsTable({ TABLE_HEAD_ROW, TABLE_ROW }) {
+  const supabase = supabaseBrowser();
+  const { orgId } = useOrg();
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -12,16 +15,23 @@ export default function LocationsTable({ TABLE_HEAD_ROW, TABLE_ROW }) {
   const [form, setForm] = useState({ name: "", description: "" });
 
   useEffect(() => {
-    const supabase = supabaseBrowser();
+    if (!orgId) {
+      setLocations([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     supabase
       .from("asset_locations")
       .select("id, name, description")
+      .eq("organization_id", orgId)
+      .order("name", { ascending: true })
       .then(({ data }) => {
         setLocations(data || []);
         setLoading(false);
       });
-  }, [showModal]);
+  }, [orgId, showModal, supabase]);
 
   const openModal = (loc = null) => {
     setEditLoc(loc);
@@ -30,9 +40,25 @@ export default function LocationsTable({ TABLE_HEAD_ROW, TABLE_ROW }) {
   };
 
   const handleSave = async () => {
-    const supabase = supabaseBrowser();
+    if (!orgId) {
+      alert("Select an organization before saving a location.");
+      return;
+    }
+
+    const payload = {
+      name: form.name,
+      description: form.description || null,
+      organization_id: orgId,
+    };
+
     if (editLoc) {
-      const res = await supabase.from("asset_locations").update(form).eq("id", editLoc.id).select().single();
+      const res = await supabase
+        .from("asset_locations")
+        .update({ name: payload.name, description: payload.description })
+        .eq("id", editLoc.id)
+        .eq("organization_id", orgId)
+        .select()
+        .single();
       if (res.error) {
         console.error("Failed to update location", res.error);
         alert("Error updating location: " + res.error.message);
@@ -41,7 +67,7 @@ export default function LocationsTable({ TABLE_HEAD_ROW, TABLE_ROW }) {
       setLocations((prev) => prev.map((l) => (l.id === res.data.id ? res.data : l)));
       setShowModal(false);
     } else {
-      const res = await supabase.from("asset_locations").insert([form]).select().single();
+      const res = await supabase.from("asset_locations").insert([payload]).select().single();
       if (res.error) {
         console.error("Failed to insert location", res.error);
         alert("Error creating location: " + res.error.message);
@@ -53,8 +79,8 @@ export default function LocationsTable({ TABLE_HEAD_ROW, TABLE_ROW }) {
   };
 
   const handleDelete = async (id) => {
-    const supabase = supabaseBrowser();
-    const res = await supabase.from("asset_locations").delete().eq("id", id).select();
+    if (!orgId) return;
+    const res = await supabase.from("asset_locations").delete().eq("id", id).eq("organization_id", orgId).select();
     if (res.error) {
       console.error("Failed to delete location", res.error);
       alert("Error deleting location: " + res.error.message);
@@ -71,6 +97,12 @@ export default function LocationsTable({ TABLE_HEAD_ROW, TABLE_ROW }) {
           Add Location
         </button>
       </div>
+
+      {!orgId ? (
+        <div className="mb-4 rounded-xl border border-amber-300/15 bg-amber-400/5 px-4 py-3 text-sm text-amber-100">
+          Choose an organization before managing locations.
+        </div>
+      ) : null}
 
       <div className="overflow-x-auto -mx-2 md:mx-0">
         <table className="w-full text-xs md:text-sm min-w-[640px]">
@@ -144,7 +176,7 @@ export default function LocationsTable({ TABLE_HEAD_ROW, TABLE_ROW }) {
                 <button type="button" className="btn" onClick={() => setShowModal(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary">
+                <button type="submit" className="btn btn-primary" disabled={!orgId}>
                   Save
                 </button>
               </div>

@@ -6,13 +6,18 @@ First, run the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
+
+If local development gets into a bad cache state, use:
+
+```bash
+npm run dev:clean
+```
+
+Notes:
+
+- `npm run dev` uses the standard Next.js dev server because it is more stable locally on this project.
+- `npm run dev:turbo` is still available if you explicitly want Turbopack.
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 

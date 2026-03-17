@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import { DEFAULT_TASK_TYPE_DEFS, TASK_TYPES, fetchOrgTaskTypes } from "@/lib/taskTypes";
+import { buildLowConsumableRows, getConsumableStatusMeta } from "@/lib/consumableInventory";
 import { BarChart, DonutChart, StackedColumnChart } from "@/app/components/Charts";
 import { DashboardTabs } from "./components/DashboardTabs";
 import { DashboardFilters } from "./components/DashboardFilters";
@@ -131,20 +132,19 @@ export default function UserDashboardPage() {
 		(async () => {
 			setConsumableLoading(true);
 			try {
-				const { data: inv } = await supabase
-					.from("consumable_items")
-					.select("id,key,label,count,reorder_value,cost_per_unit,unit_size,include_in_report")
-					.eq("organization_id", orgId)
-					.order("label");
+				const [{ data: inv }, { data: inventoryRows }] = await Promise.all([
+					supabase
+						.from("consumable_items")
+						.select("id,key,label,count,reorder_value,cost_per_unit,unit_size,include_in_report")
+						.eq("organization_id", orgId)
+						.order("label"),
+					supabase
+						.from("consumable_location_inventory")
+						.select("id, consumable_item_id, location_id, count, reorder_value, asset_locations(name)")
+						.eq("organization_id", orgId),
+				]);
 				const allItems = inv || [];
-				const lowReorder = allItems.filter((it) => {
-					const rv = it.reorder_value || 0;
-					if (rv <= 0) return false;
-					const c = it.count || 0;
-					if (c <= rv) return true;
-					if (c <= rv * 1.5) return true;
-					return false;
-				});
+				const lowReorder = buildLowConsumableRows(allItems, inventoryRows || []);
 				setConsumableItems(lowReorder);
 
 				const includedForTrend = allItems.filter((i) => i.include_in_report);
@@ -477,31 +477,18 @@ export default function UserDashboardPage() {
 										<thead>
 											<tr className="text-left bg-slate-900/80 text-slate-100">
 												<th className="p-2">Item</th>
+												<th className="p-2">Location</th>
 												<th className="p-2 text-right">Count</th>
 												<th className="p-2 text-right">Status</th>
 											</tr>
 										</thead>
 										<tbody>
 											{consumableItems.map((it) => {
-												const rv = it.reorder_value || 0;
-												const c = it.count || 0;
-												let cls = "badge-gray";
-												let txt = "â€”";
-												if (rv > 0) {
-													if (c <= rv) {
-														cls = "badge-red";
-														txt = "Reorder";
-													} else if (c <= rv * 1.5) {
-														cls = "badge-amber";
-														txt = "Low";
-													} else {
-														cls = "badge-green";
-														txt = "OK";
-													}
-												}
+												const { badgeClass: cls, label: txt } = getConsumableStatusMeta(it.count, it.reorder_value);
 												return (
 													<tr key={it.key} className="border-b border-slate-800/80 last:border-b-0 text-slate-100">
 														<td className="p-2">{it.label}</td>
+														<td className="p-2">{it.location_name || "All locations"}</td>
 														<td className="p-2 text-right">{it.count}</td>
 														<td className="p-2 text-right">
 															<span className={`badge ${cls} text-[10px]`}>{txt}</span>
