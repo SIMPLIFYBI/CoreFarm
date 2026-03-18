@@ -103,6 +103,40 @@ function LithologyPatternDefs({ uid, types }) {
   });
 }
 
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function getConstructionVisualSpec(typeName) {
+  const value = String(typeName || "").trim().toLowerCase();
+
+  if (/(headworks|wellhead|surface)/.test(value)) {
+    return { kind: "headworks", widthRatio: 0.74, innerRatio: 0.34 };
+  }
+
+  if (/collar/.test(value)) {
+    return { kind: "collar", widthRatio: 0.7, innerRatio: 0.42 };
+  }
+
+  if (/(screen|slotted)/.test(value)) {
+    return { kind: "screen", widthRatio: 0.62, innerRatio: 0.44 };
+  }
+
+  if (/(shoe|drive shoe)/.test(value)) {
+    return { kind: "shoe", widthRatio: 0.58, innerRatio: 0.38 };
+  }
+
+  if (/(plug|cement|grout|seal|bentonite|backfill)/.test(value)) {
+    return { kind: "plug", widthRatio: 0.48, innerRatio: 0 };
+  }
+
+  if (/(casing|liner|riser|standpipe|pipe|tube|pvc|steel)/.test(value)) {
+    return { kind: "tube", widthRatio: 0.58, innerRatio: 0.4 };
+  }
+
+  return { kind: "tube", widthRatio: 0.54, innerRatio: 0.36 };
+}
+
 export default function BoreholeSchematicPreview({
   plannedDepth,
   actualDepth,
@@ -146,6 +180,8 @@ export default function BoreholeSchematicPreview({
   const waterY = hasWater ? yForDepth(water) : null;
 
   const clipId = `schemClip-${uid}`;
+  const boreVoidFill = "none";
+  const boreVoidStroke = compact ? "rgba(255,255,255,0.09)" : "rgba(255,255,255,0.12)";
 
   const normGeology = useMemo(() => {
     return (geologyIntervals || [])
@@ -246,6 +282,57 @@ export default function BoreholeSchematicPreview({
     return `${raw.slice(0, Math.max(0, maxChars - 1))}…`;
   };
 
+  const constructionCallouts = useMemo(() => {
+    const leftMinX = Math.max(sidePad + 8, geologyLeftX + 8);
+    const leftMaxW = Math.max(76, geologyLeftW - 16);
+    const rightMinX = geologyRightX + 8;
+    const rightMaxW = Math.max(76, geologyRightW - 16);
+    const leftState = { nextY: padTop + 8 };
+    const rightState = { nextY: padTop + 8 };
+    const minGap = compact ? 22 : 26;
+    const boxH = compact ? 18 : 20;
+
+    return normConstruction.map((it, index) => {
+      const type = constructionById?.get?.(it.typeId);
+      const label = type?.name || "Construction";
+      const y1 = yForDepth(it.from);
+      const y2 = yForDepth(it.to);
+      const centerY = y1 + Math.max(0, y2 - y1) / 2;
+      const preferRight = !compact && index % 2 === 1 && showRightGeology && rightMaxW >= 100;
+      const side = preferRight ? "right" : "left";
+      const sideState = side === "right" ? rightState : leftState;
+      const maxBoxW = side === "right" ? rightMaxW : leftMaxW;
+      const boxW = clamp(maxBoxW, compact ? 76 : 104, compact ? 112 : 176);
+      let boxY = clamp(centerY - boxH / 2, padTop + 4, H - padBottom - boxH - 4);
+      if (boxY < sideState.nextY) {
+        boxY = Math.min(H - padBottom - boxH - 4, sideState.nextY);
+      }
+      sideState.nextY = boxY + minGap;
+
+      const boxX = side === "right" ? rightMinX : leftMinX + Math.max(0, leftMaxW - boxW);
+      const lineStartX = side === "right" ? holeX + holeW + annulusBandW - 1 : holeX - annulusBandW + 1;
+      const lineBendX = side === "right" ? boxX - 10 : boxX + boxW + 10;
+      const lineEndX = side === "right" ? boxX : boxX + boxW;
+      const lineY = boxY + boxH / 2;
+
+      return {
+        key: it.id || `construction-callout-${it.typeId}-${it.from}-${it.to}-${index}`,
+        side,
+        boxX,
+        boxY,
+        boxW,
+        boxH,
+        lineStartX,
+        lineBendX,
+        lineEndX,
+        lineY,
+        anchorY: centerY,
+        color: type?.color || "#64748b",
+        label: fitLabel(label, boxW - 18, compact),
+      };
+    });
+  }, [H, annulusBandW, compact, constructionById, geologyLeftW, geologyLeftX, geologyRightW, geologyRightX, holeW, holeX, normConstruction, padBottom, padTop, showRightGeology, sidePad]);
+
   const selectedComponentPopup = useMemo(() => {
     if (!selectedComponent) return null;
     const type = componentById?.get?.(selectedComponent.typeId);
@@ -332,8 +419,26 @@ export default function BoreholeSchematicPreview({
           width={holeW}
           height={H - padTop - padBottom}
           rx="10"
-          fill="rgba(2,6,24,0.35)"
+          fill="none"
           stroke="rgba(255,255,255,0.18)"
+        />
+        <rect
+          x={holeX + (compact ? 6 : 10)}
+          y={padTop + 2}
+          width={holeW - (compact ? 12 : 20)}
+          height={H - padTop - padBottom - 4}
+          rx={compact ? 8 : 10}
+          fill={boreVoidFill}
+          stroke={boreVoidStroke}
+        />
+        <line
+          x1={holeX + holeW / 2}
+          y1={padTop + 4}
+          x2={holeX + holeW / 2}
+          y2={H - padBottom - 4}
+          stroke="rgba(255,255,255,0.08)"
+          strokeDasharray={compact ? "5 6" : "6 7"}
+          strokeWidth="1"
         />
         <rect
           x={holeX - annulusBandW}
@@ -420,27 +525,195 @@ export default function BoreholeSchematicPreview({
             const t = constructionById?.get?.(it.typeId);
             const color = t?.color || "#64748b";
             const label = t?.name || "Construction";
+            const spec = getConstructionVisualSpec(label);
 
             const y1 = yForDepth(it.from);
             const y2 = yForDepth(it.to);
             const h = Math.max(0, y2 - y1);
             if (h <= 0.5) return null;
 
+            const visualW = clamp(holeW * spec.widthRatio, compact ? 22 : 26, holeW - (compact ? 18 : 28));
+            const visualX = holeX + (holeW - visualW) / 2;
+            const innerW = clamp(visualW * spec.innerRatio, 0, visualW - 6);
+            const innerX = holeX + (holeW - innerW) / 2;
+            const wallInset = Math.max(2.5, Math.min(6, visualW * 0.14));
+            const showInnerVoid = spec.innerRatio > 0 && innerW >= 6 && h >= 6;
+
+            const slotCount = spec.kind === "screen" ? Math.max(2, Math.min(8, Math.floor(h / (compact ? 18 : 16)))) : 0;
+            const slotYs = Array.from({ length: slotCount }, (_, slotIndex) => y1 + ((slotIndex + 1) * h) / (slotCount + 1));
+
             return (
               <g key={it.id || `c-${it.typeId}-${it.from}-${it.to}-${i}`}>
-                <rect x={holeX + 2} y={y1} width={holeW - 4} height={h} fill={color} fillOpacity="0.92" stroke="rgba(255,255,255,0.14)">
-                  <title>
-                    {label} · {it.from.toFixed(1)}–{it.to.toFixed(1)}m{it.notes ? ` · ${it.notes}` : ""}
-                  </title>
-                </rect>
-                {h >= 18 && (
-                  <text x={holeX + holeW / 2} y={y1 + Math.min(h - 6, 16)} textAnchor="middle" fontSize="11" fill="rgba(15,23,42,0.95)">
-                    {label}
-                  </text>
+                <title>
+                  {label} · {it.from.toFixed(1)}–{it.to.toFixed(1)}m{it.notes ? ` · ${it.notes}` : ""}
+                </title>
+
+                {(spec.kind === "tube" || spec.kind === "screen" || spec.kind === "collar" || spec.kind === "headworks" || spec.kind === "shoe") && (
+                  <>
+                    <rect
+                      x={visualX}
+                      y={y1}
+                      width={visualW}
+                      height={h}
+                      rx={Math.min(visualW / 2, compact ? 8 : 10)}
+                      fill={color}
+                      fillOpacity={spec.kind === "headworks" ? "0.82" : "0.78"}
+                      stroke="rgba(255,255,255,0.3)"
+                      strokeWidth={spec.kind === "headworks" ? "1.5" : "1.2"}
+                    />
+
+                    {showInnerVoid && (
+                      <rect
+                        x={innerX}
+                        y={y1 + (spec.kind === "collar" ? 2 : 1.5)}
+                        width={innerW}
+                        height={Math.max(0, h - (spec.kind === "collar" ? 4 : 3))}
+                        rx={Math.min(innerW / 2, compact ? 6 : 8)}
+                        fill={boreVoidFill}
+                        stroke="rgba(255,255,255,0.12)"
+                        strokeWidth="0.9"
+                      />
+                    )}
+
+                    {(spec.kind === "tube" || spec.kind === "screen") && (
+                      <>
+                        <line
+                          x1={visualX + wallInset}
+                          y1={y1 + 1}
+                          x2={visualX + wallInset}
+                          y2={y2 - 1}
+                          stroke="rgba(255,255,255,0.22)"
+                          strokeWidth="0.9"
+                        />
+                        <line
+                          x1={visualX + visualW - wallInset}
+                          y1={y1 + 1}
+                          x2={visualX + visualW - wallInset}
+                          y2={y2 - 1}
+                          stroke="rgba(15,23,42,0.28)"
+                          strokeWidth="0.9"
+                        />
+                      </>
+                    )}
+
+                    {spec.kind === "screen" &&
+                      slotYs.map((slotY) => (
+                        <g key={`${it.id || i}-${slotY}`}>
+                          <line
+                            x1={visualX + 1.5}
+                            y1={slotY}
+                            x2={innerX - 1}
+                            y2={slotY}
+                            stroke="rgba(15,23,42,0.45)"
+                            strokeWidth="1.1"
+                            strokeLinecap="round"
+                          />
+                          <line
+                            x1={innerX + innerW + 1}
+                            y1={slotY}
+                            x2={visualX + visualW - 1.5}
+                            y2={slotY}
+                            stroke="rgba(15,23,42,0.45)"
+                            strokeWidth="1.1"
+                            strokeLinecap="round"
+                          />
+                        </g>
+                      ))}
+
+                    {spec.kind === "headworks" && (
+                      <>
+                        <rect
+                          x={visualX - (compact ? 3 : 6)}
+                          y={y1}
+                          width={visualW + (compact ? 6 : 12)}
+                          height={Math.min(h, compact ? 12 : 14)}
+                          rx={compact ? 5 : 6}
+                          fill={color}
+                          fillOpacity="0.96"
+                          stroke="rgba(255,255,255,0.34)"
+                          strokeWidth="1.1"
+                        />
+                        <line
+                          x1={holeX + 3}
+                          y1={y1 + Math.min(h, compact ? 12 : 14) / 2}
+                          x2={holeX + holeW - 3}
+                          y2={y1 + Math.min(h, compact ? 12 : 14) / 2}
+                          stroke="rgba(255,255,255,0.18)"
+                          strokeWidth="1"
+                        />
+                      </>
+                    )}
+
+                    {spec.kind === "shoe" && h >= 10 && (
+                      <path
+                        d={`M ${visualX + 2} ${y2 - 2} L ${visualX + visualW / 2} ${y2 + (compact ? 4 : 6)} L ${visualX + visualW - 2} ${y2 - 2}`}
+                        fill={color}
+                        fillOpacity="0.88"
+                        stroke="rgba(255,255,255,0.22)"
+                        strokeWidth="1"
+                        strokeLinejoin="round"
+                      />
+                    )}
+                  </>
                 )}
+
+                {spec.kind === "plug" && (
+                  <rect
+                    x={visualX}
+                    y={y1}
+                    width={visualW}
+                    height={h}
+                    rx={Math.min(visualW / 2, compact ? 7 : 9)}
+                    fill={color}
+                    fillOpacity="0.84"
+                    stroke="rgba(255,255,255,0.24)"
+                    strokeWidth="1.1"
+                  />
+                )}
+
               </g>
             );
           })}
+
+          {constructionCallouts.map((callout) => (
+            <g key={callout.key}>
+              <path
+                d={`M ${callout.lineStartX} ${callout.anchorY} L ${callout.lineBendX} ${callout.anchorY} L ${callout.lineEndX} ${callout.lineY}`}
+                fill="none"
+                stroke="rgba(226,232,240,0.42)"
+                strokeWidth="1.15"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <rect
+                x={callout.boxX}
+                y={callout.boxY}
+                width={callout.boxW}
+                height={callout.boxH}
+                rx={compact ? 8 : 9}
+                fill="rgba(2,6,23,0.78)"
+                stroke="rgba(255,255,255,0.14)"
+              />
+              <rect
+                x={callout.side === "right" ? callout.boxX + callout.boxW - 7 : callout.boxX + 3}
+                y={callout.boxY + 3}
+                width="4"
+                height={callout.boxH - 6}
+                rx="2"
+                fill={callout.color}
+              />
+              <text
+                x={callout.side === "right" ? callout.boxX + 8 : callout.boxX + 11}
+                y={callout.boxY + callout.boxH / 2 + 3}
+                textAnchor="start"
+                fontSize={compact ? "8.5" : "9.5"}
+                fill="rgba(241,245,249,0.94)"
+                fontWeight="600"
+              >
+                {callout.label}
+              </text>
+            </g>
+          ))}
 
           {normComponents.map((it, i) => {
             const t = componentById?.get?.(it.typeId);

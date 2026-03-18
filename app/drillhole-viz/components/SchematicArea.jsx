@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import DepthAxisBar from "./DepthAxisBar";
 import BoreholeSchematicPreview from "./BoreholeSchematicPreview";
+import { computeMaxDepth } from "../utils/computeMaxDepth";
+import { svgHeightForMaxDepth } from "../utils/depthScaleConfig";
 
 export default function SchematicArea({
   selectedHole,
@@ -15,12 +17,25 @@ export default function SchematicArea({
   annulusRows,
   annulusById,
 }) {
-  const svgPxHeight = 620;
   const [selectedComponentId, setSelectedComponentId] = useState("");
+  const [schematicZoom, setSchematicZoom] = useState(1);
+
+  const zoomPct = Math.round(schematicZoom * 100);
+  const zoomOut = () => setSchematicZoom((prev) => Math.max(0.7, Math.round((prev - 0.15) * 100) / 100));
+  const zoomIn = () => setSchematicZoom((prev) => Math.min(1.9, Math.round((prev + 0.15) * 100) / 100));
+  const resetZoom = () => setSchematicZoom(1);
 
   useEffect(() => {
     setSelectedComponentId("");
   }, [selectedHole?.id]);
+
+  const maxDepth = useMemo(() => {
+    return computeMaxDepth({ plannedDepth: selectedHole?.planned_depth, actualDepth: selectedHole?.depth, minDepth: 30, step: 10 });
+  }, [selectedHole?.depth, selectedHole?.planned_depth]);
+
+  const schematicHeight = useMemo(() => svgHeightForMaxDepth(maxDepth), [maxDepth]);
+  const mobileBaseWidth = 58 + 8 + 258;
+  const desktopBaseWidth = 90 + 12 + 980;
 
   const selectedComponent = useMemo(() => {
     return (componentRows || []).find((row) => row.id === selectedComponentId) || null;
@@ -69,66 +84,83 @@ export default function SchematicArea({
 
                   <OrientationRibbon azimuth={selectedHole.azimuth} dip={selectedHole.dip} />
 
-                  <div className="text-sm text-slate-200">Borehole schematic</div>
-                  <div className="text-xs text-slate-400">
-                    The depth-true schematic stays intact while azimuth and dip are shown as companion orientation cues.
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <div className="text-sm text-slate-200">Borehole schematic</div>
+                      <div className="text-xs text-slate-400">
+                        The depth-true schematic stays intact while azimuth and dip are shown as companion orientation cues.
+                      </div>
+                    </div>
+
+                    <div className="inline-flex items-center gap-2 self-start rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-2 text-xs text-slate-300">
+                      <span className="text-slate-500">Zoom</span>
+                      <button type="button" className="btn btn-xs h-7 min-h-0 px-2" onClick={zoomOut} aria-label="Zoom out schematic">
+                        -
+                      </button>
+                      <button type="button" className="btn btn-xs h-7 min-h-0 px-2.5" onClick={resetZoom}>
+                        {zoomPct}%
+                      </button>
+                      <button type="button" className="btn btn-xs h-7 min-h-0 px-2" onClick={zoomIn} aria-label="Zoom in schematic">
+                        +
+                      </button>
+                    </div>
                   </div>
 
                   <div className="overflow-x-auto rounded-[24px] border border-white/10 bg-slate-950/40 p-3 pb-1 md:p-5">
                     <div className="w-full min-w-max">
-                    <div className="flex md:hidden gap-2 items-start">
-                      <DepthAxisBar
-                        plannedDepth={selectedHole.planned_depth}
-                        actualDepth={selectedHole.depth}
-                        waterLevel={selectedHole.water_level_m}
-                        svgPxHeight={svgPxHeight}
-                        compact
-                      />
+                      <div className="md:hidden" style={{ width: `${mobileBaseWidth * schematicZoom}px`, height: `${schematicHeight * schematicZoom}px` }}>
+                        <div className="flex gap-2 items-start origin-top-left" style={{ transform: `scale(${schematicZoom})` }}>
+                          <DepthAxisBar
+                            plannedDepth={selectedHole.planned_depth}
+                            actualDepth={selectedHole.depth}
+                            waterLevel={selectedHole.water_level_m}
+                            compact
+                          />
 
-                      <BoreholeSchematicPreview
-                        plannedDepth={selectedHole.planned_depth}
-                        actualDepth={selectedHole.depth}
-                        waterLevel={selectedHole.water_level_m}
-                        geologyIntervals={geoRows}
-                        lithById={lithById}
-                        componentRows={componentRows}
-                        componentById={componentById}
-                        annulusIntervals={annulusRows}
-                        annulusById={annulusById}
-                        constructionIntervals={constructionRows}
-                        constructionById={constructionById}
-                        svgPxHeight={svgPxHeight}
-                        compact
-                        selectedComponentId={selectedComponentId}
-                        onSelectComponent={(component) => setSelectedComponentId(component?.id || "")}
-                      />
-                    </div>
+                          <BoreholeSchematicPreview
+                            plannedDepth={selectedHole.planned_depth}
+                            actualDepth={selectedHole.depth}
+                            waterLevel={selectedHole.water_level_m}
+                            geologyIntervals={geoRows}
+                            lithById={lithById}
+                            componentRows={componentRows}
+                            componentById={componentById}
+                            annulusIntervals={annulusRows}
+                            annulusById={annulusById}
+                            constructionIntervals={constructionRows}
+                            constructionById={constructionById}
+                            compact
+                            selectedComponentId={selectedComponentId}
+                            onSelectComponent={(component) => setSelectedComponentId(component?.id || "")}
+                          />
+                        </div>
+                      </div>
 
-                    <div className="hidden md:inline-flex gap-3 items-start">
-                      <DepthAxisBar
-                        plannedDepth={selectedHole.planned_depth}
-                        actualDepth={selectedHole.depth}
-                        waterLevel={selectedHole.water_level_m}
-                        svgPxHeight={svgPxHeight}
-                      />
+                      <div className="hidden md:block" style={{ width: `${desktopBaseWidth * schematicZoom}px`, height: `${schematicHeight * schematicZoom}px` }}>
+                        <div className="inline-flex gap-3 items-start origin-top-left" style={{ transform: `scale(${schematicZoom})` }}>
+                          <DepthAxisBar
+                            plannedDepth={selectedHole.planned_depth}
+                            actualDepth={selectedHole.depth}
+                            waterLevel={selectedHole.water_level_m}
+                          />
 
-                      <BoreholeSchematicPreview
-                        plannedDepth={selectedHole.planned_depth}
-                        actualDepth={selectedHole.depth}
-                        waterLevel={selectedHole.water_level_m}
-                        geologyIntervals={geoRows}
-                        lithById={lithById}
-                        componentRows={componentRows}
-                        componentById={componentById}
-                        annulusIntervals={annulusRows}
-                        annulusById={annulusById}
-                        constructionIntervals={constructionRows}
-                        constructionById={constructionById}
-                        svgPxHeight={svgPxHeight}
-                        selectedComponentId={selectedComponentId}
-                        onSelectComponent={(component) => setSelectedComponentId(component?.id || "")}
-                      />
-                    </div>
+                          <BoreholeSchematicPreview
+                            plannedDepth={selectedHole.planned_depth}
+                            actualDepth={selectedHole.depth}
+                            waterLevel={selectedHole.water_level_m}
+                            geologyIntervals={geoRows}
+                            lithById={lithById}
+                            componentRows={componentRows}
+                            componentById={componentById}
+                            annulusIntervals={annulusRows}
+                            annulusById={annulusById}
+                            constructionIntervals={constructionRows}
+                            constructionById={constructionById}
+                            selectedComponentId={selectedComponentId}
+                            onSelectComponent={(component) => setSelectedComponentId(component?.id || "")}
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

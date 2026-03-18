@@ -194,11 +194,11 @@ export function ComponentIconGlyph({ icon, cx = 10, cy = 10, selected = false, s
   return <circle cx={cx} cy={cy} r={2.8} fill={stroke} opacity="0.95" transform={scale !== 1 ? `translate(${cx} ${cy}) scale(${scale}) translate(${-cx} ${-cy})` : undefined} />;
 }
 
-export function ComponentIconSvg({ icon, color = "#38bdf8", size = 20, selected = false, className = "" }) {
+export function ComponentIconSvg({ icon, color = "#38bdf8", size = 20, selected = false, className = "", glyphScale = 1 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 20 20" className={className} aria-hidden="true">
       <circle cx="10" cy="10" r="8.5" fill={color} opacity="0.22" />
-      <ComponentIconGlyph icon={icon} cx={10} cy={10} selected={selected} />
+      <ComponentIconGlyph icon={icon} cx={10} cy={10} selected={selected} scale={glyphScale} />
     </svg>
   );
 }

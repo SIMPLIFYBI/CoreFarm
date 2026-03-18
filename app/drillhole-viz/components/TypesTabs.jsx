@@ -515,8 +515,8 @@ export default function TypesTabs({
                             aria-expanded={isIconPickerOpen}
                             aria-label="Choose component icon"
                           >
-                            <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-slate-950/50">
-                              <ComponentIconSvg icon={selectedIconOption.value} color={t.color || "#38bdf8"} size={20} />
+                            <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/10 bg-slate-950/50">
+                              <ComponentIconSvg icon={selectedIconOption.value} color={t.color || "#38bdf8"} size={28} glyphScale={1.45} />
                             </div>
                             <span className="text-xs text-slate-400">Select</span>
                           </button>
@@ -545,7 +545,7 @@ export default function TypesTabs({
                                       aria-label={option.label}
                                       title={option.label}
                                     >
-                                      <ComponentIconSvg icon={option.value} color={t.color || "#38bdf8"} size={22} selected={isSelected} />
+                                      <ComponentIconSvg icon={option.value} color={t.color || "#38bdf8"} size={34} selected={isSelected} glyphScale={1.62} />
                                     </button>
                                   );
                                 })}
