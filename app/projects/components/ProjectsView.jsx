@@ -17,6 +17,7 @@ import VendorsTab from "./VendorsTab";
 import ContractsTab from "./ContractsTab";
 import ActivitiesTab from "./ActivitiesTab";
 import PlodTypesAdminPanel from "./PlodTypesAdminPanel";
+import DrillingTypesAdminPanel from "./DrillingTypesAdminPanel";
 
 const DEFAULT_TAB = "projects";
 const VALID_TABS = new Set([
@@ -28,6 +29,7 @@ const VALID_TABS = new Set([
   "contracts",
   "activities",
   "plodtypes",
+  "drillingtypes",
 ]);
 
 export default function ProjectsView() {
@@ -535,6 +537,16 @@ export default function ProjectsView() {
         >
           Plod Types
         </button>
+
+        <button
+          className={`px-4 py-2 -mb-px font-medium text-sm ${
+            activeTab === "drillingtypes" ? "border-b-2 border-indigo-500 text-indigo-300" : "text-slate-300/70"
+          }`}
+          onClick={() => setTab("drillingtypes")}
+          type="button"
+        >
+          Drilling Types
+        </button>
       </HorizontalScrollTabs>
 
       {/* header actions per tab */}
@@ -620,6 +632,15 @@ export default function ProjectsView() {
             Configure which Plod Types exist for this organisation. Activity Types can be assigned to one or more Plod Types.
           </div>
           <PlodTypesAdminPanel orgId={orgId} />
+        </div>
+      )}
+
+      {activeTab === "drillingtypes" && (
+        <div className="space-y-4">
+          <div className="text-sm text-slate-300/70">
+            Configure the drilling types and hole descriptors available to this organisation. These are used in hole editing, imports, and map filtering.
+          </div>
+          <DrillingTypesAdminPanel orgId={orgId} />
         </div>
       )}
 

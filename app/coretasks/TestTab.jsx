@@ -7,6 +7,13 @@ import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import { getAustralianProjectCrsByCode } from "@/lib/coordinateSystems";
 import { deriveHoleCoordinates } from "@/lib/holeCoordinates";
+import {
+  attachHoleDescriptors,
+  fetchHoleDescriptorAssignments,
+  fetchOrgHoleDescriptors,
+  replaceHoleDescriptorAssignments,
+  replaceManyHoleDescriptorAssignments,
+} from "@/lib/holeDescriptors";
 import { EditIconButton, DeleteIconButton } from "@/app/components/ActionIconButton";
 import { DEFAULT_TASK_TYPE_DEFS, fetchOrgTaskTypes } from "@/lib/taskTypes";
 import CoreTaskPanelHeader from "./CoreTaskPanelHeader";
@@ -80,6 +87,11 @@ function formatProjectCrs(project) {
   return "Not set on project yet";
 }
 
+function formatDescriptorSummary(descriptors) {
+  if (!descriptors?.length) return "No descriptors assigned";
+  return descriptors.map((descriptor) => descriptor.name).join(", ");
+}
+
 function getStateMeta(state) {
   if (state === "drilled") return { label: "Drilled", className: "bg-cyan-300/15 text-cyan-100 border-cyan-300/20" };
   if (state === "in_progress") return { label: "In Progress", className: "bg-amber-300/15 text-amber-100 border-amber-300/20" };
@@ -113,8 +125,54 @@ function createEmptyForm(projectId = "") {
     state: "proposed",
     drilling_diameter: "",
     drilling_contractor: "",
+    descriptor_ids: [],
     project_id: projectId,
   };
+}
+
+function DescriptorMultiSelect({ options, value, onChange, disabled = false, emptyText = "No descriptors configured yet." }) {
+  const selectedIds = new Set(value || []);
+
+  if (!options.length) {
+    return <div className="mt-1 rounded-2xl border border-dashed border-white/10 bg-white/[0.03] px-3 py-3 text-xs text-slate-400">{emptyText}</div>;
+  }
+
+  return (
+    <div className="mt-1 max-h-48 space-y-2 overflow-y-auto rounded-2xl border border-white/10 bg-white/[0.03] p-2.5">
+      {options.map((descriptor) => {
+        const active = selectedIds.has(descriptor.id);
+        return (
+          <label
+            key={descriptor.id}
+            className={[
+              "flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2.5 transition",
+              active ? "border-cyan-300/25 bg-cyan-300/10" : "border-white/8 bg-black/10 hover:border-white/15 hover:bg-white/[0.04]",
+              disabled ? "cursor-not-allowed opacity-60" : "",
+            ].join(" ")}
+          >
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 rounded border-white/20 bg-slate-950 text-cyan-300"
+              checked={active}
+              disabled={disabled}
+              onChange={() => {
+                if (disabled) return;
+                const next = active ? (value || []).filter((id) => id !== descriptor.id) : [...(value || []), descriptor.id];
+                onChange(next);
+              }}
+            />
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-slate-100">{descriptor.name}</div>
+              <div className="mt-0.5 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                {descriptor.key}
+                {descriptor.category ? ` • ${descriptor.category}` : ""}
+              </div>
+            </div>
+          </label>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function TestTab({ projectScope = "own" }) {
@@ -123,6 +181,7 @@ export default function TestTab({ projectScope = "own" }) {
 
   const [holes, setHoles] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [availableDescriptors, setAvailableDescriptors] = useState([]);
   const [holeStatus, setHoleStatus] = useState({});
   const [taskMeta, setTaskMeta] = useState(
     Object.fromEntries(DEFAULT_TASK_TYPE_DEFS.map((task) => [task.key, { label: task.name, color: task.color || "#64748b" }]))
@@ -139,6 +198,7 @@ export default function TestTab({ projectScope = "own" }) {
   const [projectFilter, setProjectFilter] = useState("");
   const [stateFilter, setStateFilter] = useState("");
   const [diameterFilter, setDiameterFilter] = useState("");
+  const [descriptorFilter, setDescriptorFilter] = useState("");
 
   const [selectedHole, setSelectedHole] = useState(null);
   const [selectedHoleIds, setSelectedHoleIds] = useState([]);
@@ -151,6 +211,8 @@ export default function TestTab({ projectScope = "own" }) {
     drilling_diameter: BULK_KEEP_VALUE,
     drilling_contractor_action: "keep",
     drilling_contractor: "",
+    descriptor_action: "keep",
+    descriptor_ids: [],
   });
 
   const [intervals, setIntervals] = useState({});
@@ -207,6 +269,33 @@ export default function TestTab({ projectScope = "own" }) {
       active = false;
     };
   }, [orgId, supabase]);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!orgId || projectScope === "shared") {
+      setAvailableDescriptors([]);
+      return () => {
+        active = false;
+      };
+    }
+
+    (async () => {
+      try {
+        const rows = await fetchOrgHoleDescriptors(supabase, orgId);
+        if (!active) return;
+        setAvailableDescriptors(rows);
+      } catch (error) {
+        if (!active) return;
+        setAvailableDescriptors([]);
+        toast.error(error?.message || "Failed to load hole descriptors");
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [orgId, projectScope, supabase]);
 
   const labelForTask = (taskKey) => taskMeta[taskKey]?.label || humanizeLabel(taskKey);
   const colorForTask = (taskKey) => taskMeta[taskKey]?.color || "#64748b";
@@ -402,10 +491,16 @@ export default function TestTab({ projectScope = "own" }) {
         nextProjects = projectsRes.data || [];
       }
 
-      setHoles(nextHoles);
+      const descriptorsByHole = await fetchHoleDescriptorAssignments(
+        supabase,
+        nextHoles.map((hole) => hole.id)
+      );
+      const holesWithDescriptors = attachHoleDescriptors(nextHoles, descriptorsByHole);
+
+      setHoles(holesWithDescriptors);
       setProjects(nextProjects);
-      await loadWorkflowStatus(nextHoles.map((hole) => hole.id));
-      return nextHoles;
+      await loadWorkflowStatus(holesWithDescriptors.map((hole) => hole.id));
+      return holesWithDescriptors;
     } catch (error) {
       toast.error(error?.message || "Failed to load unified core planner");
       setHoles([]);
@@ -425,6 +520,7 @@ export default function TestTab({ projectScope = "own" }) {
     setProjectFilter("");
     setStateFilter("");
     setDiameterFilter("");
+    setDescriptorFilter("");
     setSearch("");
     setSelectedHole(null);
     setSelectedHoleIds([]);
@@ -446,6 +542,7 @@ export default function TestTab({ projectScope = "own" }) {
       if (projectFilter && hole.project_id !== projectFilter) return false;
       if (stateFilter && hole.state !== stateFilter) return false;
       if (diameterFilter && hole.drilling_diameter !== diameterFilter) return false;
+      if (descriptorFilter && !(hole.descriptor_ids || []).includes(descriptorFilter)) return false;
       if (!term) return true;
 
       return [
@@ -454,16 +551,27 @@ export default function TestTab({ projectScope = "own" }) {
         hole.drilling_contractor,
         hole.state,
         hole.drilling_diameter,
+        hole.descriptor_names_text,
       ]
         .join(" ")
         .toLowerCase()
         .includes(term);
     });
-  }, [holes, search, projectFilter, stateFilter, diameterFilter]);
+  }, [descriptorFilter, diameterFilter, holes, projectFilter, search, stateFilter]);
+
+  const descriptorFilterOptions = useMemo(() => {
+    const descriptorMap = new Map();
+    (holes || []).forEach((hole) => {
+      (hole.descriptors || []).forEach((descriptor) => {
+        if (!descriptorMap.has(descriptor.id)) descriptorMap.set(descriptor.id, descriptor);
+      });
+    });
+    return Array.from(descriptorMap.values()).sort((left, right) => left.name.localeCompare(right.name));
+  }, [holes]);
 
   const activeFilterCount = useMemo(
-    () => [search.trim(), projectFilter, stateFilter, diameterFilter].filter(Boolean).length,
-    [search, projectFilter, stateFilter, diameterFilter]
+    () => [search.trim(), projectFilter, stateFilter, diameterFilter, descriptorFilter].filter(Boolean).length,
+    [descriptorFilter, diameterFilter, projectFilter, search, stateFilter]
   );
 
   const headerStats = useMemo(() => {
@@ -657,6 +765,7 @@ export default function TestTab({ projectScope = "own" }) {
       state: hole.state || "proposed",
       drilling_diameter: hole.drilling_diameter || "",
       drilling_contractor: hole.drilling_contractor || "",
+      descriptor_ids: hole.descriptor_ids || [],
       project_id: hole.project_id || "",
     });
     setIntervalSaveState("idle");
@@ -811,8 +920,14 @@ export default function TestTab({ projectScope = "own" }) {
 
       if (result.error) throw result.error;
 
-      const freshHoles = await loadData();
       const savedHoleId = result.data?.id || selectedHole.id;
+      await replaceHoleDescriptorAssignments(supabase, {
+        orgId,
+        holeId: savedHoleId,
+        descriptorIds: form.descriptor_ids,
+      });
+
+      const freshHoles = await loadData();
       const refreshedHole = freshHoles.find((hole) => hole.id === savedHoleId) || null;
 
       if (refreshedHole) {
@@ -848,6 +963,8 @@ export default function TestTab({ projectScope = "own" }) {
       drilling_diameter: BULK_KEEP_VALUE,
       drilling_contractor_action: "keep",
       drilling_contractor: "",
+      descriptor_action: "keep",
+      descriptor_ids: [],
     });
   };
 
@@ -892,15 +1009,29 @@ export default function TestTab({ projectScope = "own" }) {
       payload.drilling_contractor = null;
     }
 
-    if (Object.keys(payload).length === 0) {
+    if (bulkEditForm.descriptor_action === "set" && !bulkEditForm.descriptor_ids.length) {
+      return toast.error("Choose at least one descriptor to apply");
+    }
+
+    if (Object.keys(payload).length === 0 && bulkEditForm.descriptor_action === "keep") {
       toast.error("Choose at least one change to apply");
       return;
     }
 
     setBulkUpdating(true);
     try {
-      const { error } = await supabase.from("holes").update(payload).in("id", selectedHoleIds).eq("organization_id", orgId);
-      if (error) throw error;
+      if (Object.keys(payload).length > 0) {
+        const { error } = await supabase.from("holes").update(payload).in("id", selectedHoleIds).eq("organization_id", orgId);
+        if (error) throw error;
+      }
+
+      if (bulkEditForm.descriptor_action === "set" || bulkEditForm.descriptor_action === "clear") {
+        await replaceManyHoleDescriptorAssignments(supabase, {
+          orgId,
+          holeIds: selectedHoleIds,
+          descriptorIds: bulkEditForm.descriptor_action === "set" ? bulkEditForm.descriptor_ids : [],
+        });
+      }
 
       toast.success(`Updated ${selectedHoleIds.length} holes`);
       closeBulkEdit(true);
@@ -993,7 +1124,7 @@ export default function TestTab({ projectScope = "own" }) {
       </div>
 
       <section className={["rounded-[30px] border border-white/10 bg-slate-950/50 p-4 shadow-[0_24px_80px_rgba(2,6,23,0.35)] md:p-5", showMobileFilters ? "block" : "hidden md:block"].join(" ")}>
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_repeat(3,minmax(0,0.8fr))_auto] xl:items-end">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_repeat(4,minmax(0,0.8fr))_auto] xl:items-end">
           <label className="flex min-w-[220px] flex-col gap-1.5 text-sm text-slate-200">
             Search holes
             <input
@@ -1040,6 +1171,18 @@ export default function TestTab({ projectScope = "own" }) {
             </select>
           </label>
 
+          <label className="flex flex-col gap-1.5 text-sm text-slate-200">
+            Descriptor
+            <select className="select-gradient-sm h-11" value={descriptorFilter} onChange={(event) => setDescriptorFilter(event.target.value)}>
+              <option value="">All descriptors</option>
+              {descriptorFilterOptions.map((descriptor) => (
+                <option key={descriptor.id} value={descriptor.id}>
+                  {descriptor.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <button
             type="button"
             className="btn btn-3d-glass h-11 px-5"
@@ -1048,6 +1191,7 @@ export default function TestTab({ projectScope = "own" }) {
               setProjectFilter("");
               setStateFilter("");
               setDiameterFilter("");
+              setDescriptorFilter("");
               setShowMobileFilters(false);
             }}
           >
@@ -1108,6 +1252,18 @@ export default function TestTab({ projectScope = "own" }) {
                     </div>
                     <div className="mt-2 text-sm text-slate-300">{hole.projects?.name || "No project assigned"}</div>
                     <div className="mt-1 text-xs text-slate-400">{hole.drilling_contractor || "No contractor assigned"}</div>
+                    {hole.descriptors?.length ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {hole.descriptors.slice(0, 4).map((descriptor) => (
+                          <span key={descriptor.id} className="rounded-full border border-cyan-300/15 bg-cyan-300/10 px-2.5 py-1 text-[11px] font-medium text-cyan-100">
+                            {descriptor.name}
+                          </span>
+                        ))}
+                        {hole.descriptors.length > 4 ? (
+                          <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-slate-300">+{hole.descriptors.length - 4} more</span>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="flex gap-2" onClick={(event) => event.stopPropagation()}>
@@ -1257,6 +1413,17 @@ export default function TestTab({ projectScope = "own" }) {
                       <label className="text-sm text-slate-200 md:col-span-2">
                         Drilling contractor
                         <input className="input mt-1" value={form.drilling_contractor} onChange={(event) => setForm((current) => ({ ...current, drilling_contractor: event.target.value }))} />
+                      </label>
+
+                      <label className="text-sm text-slate-200 md:col-span-2">
+                        Hole descriptors
+                        <DescriptorMultiSelect
+                          options={availableDescriptors}
+                          value={form.descriptor_ids}
+                          onChange={(descriptorIds) => setForm((current) => ({ ...current, descriptor_ids: descriptorIds }))}
+                          emptyText="Create hole descriptors for this org to tag holes here."
+                        />
+                        <div className="mt-2 text-xs text-slate-400">{formatDescriptorSummary((availableDescriptors || []).filter((descriptor) => (form.descriptor_ids || []).includes(descriptor.id)))}</div>
                       </label>
 
                       <label className="text-sm text-slate-200 md:col-span-2">
@@ -1515,6 +1682,31 @@ export default function TestTab({ projectScope = "own" }) {
                   <option value="clear">Clear contractor</option>
                 </select>
               </label>
+
+              <label className="text-sm text-slate-200 md:col-span-2">
+                Descriptor action
+                <select
+                  className="select-gradient-sm mt-1"
+                  value={bulkEditForm.descriptor_action}
+                  onChange={(event) => setBulkEditForm((current) => ({ ...current, descriptor_action: event.target.value }))}
+                >
+                  <option value="keep">Keep existing descriptors</option>
+                  <option value="set">Replace with selected descriptors</option>
+                  <option value="clear">Clear all descriptors</option>
+                </select>
+              </label>
+
+              {bulkEditForm.descriptor_action === "set" ? (
+                <label className="text-sm text-slate-200 md:col-span-2">
+                  Hole descriptors
+                  <DescriptorMultiSelect
+                    options={availableDescriptors}
+                    value={bulkEditForm.descriptor_ids}
+                    onChange={(descriptorIds) => setBulkEditForm((current) => ({ ...current, descriptor_ids: descriptorIds }))}
+                    emptyText="Create hole descriptors for this org to use bulk descriptor edits."
+                  />
+                </label>
+              ) : null}
 
               {bulkEditForm.drilling_contractor_action === "set" ? (
                 <label className="text-sm text-slate-200 md:col-span-2">

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
+import { attachHoleDescriptors, fetchHoleDescriptorAssignments } from "@/lib/holeDescriptors";
 import DepthAxisBar from "@/app/drillhole-viz/components/DepthAxisBar";
 import BoreholeSchematicPreview from "@/app/drillhole-viz/components/BoreholeSchematicPreview";
 import { convertProjectedToWgs84 } from "@/lib/coordinateTransforms";
@@ -90,6 +91,11 @@ function getHoleStateTone(state) {
     border: "rgba(34,211,238,0.35)",
     background: "rgba(34,211,238,0.16)",
   };
+}
+
+function formatDescriptorSummary(descriptors) {
+  if (!descriptors?.length) return "-";
+  return descriptors.map((descriptor) => descriptor.name).join(", ");
 }
 
 function HoleStateLegend() {
@@ -414,6 +420,15 @@ function HoleAttributesPanel({ selectedHole, mobile = false }) {
               {selectedHole?.state || "-"}
             </div>
           </div>
+          {selectedHole?.descriptors?.length ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {selectedHole.descriptors.map((descriptor) => (
+                <span key={descriptor.id} className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-[11px] font-medium text-cyan-100">
+                  {descriptor.name}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -469,6 +484,10 @@ function HoleAttributesPanel({ selectedHole, mobile = false }) {
           <tr className="border-b border-white/10">
             <th className="bg-white/[0.03] px-4 py-3 text-left font-medium text-slate-300">State</th>
             <td className="px-4 py-3">{selectedHole?.state || "-"}</td>
+          </tr>
+          <tr className="border-b border-white/10">
+            <th className="bg-white/[0.03] px-4 py-3 text-left font-medium text-slate-300">Descriptors</th>
+            <td className="px-4 py-3">{formatDescriptorSummary(selectedHole?.descriptors)}</td>
           </tr>
           <tr className="border-b border-white/10">
             <th className="bg-white/[0.03] px-4 py-3 text-left font-medium text-slate-300">Depth</th>
@@ -766,6 +785,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const [allHoles, setAllHoles] = useState([]);
   const [allAssets, setAllAssets] = useState([]);
   const [projectFilter, setProjectFilter] = useState("");
+  const [descriptorFilter, setDescriptorFilter] = useState("");
   const [navigatorTab, setNavigatorTab] = useState("holes");
   const [expandedProjects, setExpandedProjects] = useState({});
   const [expandedAssetProjects, setExpandedAssetProjects] = useState({});
@@ -810,6 +830,9 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
       }
       if (typeof snapshot.projectFilter === "string") {
         setProjectFilter(snapshot.projectFilter);
+      }
+      if (typeof snapshot.descriptorFilter === "string") {
+        setDescriptorFilter(snapshot.descriptorFilter);
       }
       if (snapshot.navigatorTab === "holes" || snapshot.navigatorTab === "assets") {
         setNavigatorTab(snapshot.navigatorTab);
@@ -1052,43 +1075,47 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
 
         if (!active) return;
 
-        setAllHoles(
-          holeRows
-            .map((hole) => {
-              const derived = deriveHoleCoordinates({
-                collarLongitude: hole.collar_longitude ?? null,
-                collarLatitude: hole.collar_latitude ?? null,
-                collarEasting: hole.collar_easting ?? null,
-                collarNorthing: hole.collar_northing ?? null,
-                projectCrsCode: hole.projects?.coordinate_crs_code ?? null,
-              });
+        const mappedHoles = holeRows
+          .map((hole) => {
+            const derived = deriveHoleCoordinates({
+              collarLongitude: hole.collar_longitude ?? null,
+              collarLatitude: hole.collar_latitude ?? null,
+              collarEasting: hole.collar_easting ?? null,
+              collarNorthing: hole.collar_northing ?? null,
+              projectCrsCode: hole.projects?.coordinate_crs_code ?? null,
+            });
 
-              return {
-                id: hole.id,
-                organization_id: hole.organization_id,
-                hole_id: hole.hole_id,
-                project_id: hole.project_id || "",
-                project_name: hole.projects?.name || "No project",
-                state: hole.state || "",
-                depth: hole.depth ?? null,
-                planned_depth: hole.planned_depth ?? null,
-                water_level_m: hole.water_level_m ?? null,
-                azimuth: hole.azimuth ?? null,
-                dip: hole.dip ?? null,
-                collar_longitude: derived.collarLongitude,
-                collar_latitude: derived.collarLatitude,
-                collar_easting: hole.collar_easting ?? null,
-                collar_northing: hole.collar_northing ?? null,
-                collar_elevation_m: hole.collar_elevation_m ?? null,
-                collar_source: hole.collar_source ?? null,
-                started_at: hole.started_at ?? null,
-                completed_at: hole.completed_at ?? null,
-                completion_status: hole.completion_status ?? null,
-                completion_notes: hole.completion_notes ?? null,
-              };
-            })
-            .filter((hole) => hole.collar_longitude != null && hole.collar_latitude != null)
+            return {
+              id: hole.id,
+              organization_id: hole.organization_id,
+              hole_id: hole.hole_id,
+              project_id: hole.project_id || "",
+              project_name: hole.projects?.name || "No project",
+              state: hole.state || "",
+              depth: hole.depth ?? null,
+              planned_depth: hole.planned_depth ?? null,
+              water_level_m: hole.water_level_m ?? null,
+              azimuth: hole.azimuth ?? null,
+              dip: hole.dip ?? null,
+              collar_longitude: derived.collarLongitude,
+              collar_latitude: derived.collarLatitude,
+              collar_easting: hole.collar_easting ?? null,
+              collar_northing: hole.collar_northing ?? null,
+              collar_elevation_m: hole.collar_elevation_m ?? null,
+              collar_source: hole.collar_source ?? null,
+              started_at: hole.started_at ?? null,
+              completed_at: hole.completed_at ?? null,
+              completion_status: hole.completion_status ?? null,
+              completion_notes: hole.completion_notes ?? null,
+            };
+          })
+          .filter((hole) => hole.collar_longitude != null && hole.collar_latitude != null);
+        const descriptorsByHole = await fetchHoleDescriptorAssignments(
+          supabase,
+          mappedHoles.map((hole) => hole.id)
         );
+
+        setAllHoles(attachHoleDescriptors(mappedHoles, descriptorsByHole));
 
         setAllAssets(
           assetRows
@@ -1162,10 +1189,27 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [allHoles]);
 
+  const descriptorOptions = useMemo(() => {
+    const descriptorMap = new Map();
+    (allHoles || []).forEach((hole) => {
+      (hole.descriptors || []).forEach((descriptor) => {
+        if (!descriptorMap.has(descriptor.id)) descriptorMap.set(descriptor.id, descriptor);
+      });
+    });
+    return Array.from(descriptorMap.values()).sort((left, right) => left.name.localeCompare(right.name));
+  }, [allHoles]);
+
   const filteredProjects = useMemo(() => {
-    if (!projectFilter) return projects;
-    return projects.filter((project) => project.id === projectFilter);
-  }, [projectFilter, projects]);
+    return projects
+      .filter((project) => !projectFilter || project.id === projectFilter)
+      .map((project) => ({
+        ...project,
+        holes: descriptorFilter
+          ? project.holes.filter((hole) => (hole.descriptor_ids || []).includes(descriptorFilter))
+          : project.holes,
+      }))
+      .filter((project) => project.holes.length > 0);
+  }, [descriptorFilter, projectFilter, projects]);
 
   const assetProjects = useMemo(() => {
     const projectMap = new Map();
@@ -1364,6 +1408,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     const snapshot = {
       projectScope,
       projectFilter,
+      descriptorFilter,
       navigatorTab,
       mobilePanelTab,
       selectedHoleId: nextSelectedHoleId || "",
@@ -1392,6 +1437,13 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const renderPopupHtml = (hole) => {
     if (!hole) return "";
     const stateTone = getHoleStateTone(hole.state);
+    const descriptorMarkup = (hole.descriptors || [])
+      .slice(0, 3)
+      .map(
+        (descriptor) =>
+          `<span style="display:inline-flex;align-items:center;border:1px solid rgba(34,211,238,0.18);background:rgba(34,211,238,0.1);border-radius:999px;padding:4px 7px;font-size:9px;font-weight:700;color:#cffafe;line-height:1.05;">${descriptor.name}</span>`
+      )
+      .join("");
 
     return `
       <div style="width:188px;padding:10px 10px 10px 6px;color:#e2e8f0;font-family:Arial,Helvetica,sans-serif;box-sizing:border-box;">
@@ -1402,6 +1454,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
           <div style="display:inline-flex;align-self:flex-start;max-width:100%;border:1px solid ${stateTone.border};background:${stateTone.background};color:${stateTone.text};border-radius:999px;padding:4px 7px;font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;line-height:1.05;">
             ${stateTone.label}
           </div>
+          ${descriptorMarkup ? `<div style="display:flex;flex-wrap:wrap;gap:6px;">${descriptorMarkup}</div>` : ""}
         </div>
         <div style="margin-top:9px;display:grid;grid-template-columns:minmax(0,1fr);gap:6px;">
           <div style="width:calc(100% - 6px);margin-right:auto;border:1px solid rgba(148,163,184,0.18);background:rgba(15,23,42,0.5);border-radius:12px;padding:7px 9px;box-sizing:border-box;">
@@ -1783,7 +1836,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   }, [loading, visibleAssets, visibleHoles]);
 
   const totalProjects = projectOptions.length;
-  const totalVisibleProjects = projectFilter ? projectOptions.filter((project) => project.id === projectFilter).length : projectOptions.length;
+  const totalVisibleProjects = filteredProjects.length;
   const totalVisibleHoles = visibleHoles.length;
   const totalVisibleAssets = visibleAssets.length;
   const totalShared = allHoles.filter((hole) => hole.organization_id !== orgId).length;
@@ -1885,6 +1938,24 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                     {projectOptions.map((project) => (
                       <option key={project.id} value={project.id}>
                         {project.name} ({project.holeCount} holes, {project.assetCount} assets)
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div>
+                <label className="flex min-w-[220px] flex-col gap-2 text-xs uppercase tracking-[0.18em] text-slate-400">
+                  Descriptor Filter
+                  <select
+                    value={descriptorFilter}
+                    onChange={(event) => setDescriptorFilter(event.target.value)}
+                    className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm font-medium text-slate-100 outline-none transition focus:border-cyan-300/40"
+                  >
+                    <option value="">All descriptors</option>
+                    {descriptorOptions.map((descriptor) => (
+                      <option key={descriptor.id} value={descriptor.id}>
+                        {descriptor.name}
                       </option>
                     ))}
                   </select>
@@ -2070,6 +2141,22 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                       {projectOptions.map((project) => (
                         <option key={project.id} value={project.id}>
                           {project.name} ({project.holeCount} holes, {project.assetCount} assets)
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                    Descriptor Filter
+                    <select
+                      value={descriptorFilter}
+                      onChange={(event) => setDescriptorFilter(event.target.value)}
+                      className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm font-medium text-slate-100 outline-none transition focus:border-cyan-300/40"
+                    >
+                      <option value="">All descriptors</option>
+                      {descriptorOptions.map((descriptor) => (
+                        <option key={descriptor.id} value={descriptor.id}>
+                          {descriptor.name}
                         </option>
                       ))}
                     </select>

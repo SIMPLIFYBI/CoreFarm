@@ -1,5 +1,7 @@
 "use client";
 
+import { ComponentIconSvg, getComponentIconOption } from "../utils/componentIcons";
+
 const STATUS_OPTIONS = ["planned", "installed", "inactive", "removed"];
 
 function renderFieldInput(field, value, onChange, disabled) {
@@ -108,7 +110,7 @@ export default function ComponentsTab({
             <div className="glass rounded-xl border border-white/10 p-3 text-sm text-slate-300">Loading components...</div>
           ) : (componentTypesActive || []).length === 0 ? (
             <div className="glass rounded-xl border border-amber-300/30 p-3 text-sm text-amber-300">
-              No active component types found for this org. Add or enable them in the <b>Types</b> tab.
+              No active component types found for this org. Add or enable them in the <b>Setup</b> tab.
             </div>
           ) : (
             <div className="space-y-3">
@@ -122,6 +124,7 @@ export default function ComponentsTab({
                 const t = r.component_type_id ? componentById?.get?.(r.component_type_id) : null;
                 const swatch = t?.color || "#64748b";
                 const schemaFields = Array.isArray(t?.details_schema?.fields) ? t.details_schema.fields : [];
+                const iconOption = getComponentIconOption(t?.icon);
 
                 return (
                   <div key={r.id || `new-comp-${idx}`} className="rounded-xl border border-white/10 bg-white/[0.04] p-3 space-y-3">
@@ -195,7 +198,10 @@ export default function ComponentsTab({
 
                     <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
                       <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1">Category: {t?.category || "n/a"}</span>
-                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1">Icon: {t?.icon || "dot"}</span>
+                      <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-2 py-1">
+                        <ComponentIconSvg icon={iconOption.value} color={swatch} size={16} />
+                        {iconOption.label}
+                      </span>
                     </div>
 
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">

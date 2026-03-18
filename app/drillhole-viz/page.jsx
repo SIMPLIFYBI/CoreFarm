@@ -19,6 +19,7 @@ import { normalizeLithologyPatternKey } from "./utils/lithologyPatterns";
 import HorizontalScrollTabs from "@/app/components/HorizontalScrollTabs";
 import { getAustralianProjectCrsByCode } from "@/lib/coordinateSystems";
 import { deriveHoleCoordinates } from "@/lib/holeCoordinates";
+import { attachHoleDescriptors, fetchHoleDescriptorAssignments } from "@/lib/holeDescriptors";
 
 const PROJECT_SCOPE_STORAGE_KEY = "coretasks:projectScope";
 
@@ -525,7 +526,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
         key: t.key || "",
         name: t.name || "",
         category: t.category || "sensor",
-        icon: t.icon || "dot",
+        icon: t.icon || "generic_marker",
         color: t.color || "#64748b",
         sort_order: t.sort_order ?? 0,
         is_active: t.is_active !== false,
@@ -841,6 +842,13 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
       .replace(/^_+|_+$/g, "");
 
   const parseDetailsSchemaInput = (value) => {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      if (value.fields != null && !Array.isArray(value.fields)) {
+        return { ok: false, message: "Details schema fields must be an array." };
+      }
+      return { ok: true, schema: value };
+    }
+
     const raw = String(value || "").trim();
     if (!raw) return { ok: true, schema: {} };
 
@@ -866,7 +874,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
         key: "",
         name: "",
         category: "sensor",
-        icon: "dot",
+        icon: "generic_marker",
         color: "#38bdf8",
         sort_order: (prev?.length || 0) + 1,
         is_active: true,
@@ -915,7 +923,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
 
     const cleaned = [];
     for (const t of componentTypesAll || []) {
-      const schemaResult = parseDetailsSchemaInput(t.details_schema_json);
+      const schemaResult = parseDetailsSchemaInput(t.details_schema ?? t.details_schema_json);
       if (!schemaResult.ok) {
         toast.error(schemaResult.message);
         return;
@@ -926,7 +934,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
         key: slugifyKey(t.key || t.name),
         name: String(t.name || "").trim(),
         category: String(t.category || "sensor").trim() || "sensor",
-        icon: String(t.icon || "dot").trim() || "dot",
+        icon: String(t.icon || "generic_marker").trim() || "generic_marker",
         color: t.color || "#38bdf8",
         sort_order: Number.isFinite(Number(t.sort_order)) ? Number(t.sort_order) : 0,
         is_active: t.is_active !== false,
@@ -1612,43 +1620,48 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
         return;
       }
 
-      setHoles(
-        (data || []).map((h) => ({
-          ...(() => {
-            const derived = deriveHoleCoordinates({
-              collarLongitude: h.collar_longitude ?? null,
-              collarLatitude: h.collar_latitude ?? null,
-              collarEasting: h.collar_easting ?? null,
-              collarNorthing: h.collar_northing ?? null,
-              projectCrsCode: h.projects?.coordinate_crs_code ?? null,
-            });
+      const mappedHoles = (data || []).map((h) => ({
+        ...(() => {
+          const derived = deriveHoleCoordinates({
+            collarLongitude: h.collar_longitude ?? null,
+            collarLatitude: h.collar_latitude ?? null,
+            collarEasting: h.collar_easting ?? null,
+            collarNorthing: h.collar_northing ?? null,
+            projectCrsCode: h.projects?.coordinate_crs_code ?? null,
+          });
 
-            return {
-              collar_longitude: derived.collarLongitude,
-              collar_latitude: derived.collarLatitude,
-              collar_easting: h.collar_easting ?? null,
-              collar_northing: h.collar_northing ?? null,
-            };
-          })(),
-          id: h.id,
-          organization_id: h.organization_id,
-          hole_id: h.hole_id,
-          project_id: h.project_id ?? null,
-          projects: h.projects ?? null, // <-- keep joined project info
-          depth: h.depth ?? null,
-          planned_depth: h.planned_depth ?? null,
-          water_level_m: h.water_level_m ?? null,
-          azimuth: h.azimuth ?? null,
-          dip: h.dip ?? null,
-          collar_elevation_m: h.collar_elevation_m ?? null,
-          collar_source: h.collar_source ?? null,
-          started_at: h.started_at ?? null,
-          completed_at: h.completed_at ?? null,
-          completion_status: h.completion_status ?? null,
-          completion_notes: h.completion_notes ?? null,
-        }))
+          return {
+            collar_longitude: derived.collarLongitude,
+            collar_latitude: derived.collarLatitude,
+            collar_easting: h.collar_easting ?? null,
+            collar_northing: h.collar_northing ?? null,
+          };
+        })(),
+        id: h.id,
+        organization_id: h.organization_id,
+        hole_id: h.hole_id,
+        project_id: h.project_id ?? null,
+        projects: h.projects ?? null,
+        depth: h.depth ?? null,
+        planned_depth: h.planned_depth ?? null,
+        water_level_m: h.water_level_m ?? null,
+        azimuth: h.azimuth ?? null,
+        dip: h.dip ?? null,
+        collar_elevation_m: h.collar_elevation_m ?? null,
+        collar_source: h.collar_source ?? null,
+        started_at: h.started_at ?? null,
+        completed_at: h.completed_at ?? null,
+        completion_status: h.completion_status ?? null,
+        completion_notes: h.completion_notes ?? null,
+      }));
+      const descriptorsByHole = await fetchHoleDescriptorAssignments(
+        supabase,
+        mappedHoles.map((hole) => hole.id)
       );
-      setSelectedHoleId((prev) => ((data || []).some((h) => h.id === prev) ? prev : ""));
+      const holesWithDescriptors = attachHoleDescriptors(mappedHoles, descriptorsByHole);
+
+      setHoles(holesWithDescriptors);
+      setSelectedHoleId((prev) => (holesWithDescriptors.some((h) => h.id === prev) ? prev : ""));
       setLoading(false);
     })();
   }, [supabase, selectedOrgId, projectScope]);
@@ -1959,6 +1972,11 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
               <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{totalHoles} loaded holes</span>
               <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{selectedHole ? selectedHole.hole_id : "No selection"}</span>
+              {selectedHole?.descriptors?.map((descriptor) => (
+                <span key={descriptor.id} className="rounded-full border border-cyan-300/15 bg-cyan-300/10 px-3 py-1.5 text-cyan-100">
+                  {descriptor.name}
+                </span>
+              ))}
             </div>
 
             <div className="flex flex-col gap-3 md:flex-row md:items-center">
@@ -2062,7 +2080,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
                     />
 
                     {canSeeTypesTab && (
-                      <TabButton active={drawerTab === "types"} onClick={() => setDrawerTab("types")} label="Types" />
+                      <TabButton active={drawerTab === "types"} onClick={() => setDrawerTab("types")} label="Setup" />
                     )}
                 </HorizontalScrollTabs>
               </div>

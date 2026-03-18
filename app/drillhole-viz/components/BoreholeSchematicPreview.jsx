@@ -4,6 +4,7 @@ import { useId, useMemo } from "react";
 import { computeMaxDepth } from "../utils/computeMaxDepth";
 import { DEPTH_PAD_TOP, DEPTH_PAD_BOTTOM, PX_PER_M, svgHeightForMaxDepth } from "../utils/depthScaleConfig";
 import { normalizeLithologyPatternKey } from "../utils/lithologyPatterns";
+import { ComponentIconGlyph } from "../utils/componentIcons";
 
 function makeSvgIdFragment(value) {
   return String(value || "")
@@ -245,49 +246,6 @@ export default function BoreholeSchematicPreview({
     return `${raw.slice(0, Math.max(0, maxChars - 1))}…`;
   };
 
-  const renderComponentIcon = (icon, cx, cy, selected) => {
-    const key = String(icon || "dot").toLowerCase();
-    const stroke = "rgba(255,255,255,0.96)";
-    const baseProps = { stroke, strokeWidth: selected ? 1.9 : 1.6, fill: "none", strokeLinecap: "round", strokeLinejoin: "round" };
-
-    if (key.includes("pump")) {
-      return (
-        <g>
-          <path d={`M ${cx - 3.5} ${cy + 3.5} L ${cx + 4.2} ${cy} L ${cx - 3.5} ${cy - 3.5} Z`} fill={stroke} opacity="0.95" />
-          <line x1={cx - 5.5} y1={cy} x2={cx - 1.8} y2={cy} {...baseProps} />
-        </g>
-      );
-    }
-
-    if (key.includes("seal") || key.includes("packer")) {
-      return <rect x={cx - 3.2} y={cy - 3.2} width={6.4} height={6.4} transform={`rotate(45 ${cx} ${cy})`} fill={stroke} opacity="0.95" />;
-    }
-
-    if (key.includes("wave") || key.includes("level")) {
-      return <path d={`M ${cx - 4.5} ${cy + 1.4} Q ${cx - 2.8} ${cy - 1.4} ${cx - 1.1} ${cy + 1.4} T ${cx + 2.3} ${cy + 1.4} T ${cx + 5.7} ${cy + 1.4}`} {...baseProps} />;
-    }
-
-    if (key.includes("valve")) {
-      return (
-        <g>
-          <rect x={cx - 3.8} y={cy - 3.1} width={7.6} height={6.2} rx="1.5" fill={stroke} opacity="0.92" />
-          <line x1={cx} y1={cy - 5.4} x2={cx} y2={cy + 5.4} stroke="rgba(15,23,42,0.9)" strokeWidth="1.2" />
-        </g>
-      );
-    }
-
-    if (key.includes("gauge") || key.includes("sensor")) {
-      return (
-        <g>
-          <circle cx={cx} cy={cy} r={3.5} {...baseProps} />
-          <line x1={cx} y1={cy} x2={cx + 2.2} y2={cy - 2.2} {...baseProps} />
-        </g>
-      );
-    }
-
-    return <circle cx={cx} cy={cy} r={2.7} fill={stroke} opacity="0.95" />;
-  };
-
   const selectedComponentPopup = useMemo(() => {
     if (!selectedComponent) return null;
     const type = componentById?.get?.(selectedComponent.typeId);
@@ -518,7 +476,7 @@ export default function BoreholeSchematicPreview({
                   <circle
                     cx={componentRailX}
                     cy={y}
-                    r={isSelected ? 10 : 8}
+                    r={isSelected ? 11 : 9}
                     fill={color}
                     stroke={isSelected ? "rgba(255,255,255,0.95)" : "rgba(15,23,42,0.55)"}
                     strokeWidth={isSelected ? "3" : "2"}
@@ -527,7 +485,7 @@ export default function BoreholeSchematicPreview({
                       {label} . {it.depth.toFixed(1)}m{it.notes ? ` . ${it.notes}` : ""}
                     </title>
                   </circle>
-                  {renderComponentIcon(t?.icon, componentRailX, y, isSelected)}
+                  <ComponentIconGlyph icon={t?.icon} cx={componentRailX} cy={y} selected={isSelected} scale={1.12} />
                 </g>
                 {!compact && (
                   <text x={componentCalloutX} y={y + 4} textAnchor="start" fontSize="11" fill={isSelected ? "rgba(255,255,255,0.96)" : "rgba(226,232,240,0.84)"}>

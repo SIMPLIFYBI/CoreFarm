@@ -7,6 +7,7 @@ import { useOrg } from "@/lib/OrgContext";
 import { parseTable } from "@/lib/parseTable";
 import { getAustralianProjectCrsByCode } from "@/lib/coordinateSystems";
 import { deriveHoleCoordinates } from "@/lib/holeCoordinates";
+import { fetchOrgHoleDescriptors, resolveHoleDescriptorTokens } from "@/lib/holeDescriptors";
 import CoreTaskPanelHeader from "./CoreTaskPanelHeader";
 
 const BULK_COLUMNS = [
@@ -28,6 +29,7 @@ const BULK_COLUMNS = [
   { key: "completion_notes", required: false, description: "Free text." },
   { key: "drilling_diameter", required: false, description: "NQ/HQ/PQ/Other." },
   { key: "drilling_contractor", required: false, description: "Contractor name." },
+  { key: "descriptor_keys", required: false, description: "Optional descriptor keys or names separated with | ; or newline." },
 ];
 
 function toNumOrNull(value) {
@@ -68,6 +70,7 @@ export default function BulkUploaderTab({ projectScope = "own" }) {
   const { orgId } = useOrg();
 
   const [projects, setProjects] = useState([]);
+  const [availableDescriptors, setAvailableDescriptors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [bulkText, setBulkText] = useState("");
@@ -76,15 +79,16 @@ export default function BulkUploaderTab({ projectScope = "own" }) {
 
   const sampleHeaders = useMemo(
     () =>
-      "hole_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_easting,collar_northing,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,drilling_diameter,drilling_contractor\n" +
-      "HOLE-001,150,200,12.5,135.0,-60.0,121.12345,-27.12345,,,385.2,gps,2026-03-01T06:00,2026-03-02T18:00,completed,Completed to planned depth,NQ,North Drilling\n" +
-      "HOLE-002,220,250,18.0,142.5,-55.0,,,500120.4,6987450.2,388.1,survey,2026-03-03T07:30,2026-03-04T16:40,completed,Deviation survey complete,HQ,Westline Drilling\n",
+      "hole_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_easting,collar_northing,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,drilling_diameter,drilling_contractor,descriptor_keys\n" +
+      "HOLE-001,150,200,12.5,135.0,-60.0,121.12345,-27.12345,,,385.2,gps,2026-03-01T06:00,2026-03-02T18:00,completed,Completed to planned depth,NQ,North Drilling,diamond|hydrogeology\n" +
+      "HOLE-002,220,250,18.0,142.5,-55.0,,,500120.4,6987450.2,388.1,survey,2026-03-03T07:30,2026-03-04T16:40,completed,Deviation survey complete,HQ,Westline Drilling,monitoring\n",
     []
   );
 
   useEffect(() => {
     if (!orgId || projectScope === "shared") {
       setProjects([]);
+      setAvailableDescriptors([]);
       setBulkProjectId("");
       setLoading(false);
       return;
@@ -108,6 +112,15 @@ export default function BulkUploaderTab({ projectScope = "own" }) {
       const nextProjects = data || [];
       setProjects(nextProjects);
       setBulkProjectId((current) => resolveDefaultProjectId(nextProjects, current));
+
+      try {
+        const descriptorRows = await fetchOrgHoleDescriptors(supabase, orgId);
+        setAvailableDescriptors(descriptorRows);
+      } catch (descriptorError) {
+        setAvailableDescriptors([]);
+        toast.error(descriptorError?.message || "Failed to load hole descriptors");
+      }
+
       setLoading(false);
     })();
   }, [orgId, projectScope, supabase]);
@@ -198,6 +211,7 @@ export default function BulkUploaderTab({ projectScope = "own" }) {
     if (missing.length) return toast.error(`Missing required headers: ${missing.join(", ")}`);
 
     const payloads = [];
+    const descriptorAssignments = [];
     for (const [index, row] of rows.entries()) {
       const holeId = String(row.hole_id || "").trim();
       if (!holeId) continue;
@@ -233,6 +247,11 @@ export default function BulkUploaderTab({ projectScope = "own" }) {
       if (String(row.started_at || "").trim() && !startedAt) return toast.error(`${rowLabel}: started_at is invalid`);
       if (String(row.completed_at || "").trim() && !completedAt) return toast.error(`${rowLabel}: completed_at is invalid`);
 
+      const descriptorMatch = resolveHoleDescriptorTokens(row.descriptor_keys, availableDescriptors);
+      if (descriptorMatch.unmatchedTokens.length) {
+        return toast.error(`${rowLabel}: unknown descriptors ${descriptorMatch.unmatchedTokens.join(", ")}`);
+      }
+
       payloads.push({
         hole_id: holeId,
         depth: toNumOrNull(row.depth),
@@ -256,14 +275,38 @@ export default function BulkUploaderTab({ projectScope = "own" }) {
         state: "proposed",
         organization_id: orgId || null,
       });
+
+      descriptorAssignments.push({
+        hole_id: holeId,
+        descriptorIds: descriptorMatch.descriptorIds,
+      });
     }
 
     if (!payloads.length) return toast.error("No valid rows (missing hole_id)");
 
     setImporting(true);
-    const { error } = await supabase.from("holes").insert(payloads);
+    const { data: insertedRows, error } = await supabase.from("holes").insert(payloads).select("id,hole_id");
     setImporting(false);
     if (error) return toast.error(error.message);
+
+    const assignmentRows = [];
+    const insertedByHoleId = new Map((insertedRows || []).map((row) => [row.hole_id, row.id]));
+    descriptorAssignments.forEach((row) => {
+      const insertedHoleId = insertedByHoleId.get(row.hole_id);
+      if (!insertedHoleId) return;
+      row.descriptorIds.forEach((descriptorId) => {
+        assignmentRows.push({
+          organization_id: orgId || null,
+          hole_id: insertedHoleId,
+          descriptor_id: descriptorId,
+        });
+      });
+    });
+
+    if (assignmentRows.length) {
+      const { error: assignmentError } = await supabase.from("hole_descriptor_assignments").insert(assignmentRows);
+      if (assignmentError) return toast.error(assignmentError.message || "Holes imported but descriptor assignments failed");
+    }
 
     toast.success(`Inserted ${payloads.length} holes`);
     setBulkText("");
@@ -313,6 +356,7 @@ export default function BulkUploaderTab({ projectScope = "own" }) {
                 </select>
               </label>
               <div className="text-xs text-slate-400">Every imported hole will be assigned to this project.</div>
+              <div className="text-xs text-slate-400">Use the optional `descriptor_keys` column to attach org-defined hole descriptors during import.</div>
               {selectedBulkProject ? (
                 <div className="rounded-lg border border-cyan-300/15 bg-cyan-400/5 px-3 py-2 text-xs text-slate-300">
                   Working CRS: {formatProjectCrs(selectedBulkProject)}
@@ -351,6 +395,7 @@ export default function BulkUploaderTab({ projectScope = "own" }) {
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 space-y-2">
               <div className="text-sm font-medium text-slate-200">Validation</div>
               {!bulkProjectId ? <div className="text-xs text-rose-300">Choose a project to enable import.</div> : null}
+              {!availableDescriptors.length ? <div className="text-xs text-slate-400">No active hole descriptors are configured for this org yet. Leave `descriptor_keys` blank or create descriptors first.</div> : null}
               {bulkInvalidHeaders.length > 0 ? <div className="text-xs text-amber-300">Unexpected headers: {bulkInvalidHeaders.join(", ")}</div> : null}
               {bulkMissingRequired.length > 0 ? <div className="text-xs text-rose-300">Missing required headers: {bulkMissingRequired.join(", ")}</div> : null}
               {bulkInvalidHeaders.length === 0 && bulkMissingRequired.length === 0 && parsed.length > 0 ? <div className="text-xs text-emerald-300">Headers look good and ready to import.</div> : null}
