@@ -1236,7 +1236,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
       {
         id: null,
         depth_m: "",
-        component_type_id: componentTypesActive?.[0]?.id || "",
+        component_type_id: "",
         label: "",
         status: "installed",
         details: {},

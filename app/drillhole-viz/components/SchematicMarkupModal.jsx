@@ -162,12 +162,12 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
 
   const stageStyle = useMemo(() => {
     if (!snapshot?.width || !snapshot?.height) return { width: "100%", aspectRatio: "1 / 1" };
-    const maxWidth = Math.max(280, availableStageArea.width - 12);
-    const maxHeight = Math.max(220, availableStageArea.height - 12);
+    const maxWidth = Math.max(120, availableStageArea.width - 24);
+    const maxHeight = Math.max(120, availableStageArea.height - 24);
     const scale = Math.min(maxWidth / snapshot.width, maxHeight / snapshot.height, 1);
     return {
-      width: `${Math.max(320, snapshot.width * scale)}px`,
-      height: `${Math.max(220, snapshot.height * scale)}px`,
+      width: `${snapshot.width * scale}px`,
+      height: `${snapshot.height * scale}px`,
     };
   }, [availableStageArea.height, availableStageArea.width, snapshot?.height, snapshot?.width]);
 
@@ -252,8 +252,9 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
 
   return (
     <div className="fixed inset-0 z-[120] bg-[rgba(2,6,23,0.86)] backdrop-blur-md">
-      <div className="flex h-full flex-col px-4 py-4 md:px-6 md:py-5">
-        <div className="flex flex-col gap-3 rounded-[24px] border border-white/10 bg-slate-950/80 px-4 py-4 shadow-[0_24px_80px_rgba(2,6,23,0.42)] md:flex-row md:items-start md:justify-between">
+      <div className="flex h-full min-h-0 flex-col overflow-hidden px-4 py-4 md:px-6 md:py-5">
+        <div className="sticky top-0 z-20 shrink-0 rounded-[24px] border border-white/10 bg-slate-950/90 px-4 py-4 shadow-[0_24px_80px_rgba(2,6,23,0.42)] backdrop-blur-md">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Markup Mode</div>
             <div className="mt-1 text-lg font-semibold text-white">Static schematic review layer</div>
@@ -322,12 +323,13 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
             </button>
           </div>
         </div>
+        </div>
 
-        <div ref={viewportRef} className="mt-4 flex-1 overflow-auto rounded-[28px] border border-white/10 bg-slate-950/65 p-3 md:p-5">
+        <div ref={viewportRef} className="mt-4 min-h-0 flex-1 overflow-auto rounded-[28px] border border-white/10 bg-slate-950/65 p-3 md:p-5">
           <div className="flex min-h-full items-center justify-center">
             <div
               ref={stageRef}
-              className="relative overflow-hidden rounded-[20px] border border-white/10 bg-[#08111d] shadow-[0_24px_80px_rgba(2,6,23,0.35)]"
+              className="relative max-w-full max-h-full overflow-hidden rounded-[20px] border border-white/10 bg-[#08111d] shadow-[0_24px_80px_rgba(2,6,23,0.35)]"
               style={stageStyle}
             >
               <img src={snapshot.src} alt="Schematic snapshot for markup" className="block h-full w-full select-none object-contain" draggable={false} />
