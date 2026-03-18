@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import toast from "react-hot-toast";
 import DepthAxisBar from "./DepthAxisBar";
 import BoreholeSchematicPreview from "./BoreholeSchematicPreview";
+import SchematicMarkupModal from "./SchematicMarkupModal";
 import { computeMaxDepth } from "../utils/computeMaxDepth";
 import { svgHeightForMaxDepth } from "../utils/depthScaleConfig";
 
@@ -16,9 +18,14 @@ export default function SchematicArea({
   constructionById,
   annulusRows,
   annulusById,
+  onExportPdf,
+  exportDisabledReason,
 }) {
   const [selectedComponentId, setSelectedComponentId] = useState("");
   const [schematicZoom, setSchematicZoom] = useState(1);
+  const [openingMarkup, setOpeningMarkup] = useState(false);
+  const [markupSnapshot, setMarkupSnapshot] = useState(null);
+  const [markupOpen, setMarkupOpen] = useState(false);
 
   const zoomPct = Math.round(schematicZoom * 100);
   const zoomOut = () => setSchematicZoom((prev) => Math.max(0.7, Math.round((prev - 0.15) * 100) / 100));
@@ -55,7 +62,48 @@ export default function SchematicArea({
       .sort((a, b) => (a?.sort_order || 0) - (b?.sort_order || 0) || String(a?.name || "").localeCompare(String(b?.name || "")));
   }, [componentById, componentRows]);
 
+  const openMarkupMode = async () => {
+    if (!selectedHole || openingMarkup) return;
+
+    const element = document.getElementById("schematic-export-root");
+    if (!element) {
+      toast.error("Could not find the schematic snapshot.");
+      return;
+    }
+
+    try {
+      setOpeningMarkup(true);
+      const { toPng } = await import("html-to-image");
+      const src = await toPng(element, {
+        cacheBust: true,
+        pixelRatio: 3,
+        backgroundColor: "#0b1220",
+      });
+
+      const probe = new Image();
+      await new Promise((resolve, reject) => {
+        probe.onload = resolve;
+        probe.onerror = reject;
+        probe.src = src;
+      });
+
+      setMarkupSnapshot({ src, width: probe.width, height: probe.height });
+      setMarkupOpen(true);
+    } catch (error) {
+      console.error(error);
+      toast.error(error?.message || "Failed to open markup mode.");
+    } finally {
+      setOpeningMarkup(false);
+    }
+  };
+
+  const closeMarkupMode = () => {
+    setMarkupOpen(false);
+    setMarkupSnapshot(null);
+  };
+
   return (
+    <>
     <div className="min-w-0 flex-1 overflow-hidden bg-slate-950/40">
       <div className="h-full overflow-auto p-3 md:p-5">
         <div className="overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/55 shadow-[0_24px_80px_rgba(2,6,23,0.32)] backdrop-blur-xl">
@@ -93,6 +141,12 @@ export default function SchematicArea({
                     </div>
 
                     <div className="inline-flex items-center gap-2 self-start rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-2 text-xs text-slate-300">
+                      <button type="button" className="btn btn-xs" onClick={openMarkupMode} disabled={!selectedHole || openingMarkup}>
+                        {openingMarkup ? "Opening markup..." : "Markup mode"}
+                      </button>
+                      <button type="button" className="btn btn-xs btn-primary" onClick={onExportPdf} disabled={!!exportDisabledReason} title={exportDisabledReason || "Export PDF"}>
+                        Export PDF
+                      </button>
                       <span className="text-slate-500">Zoom</span>
                       <button type="button" className="btn btn-xs h-7 min-h-0 px-2" onClick={zoomOut} aria-label="Zoom out schematic">
                         -
@@ -219,6 +273,8 @@ export default function SchematicArea({
         <div className="mt-4 text-xs text-slate-500">Orientation is shown as a companion overlay, not a trajectory deformation of the schematic.</div>
       </div>
     </div>
+    <SchematicMarkupModal open={markupOpen} snapshot={markupSnapshot} hole={selectedHole} onClose={closeMarkupMode} />
+    </>
   );
 }
 
