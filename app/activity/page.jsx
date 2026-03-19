@@ -5,6 +5,44 @@ import toast from "react-hot-toast";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 
+function MobileFilterDrawer({ open, onClose, children }) {
+  useEffect(() => {
+    if (!open) return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [open]);
+
+  return (
+    <div className={`fixed inset-0 z-[90] md:hidden ${open ? "pointer-events-auto" : "pointer-events-none"}`} aria-hidden={!open}>
+      <div
+        className={`absolute inset-0 bg-slate-950/70 backdrop-blur-[2px] transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0"}`}
+        onClick={onClose}
+      />
+      <div
+        className={`absolute inset-x-0 bottom-0 rounded-t-[28px] border-t border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))] shadow-[0_-24px_80px_rgba(2,6,23,0.55)] transition-transform duration-300 ${open ? "translate-y-0" : "translate-y-full"}`}
+        style={{ maxHeight: "82dvh" }}
+      >
+        <div className="mx-auto mt-3 h-1.5 w-14 rounded-full bg-white/15" />
+        <div className="flex items-center justify-between gap-3 px-4 py-4">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Filters</div>
+            <div className="mt-1 text-base font-semibold text-white">Refine activity results</div>
+          </div>
+          <button type="button" className="btn btn-xs" onClick={onClose}>
+            Close
+          </button>
+        </div>
+        <div className="max-h-[calc(82dvh-76px)] overflow-y-auto px-4 pb-5">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function formatDateTime(value) {
   if (!value) return "—";
   const dt = new Date(value);
@@ -44,6 +82,7 @@ export default function ActivityPage() {
   const [assetFilter, setAssetFilter] = useState("");
   const [activityFilter, setActivityFilter] = useState("");
   const [query, setQuery] = useState("");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const [orgCurrency, setOrgCurrency] = useState("");
   const [orgTaxRate, setOrgTaxRate] = useState(null); // percent, nullable
@@ -372,6 +411,10 @@ export default function ActivityPage() {
     setExpandedPlods((prev) => ({ ...prev, [plodId]: !prev[plodId] }));
   };
 
+  const activeFilterCount = useMemo(() => {
+    return [vendorFilter, assetFilter, activityFilter, query.trim()].filter(Boolean).length;
+  }, [activityFilter, assetFilter, query, vendorFilter]);
+
   return (
     <div className="mx-auto max-w-6xl p-4 md:p-6 space-y-5">
       <section className="card p-4 md:p-5">
@@ -381,7 +424,33 @@ export default function ActivityPage() {
         </p>
       </section>
 
-      <section className="glass rounded-2xl border border-white/10 p-4 md:p-5 space-y-4">
+      <section className="glass rounded-2xl border border-white/10 p-4 md:hidden space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block text-xs text-slate-300">
+            Date From
+            <input className="input mt-1 h-10 text-[11px]" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+          </label>
+          <label className="block text-xs text-slate-300">
+            Date To
+            <input className="input mt-1 h-10 text-[11px]" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+          </label>
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <button type="button" className="btn btn-3d-glass" onClick={() => setMobileFiltersOpen(true)}>
+            Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}
+          </button>
+          <button type="button" className="btn btn-3d-primary" onClick={exportCsv}>
+            Export CSV
+          </button>
+        </div>
+
+        <div className="text-xs text-slate-300">
+          Showing <span className="font-medium text-slate-100">{filteredRows.length}</span> rows
+        </div>
+      </section>
+
+      <section className="hidden glass rounded-2xl border border-white/10 p-4 md:p-5 space-y-4 md:block">
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3">
           <label className="block text-xs text-slate-300 xl:col-span-1">
             Date From
@@ -450,6 +519,66 @@ export default function ActivityPage() {
           </div>
         </div>
       </section>
+
+      <MobileFilterDrawer open={mobileFiltersOpen} onClose={() => setMobileFiltersOpen(false)}>
+        <div className="space-y-4">
+          <label className="block text-xs text-slate-300">
+            Vendor
+            <select className="select-gradient-sm mt-1 h-11 block w-full" value={vendorFilter} onChange={(event) => setVendorFilter(event.target.value)}>
+              <option value="">All vendors</option>
+              {vendorOptions.map((vendor) => (
+                <option key={vendor} value={vendor}>
+                  {vendor}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block text-xs text-slate-300">
+            Asset
+            <select className="select-gradient-sm mt-1 h-11 block w-full" value={assetFilter} onChange={(event) => setAssetFilter(event.target.value)}>
+              <option value="">All assets</option>
+              {assetOptions.map((asset) => (
+                <option key={asset} value={asset}>
+                  {asset}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block text-xs text-slate-300">
+            Activity
+            <select className="select-gradient-sm mt-1 h-11 block w-full" value={activityFilter} onChange={(event) => setActivityFilter(event.target.value)}>
+              <option value="">All activities</option>
+              {activityOptions.map((activity) => (
+                <option key={activity} value={activity}>
+                  {activity}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block text-xs text-slate-300">
+            Search
+            <input
+              className="input mt-1 h-11 text-sm"
+              type="text"
+              placeholder="Vendor, asset, notes..."
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <button type="button" className="btn btn-3d-glass" onClick={clearFilters}>
+              Clear filters
+            </button>
+            <button type="button" className="btn btn-3d-primary" onClick={() => setMobileFiltersOpen(false)}>
+              Apply
+            </button>
+          </div>
+        </div>
+      </MobileFilterDrawer>
 
       <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="glass rounded-xl border border-white/10 p-4">

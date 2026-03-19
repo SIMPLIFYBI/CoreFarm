@@ -7,6 +7,13 @@ import { exportMarkedupSchematicPdf } from "../utils/exportMarkedupSchematicPdf"
 
 const COLOR_OPTIONS = ["#f8fafc", "#ef4444", "#f59e0b", "#22c55e", "#38bdf8", "#a855f7"];
 const SIZE_OPTIONS = [2, 4, 6, 10];
+const TOOL_OPTIONS = [
+  ["pen", "Pen"],
+  ["highlighter", "Highlight"],
+  ["arrow", "Arrow"],
+  ["rect", "Box"],
+  ["text", "Text"],
+];
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -162,12 +169,16 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
 
   const stageStyle = useMemo(() => {
     if (!snapshot?.width || !snapshot?.height) return { width: "100%", aspectRatio: "1 / 1" };
-    const maxWidth = Math.max(120, availableStageArea.width - 24);
-    const maxHeight = Math.max(120, availableStageArea.height - 24);
+    const compactViewport = availableStageArea.width < 768 || availableStageArea.height < 720;
+    const stageInset = compactViewport ? 8 : 24;
+    const maxWidth = Math.max(120, availableStageArea.width - stageInset);
+    const maxHeight = Math.max(120, availableStageArea.height - stageInset);
     const scale = Math.min(maxWidth / snapshot.width, maxHeight / snapshot.height, 1);
     return {
       width: `${snapshot.width * scale}px`,
       height: `${snapshot.height * scale}px`,
+      maxWidth: "100%",
+      maxHeight: "100%",
     };
   }, [availableStageArea.height, availableStageArea.width, snapshot?.height, snapshot?.width]);
 
@@ -252,84 +263,153 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
 
   return (
     <div className="fixed inset-0 z-[120] bg-[rgba(2,6,23,0.86)] backdrop-blur-md">
-      <div className="flex h-full min-h-0 flex-col overflow-hidden px-4 py-4 md:px-6 md:py-5">
-        <div className="sticky top-0 z-20 shrink-0 rounded-[24px] border border-white/10 bg-slate-950/90 px-4 py-4 shadow-[0_24px_80px_rgba(2,6,23,0.42)] backdrop-blur-md">
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Markup Mode</div>
-            <div className="mt-1 text-lg font-semibold text-white">Static schematic review layer</div>
-            <div className="mt-1 text-sm text-slate-300">Annotate a frozen snapshot, then export the marked-up result as PDF.</div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {[
-              ["pen", "Pen"],
-              ["highlighter", "Highlight"],
-              ["arrow", "Arrow"],
-              ["rect", "Box"],
-              ["text", "Text"],
-            ].map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                className={`btn btn-xs ${tool === value ? "btn-primary" : ""}`}
-                onClick={() => setTool(value)}
-              >
-                {label}
-              </button>
-            ))}
-
-            <div className="ml-0 flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 md:ml-2">
-              {COLOR_OPTIONS.map((swatch) => (
-                <button
-                  key={swatch}
-                  type="button"
-                  className={`h-6 w-6 rounded-full border ${color === swatch ? "border-white" : "border-white/10"}`}
-                  style={{ backgroundColor: swatch }}
-                  onClick={() => setColor(swatch)}
-                  aria-label={`Use ${swatch} annotation color`}
-                />
-              ))}
+      <div className="flex h-[100dvh] min-h-0 flex-col overflow-hidden px-2 py-2 md:h-full md:px-6 md:py-5">
+        <div className="sticky top-0 z-20 shrink-0 rounded-[20px] border border-white/10 bg-slate-950/92 px-3 py-3 shadow-[0_24px_80px_rgba(2,6,23,0.42)] backdrop-blur-md md:hidden">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Markup Mode</div>
+              <div className="mt-1 text-base font-semibold text-white">Static schematic review</div>
+              <div className="mt-1 text-xs leading-5 text-slate-300">Markup the frozen schematic, then export the result.</div>
             </div>
 
-            <select className="select h-8 min-h-0 w-[88px]" value={size} onChange={(event) => setSize(Number(event.target.value))}>
-              {SIZE_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  Size {option}
-                </option>
+            <div className="flex shrink-0 items-center gap-2">
+              <button type="button" className="btn btn-xs btn-primary" onClick={onExport} disabled={exporting}>
+                {exporting ? "Exporting..." : "Export"}
+              </button>
+              <button type="button" className="btn btn-xs" onClick={onClose}>
+                Close
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3 overflow-x-auto pb-1">
+            <div className="flex min-w-max items-center gap-2">
+              {TOOL_OPTIONS.map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`btn btn-xs ${tool === value ? "btn-primary" : ""}`}
+                  onClick={() => setTool(value)}
+                >
+                  {label}
+                </button>
               ))}
-            </select>
+            </div>
+          </div>
 
-            {tool === "text" ? (
-              <input
-                className="input h-8 min-h-0 w-[180px]"
-                value={textValue}
-                onChange={(event) => setTextValue(event.target.value)}
-                placeholder="Text to place"
-              />
-            ) : null}
+          <div className="mt-2 overflow-x-auto pb-1">
+            <div className="flex min-w-max items-center gap-2">
+              <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2 py-1">
+                {COLOR_OPTIONS.map((swatch) => (
+                  <button
+                    key={swatch}
+                    type="button"
+                    className={`h-6 w-6 rounded-full border ${color === swatch ? "border-white" : "border-white/10"}`}
+                    style={{ backgroundColor: swatch }}
+                    onClick={() => setColor(swatch)}
+                    aria-label={`Use ${swatch} annotation color`}
+                  />
+                ))}
+              </div>
 
-            <button type="button" className="btn btn-xs" onClick={undo} disabled={!annotations.length}>
-              Undo
-            </button>
-            <button type="button" className="btn btn-xs" onClick={clear} disabled={!annotations.length && !draft}>
-              Clear
-            </button>
-            <button type="button" className="btn btn-xs btn-primary" onClick={onExport} disabled={exporting}>
-              {exporting ? "Exporting..." : "Export PDF"}
-            </button>
-            <button type="button" className="btn btn-xs" onClick={onClose}>
-              Close
-            </button>
+              <select className="select h-8 min-h-0 w-[88px]" value={size} onChange={(event) => setSize(Number(event.target.value))}>
+                {SIZE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    Size {option}
+                  </option>
+                ))}
+              </select>
+
+              <button type="button" className="btn btn-xs" onClick={undo} disabled={!annotations.length}>
+                Undo
+              </button>
+              <button type="button" className="btn btn-xs" onClick={clear} disabled={!annotations.length && !draft}>
+                Clear
+              </button>
+            </div>
+          </div>
+
+          {tool === "text" ? (
+            <input
+              className="input mt-2 h-9 min-h-0 w-full"
+              value={textValue}
+              onChange={(event) => setTextValue(event.target.value)}
+              placeholder="Text to place"
+            />
+          ) : null}
+        </div>
+
+        <div className="sticky top-0 z-20 hidden shrink-0 rounded-[24px] border border-white/10 bg-slate-950/90 px-4 py-4 shadow-[0_24px_80px_rgba(2,6,23,0.42)] backdrop-blur-md md:block">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Markup Mode</div>
+              <div className="mt-1 text-lg font-semibold text-white">Static schematic review layer</div>
+              <div className="mt-1 text-sm text-slate-300">Annotate a frozen snapshot, then export the marked-up result as PDF.</div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {TOOL_OPTIONS.map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`btn btn-xs ${tool === value ? "btn-primary" : ""}`}
+                  onClick={() => setTool(value)}
+                >
+                  {label}
+                </button>
+              ))}
+
+              <div className="ml-0 flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 md:ml-2">
+                {COLOR_OPTIONS.map((swatch) => (
+                  <button
+                    key={swatch}
+                    type="button"
+                    className={`h-6 w-6 rounded-full border ${color === swatch ? "border-white" : "border-white/10"}`}
+                    style={{ backgroundColor: swatch }}
+                    onClick={() => setColor(swatch)}
+                    aria-label={`Use ${swatch} annotation color`}
+                  />
+                ))}
+              </div>
+
+              <select className="select h-8 min-h-0 w-[88px]" value={size} onChange={(event) => setSize(Number(event.target.value))}>
+                {SIZE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    Size {option}
+                  </option>
+                ))}
+              </select>
+
+              {tool === "text" ? (
+                <input
+                  className="input h-8 min-h-0 w-[180px]"
+                  value={textValue}
+                  onChange={(event) => setTextValue(event.target.value)}
+                  placeholder="Text to place"
+                />
+              ) : null}
+
+              <button type="button" className="btn btn-xs" onClick={undo} disabled={!annotations.length}>
+                Undo
+              </button>
+              <button type="button" className="btn btn-xs" onClick={clear} disabled={!annotations.length && !draft}>
+                Clear
+              </button>
+              <button type="button" className="btn btn-xs btn-primary" onClick={onExport} disabled={exporting}>
+                {exporting ? "Exporting..." : "Export PDF"}
+              </button>
+              <button type="button" className="btn btn-xs" onClick={onClose}>
+                Close
+              </button>
+            </div>
           </div>
         </div>
-        </div>
 
-        <div ref={viewportRef} className="mt-4 min-h-0 flex-1 overflow-auto rounded-[28px] border border-white/10 bg-slate-950/65 p-3 md:p-5">
-          <div className="flex min-h-full items-center justify-center">
+        <div ref={viewportRef} className="mt-2 min-h-0 flex-1 overflow-auto rounded-[24px] border border-white/10 bg-slate-950/65 p-2 overscroll-contain md:mt-4 md:rounded-[28px] md:p-5">
+          <div className="flex min-h-full items-start justify-center md:items-center">
             <div
               ref={stageRef}
-              className="relative max-w-full max-h-full overflow-hidden rounded-[20px] border border-white/10 bg-[#08111d] shadow-[0_24px_80px_rgba(2,6,23,0.35)]"
+              className="relative max-w-full max-h-full overflow-hidden rounded-[16px] border border-white/10 bg-[#08111d] shadow-[0_24px_80px_rgba(2,6,23,0.35)] md:rounded-[20px]"
               style={stageStyle}
             >
               <img src={snapshot.src} alt="Schematic snapshot for markup" className="block h-full w-full select-none object-contain" draggable={false} />

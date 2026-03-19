@@ -32,7 +32,6 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
   const projectScope = externalProjectScope ?? localProjectScope;
   const requestedHoleId = searchParams.get("holeId") || "";
   const requestedProjectScope = searchParams.get("scope") || "";
-  const showBackToMap = searchParams.get("from") === "map";
 
   const myRole = useMemo(() => {
     const m = (memberships || []).find((m) => m.organization_id === selectedOrgId);
@@ -1676,15 +1675,6 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
     setDrawerOpen(true);
   };
 
-  const onBackToMap = () => {
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back();
-      return;
-    }
-
-    router.push("/map");
-  };
-
   const onViewInMap = () => {
     if (!selectedHole?.id) return;
 
@@ -1998,16 +1988,6 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
                   onClick={onViewInMap}
                 >
                   View in Map
-                </button>
-              ) : null}
-
-              {showBackToMap ? (
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-2xl border border-white/15 bg-white/[0.05] px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1]"
-                  onClick={onBackToMap}
-                >
-                  Back to Map
                 </button>
               ) : null}
 
