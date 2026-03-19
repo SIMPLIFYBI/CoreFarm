@@ -865,47 +865,44 @@ export default function MobileHoleMapWorkspace({ publicToken = "" }) {
           </div>
         </div>
 
-        <div className="absolute bottom-4 left-3 right-3 z-20 flex items-end justify-between gap-2">
-          <div className="min-w-0 flex-1 rounded-[28px] border border-white/10 bg-slate-950/76 p-3 shadow-[0_16px_44px_rgba(2,6,23,0.38)] backdrop-blur-xl">
+        <div className="absolute bottom-4 left-3 right-3 z-20">
+          <div className="min-w-0 rounded-[28px] border border-white/10 bg-slate-950/76 p-3 shadow-[0_16px_44px_rgba(2,6,23,0.38)] backdrop-blur-xl">
             <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Selected</div>
             <div className="mt-1 truncate text-base font-semibold text-white">{selectedHole?.hole_id || "No hole selected"}</div>
             <div className="mt-1 truncate text-xs text-slate-300">{selectedHole?.project_name || "Choose a hole from the map or projects drawer"}</div>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveSheet("projects")}
+                className="inline-flex min-h-[48px] items-center justify-center rounded-2xl border border-amber-300/20 bg-amber-300/14 px-3 py-2 text-sm font-medium text-amber-50 shadow-[0_12px_28px_rgba(251,191,36,0.14)]"
+              >
+                Browse holes
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSheet("filters")}
+                className="inline-flex min-h-[48px] items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-300/14 px-3 py-2 text-sm font-medium text-cyan-50 shadow-[0_12px_28px_rgba(34,211,238,0.14)]"
+              >
+                Filters
+              </button>
+              <button
+                type="button"
+                onClick={recenterSelectedHole}
+                className="inline-flex min-h-[48px] items-center justify-center rounded-2xl border border-white/15 bg-white/[0.08] px-3 py-2 text-sm font-medium text-white shadow-[0_12px_28px_rgba(15,23,42,0.18)]"
+              >
+                Recenter
+              </button>
+            </div>
+
             {selectedHole ? (
               <button
                 type="button"
                 onClick={() => setActiveSheet("details")}
-                className="mt-3 inline-flex items-center rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm font-medium text-white"
+                className="mt-2 inline-flex w-full items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm font-medium text-white"
               >
                 View details
               </button>
             ) : null}
-          </div>
-
-          <div className="flex shrink-0 flex-col gap-3">
-            <button
-              type="button"
-              onClick={recenterSelectedHole}
-              className="inline-flex min-h-[60px] w-20 flex-col items-center justify-center rounded-[24px] border border-white/20 bg-white/12 px-3 py-3 text-slate-50 shadow-[0_16px_36px_rgba(15,23,42,0.24)] backdrop-blur-xl"
-            >
-              <span className="text-[11px] uppercase tracking-[0.18em] text-slate-200/80">Focus</span>
-              <span className="mt-1 text-sm font-semibold">Recenter</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSheet("filters")}
-              className="inline-flex min-h-[60px] w-20 flex-col items-center justify-center rounded-[24px] border border-cyan-300/20 bg-cyan-300/14 px-3 py-3 text-slate-50 shadow-[0_16px_36px_rgba(34,211,238,0.18)] backdrop-blur-xl"
-            >
-              <span className="text-[11px] uppercase tracking-[0.18em] text-cyan-100/80">Tune</span>
-              <span className="mt-1 text-sm font-semibold">Filters</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSheet("projects")}
-              className="inline-flex min-h-[68px] w-20 flex-col items-center justify-center rounded-[24px] border border-amber-300/20 bg-amber-300/14 px-3 py-3 text-slate-50 shadow-[0_16px_36px_rgba(251,191,36,0.18)] backdrop-blur-xl"
-            >
-              <span className="text-[11px] uppercase tracking-[0.18em] text-amber-100/80">Browse</span>
-              <span className="mt-1 text-sm font-semibold">Projects</span>
-            </button>
           </div>
         </div>
 
