@@ -1685,6 +1685,17 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
     router.push("/map");
   };
 
+  const onViewInMap = () => {
+    if (!selectedHole?.id) return;
+
+    const params = new URLSearchParams({
+      holeId: selectedHole.id,
+      scope: projectScope,
+    });
+
+    router.push(`/map?${params.toString()}`);
+  };
+
   const [exportingPdf, setExportingPdf] = useState(false);
 
   const exportDisabledReason = useMemo(() => {
@@ -1969,17 +1980,27 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
-              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{totalHoles} loaded holes</span>
-              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{selectedHole ? selectedHole.hole_id : "No selection"}</span>
-              {selectedHole?.descriptors?.map((descriptor) => (
-                <span key={descriptor.id} className="rounded-full border border-cyan-300/15 bg-cyan-300/10 px-3 py-1.5 text-cyan-100">
-                  {descriptor.name}
-                </span>
-              ))}
-            </div>
+            {selectedHole?.descriptors?.length ? (
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+                {selectedHole.descriptors.map((descriptor) => (
+                  <span key={descriptor.id} className="rounded-full border border-cyan-300/15 bg-cyan-300/10 px-3 py-1.5 text-cyan-100">
+                    {descriptor.name}
+                  </span>
+                ))}
+              </div>
+            ) : null}
 
             <div className="flex flex-col gap-3 md:flex-row md:items-center">
+              {selectedHole ? (
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-2xl border border-cyan-300/25 bg-cyan-300/10 px-4 py-2.5 text-sm font-medium text-cyan-100 transition hover:bg-cyan-300/15"
+                  onClick={onViewInMap}
+                >
+                  View in Map
+                </button>
+              ) : null}
+
               {showBackToMap ? (
                 <button
                   type="button"
@@ -2009,15 +2030,6 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
                 </div>
               )}
 
-              <button
-                type="button"
-                className="inline-flex items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#22d3ee,#38bdf8)] px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-[0_14px_36px_rgba(34,211,238,0.24)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={onExportPdf}
-                disabled={!!exportDisabledReason}
-                title={exportDisabledReason || "Export PDF"}
-              >
-                Export PDF
-              </button>
             </div>
           </div>
 

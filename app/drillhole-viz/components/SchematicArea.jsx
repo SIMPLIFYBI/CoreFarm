@@ -130,8 +130,6 @@ export default function SchematicArea({
                     <DipOrientationCard dip={selectedHole.dip} />
                   </div>
 
-                  <OrientationRibbon azimuth={selectedHole.azimuth} dip={selectedHole.dip} />
-
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
                       <div className="text-sm text-slate-200">Borehole schematic</div>
@@ -343,23 +341,6 @@ function DipOrientationCard({ dip }) {
           <div className="mt-2 inline-flex rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[10px] text-slate-300 md:px-3 md:text-xs">
             {hasValue ? "Negative values trend downward" : "Add dip in Attributes"}
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function OrientationRibbon({ azimuth, dip }) {
-  return (
-    <div className="rounded-[20px] border border-white/10 bg-white/[0.03] px-4 py-3">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Orientation Overlay</div>
-          <div className="mt-1 text-sm text-slate-300">A visual cue for hole direction and inclination without altering the depth-true schematic.</div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-200">
-          <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1.5">Azimuth {formatAngle(azimuth)}</span>
-          <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1.5">Dip {formatAngle(dip)}</span>
         </div>
       </div>
     </div>

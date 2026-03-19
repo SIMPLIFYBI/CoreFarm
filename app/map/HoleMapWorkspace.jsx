@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { supabaseBrowser } from "@/lib/supabaseClient";
@@ -762,8 +762,11 @@ function HoleSchematicModal({
 
 export default function HoleMapWorkspace({ publicToken = "" }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = useMemo(() => supabaseBrowser(), []);
   const { orgId } = useOrg();
+  const requestedHoleId = searchParams.get("holeId") || "";
+  const requestedProjectScope = searchParams.get("scope") || "";
 
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
@@ -775,6 +778,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const visibleHolesRef = useRef([]);
   const visibleAssetsRef = useRef([]);
   const pendingMapRestoreRef = useRef(null);
+  const pendingHoleFocusRef = useRef("");
   const applyingMapRestoreRef = useRef(false);
 
   const [projectScope, setProjectScope] = useState("own");
@@ -850,6 +854,25 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
       pendingMapRestoreRef.current = null;
     }
   }, []);
+
+  useEffect(() => {
+    if (!requestedHoleId) {
+      pendingHoleFocusRef.current = "";
+      return;
+    }
+
+    pendingHoleFocusRef.current = requestedHoleId;
+    setNavigatorTab("holes");
+    setMobilePanelTab("holes");
+    setSelectedAssetId("");
+    setProjectFilter("");
+    setDescriptorFilter("");
+    setSelectedHoleId(requestedHoleId);
+
+    if (requestedProjectScope === "own" || requestedProjectScope === "shared") {
+      setProjectScope(requestedProjectScope);
+    }
+  }, [requestedHoleId, requestedProjectScope]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1834,6 +1857,19 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     pendingMapRestoreRef.current = null;
     applyingMapRestoreRef.current = false;
   }, [loading, visibleAssets, visibleHoles]);
+
+  useEffect(() => {
+    const pendingHoleId = pendingHoleFocusRef.current;
+    if (!pendingHoleId || loading || !mapReadyRef.current || pendingMapRestoreRef.current || applyingMapRestoreRef.current) {
+      return;
+    }
+
+    const nextHole = visibleHoles.find((hole) => hole.id === pendingHoleId);
+    if (!nextHole) return;
+
+    focusHole(nextHole);
+    pendingHoleFocusRef.current = "";
+  }, [loading, visibleHoles]);
 
   const totalProjects = projectOptions.length;
   const totalVisibleProjects = filteredProjects.length;
