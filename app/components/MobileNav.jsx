@@ -6,7 +6,7 @@ import { supabaseBrowser } from "@/lib/supabaseClient";
 import { IconCore, IconAdmin, IconTeam, IconUser, IconReport, IconClipboard, IconCoreTasks, IconMap, AssetIcon, IconPlods } from "./icons";
 
 const tabs = [
-  { href: "/map-mobile", label: "Map", icon: IconMap },
+  { href: "/map", label: "Map", icon: IconMap },
   { href: "/dashboard", label: "Reports", icon: IconReport },
   { href: "/activity", label: "Activity", icon: IconClipboard },
   { href: "/how-to", label: "How To", icon: IconClipboard },
