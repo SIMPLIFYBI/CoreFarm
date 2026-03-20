@@ -111,30 +111,30 @@ function getConstructionVisualSpec(typeName) {
   const value = String(typeName || "").trim().toLowerCase();
 
   if (/(headworks|wellhead|surface)/.test(value)) {
-    return { kind: "headworks", widthRatio: 0.74, innerRatio: 0.34 };
+    return { kind: "headworks" };
   }
 
   if (/collar/.test(value)) {
-    return { kind: "collar", widthRatio: 0.7, innerRatio: 0.42 };
+    return { kind: "collar" };
   }
 
   if (/(screen|slotted)/.test(value)) {
-    return { kind: "screen", widthRatio: 0.62, innerRatio: 0.44 };
+    return { kind: "screen" };
   }
 
   if (/(shoe|drive shoe)/.test(value)) {
-    return { kind: "shoe", widthRatio: 0.58, innerRatio: 0.38 };
+    return { kind: "shoe" };
   }
 
   if (/(plug|cement|grout|seal|bentonite|backfill)/.test(value)) {
-    return { kind: "plug", widthRatio: 0.48, innerRatio: 0 };
+    return { kind: "plug" };
   }
 
   if (/(casing|liner|riser|standpipe|pipe|tube|pvc|steel)/.test(value)) {
-    return { kind: "tube", widthRatio: 0.58, innerRatio: 0.4 };
+    return { kind: "tube" };
   }
 
-  return { kind: "tube", widthRatio: 0.54, innerRatio: 0.36 };
+  return { kind: "tube" };
 }
 
 export default function BoreholeSchematicPreview({
@@ -532,15 +532,18 @@ export default function BoreholeSchematicPreview({
             const h = Math.max(0, y2 - y1);
             if (h <= 0.5) return null;
 
-            const visualW = clamp(holeW * spec.widthRatio, compact ? 22 : 26, holeW - (compact ? 18 : 28));
-            const visualX = holeX + (holeW - visualW) / 2;
-            const innerW = clamp(visualW * spec.innerRatio, 0, visualW - 6);
-            const innerX = holeX + (holeW - innerW) / 2;
-            const wallInset = Math.max(2.5, Math.min(6, visualW * 0.14));
-            const showInnerVoid = spec.innerRatio > 0 && innerW >= 6 && h >= 6;
+            const wallOuterInset = compact ? 6 : 10;
+            const centerGapW = clamp(holeW * (compact ? 0.36 : 0.4), compact ? 18 : 32, holeW - wallOuterInset * 2 - (compact ? 10 : 16));
+            const wallW = Math.max(4, (holeW - wallOuterInset * 2 - centerGapW) / 2);
+            const leftWallX = holeX + wallOuterInset;
+            const rightWallX = holeX + holeW - wallOuterInset - wallW;
+            const wallRadius = Math.min(wallW / 2, compact ? 6 : 8);
+            const wallHighlightInset = Math.max(1.2, Math.min(3.5, wallW * 0.2));
 
             const slotCount = spec.kind === "screen" ? Math.max(2, Math.min(8, Math.floor(h / (compact ? 18 : 16)))) : 0;
             const slotYs = Array.from({ length: slotCount }, (_, slotIndex) => y1 + ((slotIndex + 1) * h) / (slotCount + 1));
+            const plugBandCount = spec.kind === "plug" ? Math.max(2, Math.min(6, Math.floor(h / (compact ? 20 : 18)))) : 0;
+            const plugBandYs = Array.from({ length: plugBandCount }, (_, bandIndex) => y1 + ((bandIndex + 1) * h) / (plugBandCount + 1));
 
             return (
               <g key={it.id || `c-${it.typeId}-${it.from}-${it.to}-${i}`}>
@@ -548,47 +551,62 @@ export default function BoreholeSchematicPreview({
                   {label} · {it.from.toFixed(1)}–{it.to.toFixed(1)}m{it.notes ? ` · ${it.notes}` : ""}
                 </title>
 
-                {(spec.kind === "tube" || spec.kind === "screen" || spec.kind === "collar" || spec.kind === "headworks" || spec.kind === "shoe") && (
+                <>
+                  <rect
+                    x={leftWallX}
+                    y={y1}
+                    width={wallW}
+                    height={h}
+                    rx={wallRadius}
+                    fill={color}
+                    fillOpacity={spec.kind === "headworks" ? "0.82" : spec.kind === "plug" ? "0.84" : "0.78"}
+                    stroke="rgba(255,255,255,0.28)"
+                    strokeWidth={spec.kind === "headworks" ? "1.4" : "1.1"}
+                  />
+                  <rect
+                    x={rightWallX}
+                    y={y1}
+                    width={wallW}
+                    height={h}
+                    rx={wallRadius}
+                    fill={color}
+                    fillOpacity={spec.kind === "headworks" ? "0.82" : spec.kind === "plug" ? "0.84" : "0.78"}
+                    stroke="rgba(255,255,255,0.28)"
+                    strokeWidth={spec.kind === "headworks" ? "1.4" : "1.1"}
+                  />
+
+                  {(spec.kind === "tube" || spec.kind === "screen" || spec.kind === "collar" || spec.kind === "headworks" || spec.kind === "shoe") && (
                   <>
-                    <rect
-                      x={visualX}
-                      y={y1}
-                      width={visualW}
-                      height={h}
-                      rx={Math.min(visualW / 2, compact ? 8 : 10)}
-                      fill={color}
-                      fillOpacity={spec.kind === "headworks" ? "0.82" : "0.78"}
-                      stroke="rgba(255,255,255,0.3)"
-                      strokeWidth={spec.kind === "headworks" ? "1.5" : "1.2"}
-                    />
-
-                    {showInnerVoid && (
-                      <rect
-                        x={innerX}
-                        y={y1 + (spec.kind === "collar" ? 2 : 1.5)}
-                        width={innerW}
-                        height={Math.max(0, h - (spec.kind === "collar" ? 4 : 3))}
-                        rx={Math.min(innerW / 2, compact ? 6 : 8)}
-                        fill={boreVoidFill}
-                        stroke="rgba(255,255,255,0.12)"
-                        strokeWidth="0.9"
-                      />
-                    )}
-
                     {(spec.kind === "tube" || spec.kind === "screen") && (
                       <>
                         <line
-                          x1={visualX + wallInset}
+                          x1={leftWallX + wallHighlightInset}
                           y1={y1 + 1}
-                          x2={visualX + wallInset}
+                          x2={leftWallX + wallHighlightInset}
                           y2={y2 - 1}
                           stroke="rgba(255,255,255,0.22)"
                           strokeWidth="0.9"
                         />
                         <line
-                          x1={visualX + visualW - wallInset}
+                          x1={leftWallX + wallW - wallHighlightInset}
                           y1={y1 + 1}
-                          x2={visualX + visualW - wallInset}
+                          x2={leftWallX + wallW - wallHighlightInset}
+                          y2={y2 - 1}
+                          stroke="rgba(15,23,42,0.28)"
+                          strokeWidth="0.9"
+                        />
+                        <line
+                          x1={rightWallX + wallHighlightInset}
+                          y1={y1 + 1}
+                          x2={rightWallX + wallHighlightInset}
+                          y2={y2 - 1}
+                          stroke="rgba(255,255,255,0.22)"
+                          strokeWidth="0.9"
+                        />
+                        <line
+                          x1={rightWallX + wallW - wallHighlightInset}
+                          y1={y1 + 1}
+                          x2={rightWallX + wallW - wallHighlightInset}
                           y2={y2 - 1}
                           stroke="rgba(15,23,42,0.28)"
                           strokeWidth="0.9"
@@ -600,18 +618,18 @@ export default function BoreholeSchematicPreview({
                       slotYs.map((slotY) => (
                         <g key={`${it.id || i}-${slotY}`}>
                           <line
-                            x1={visualX + 1.5}
+                            x1={leftWallX + 1.5}
                             y1={slotY}
-                            x2={innerX - 1}
+                            x2={leftWallX + wallW - 1.5}
                             y2={slotY}
                             stroke="rgba(15,23,42,0.45)"
                             strokeWidth="1.1"
                             strokeLinecap="round"
                           />
                           <line
-                            x1={innerX + innerW + 1}
+                            x1={rightWallX + 1.5}
                             y1={slotY}
-                            x2={visualX + visualW - 1.5}
+                            x2={rightWallX + wallW - 1.5}
                             y2={slotY}
                             stroke="rgba(15,23,42,0.45)"
                             strokeWidth="1.1"
@@ -623,9 +641,20 @@ export default function BoreholeSchematicPreview({
                     {spec.kind === "headworks" && (
                       <>
                         <rect
-                          x={visualX - (compact ? 3 : 6)}
+                          x={leftWallX - (compact ? 2 : 4)}
                           y={y1}
-                          width={visualW + (compact ? 6 : 12)}
+                          width={wallW + (compact ? 4 : 8)}
+                          height={Math.min(h, compact ? 12 : 14)}
+                          rx={compact ? 5 : 6}
+                          fill={color}
+                          fillOpacity="0.96"
+                          stroke="rgba(255,255,255,0.34)"
+                          strokeWidth="1.1"
+                        />
+                        <rect
+                          x={rightWallX - (compact ? 2 : 4)}
+                          y={y1}
+                          width={wallW + (compact ? 4 : 8)}
                           height={Math.min(h, compact ? 12 : 14)}
                           rx={compact ? 5 : 6}
                           fill={color}
@@ -634,42 +663,86 @@ export default function BoreholeSchematicPreview({
                           strokeWidth="1.1"
                         />
                         <line
-                          x1={holeX + 3}
+                          x1={leftWallX + wallW / 2}
                           y1={y1 + Math.min(h, compact ? 12 : 14) / 2}
-                          x2={holeX + holeW - 3}
+                          x2={rightWallX + wallW / 2}
                           y2={y1 + Math.min(h, compact ? 12 : 14) / 2}
                           stroke="rgba(255,255,255,0.18)"
                           strokeWidth="1"
+                          strokeDasharray={compact ? "4 5" : "5 6"}
+                        />
+                      </>
+                    )}
+
+                    {spec.kind === "collar" && h >= 8 && (
+                      <>
+                        <line
+                          x1={leftWallX + 1}
+                          y1={y1 + 3}
+                          x2={leftWallX + wallW - 1}
+                          y2={y1 + 3}
+                          stroke="rgba(255,255,255,0.3)"
+                          strokeWidth="1"
+                          strokeLinecap="round"
+                        />
+                        <line
+                          x1={rightWallX + 1}
+                          y1={y1 + 3}
+                          x2={rightWallX + wallW - 1}
+                          y2={y1 + 3}
+                          stroke="rgba(255,255,255,0.3)"
+                          strokeWidth="1"
+                          strokeLinecap="round"
                         />
                       </>
                     )}
 
                     {spec.kind === "shoe" && h >= 10 && (
-                      <path
-                        d={`M ${visualX + 2} ${y2 - 2} L ${visualX + visualW / 2} ${y2 + (compact ? 4 : 6)} L ${visualX + visualW - 2} ${y2 - 2}`}
-                        fill={color}
-                        fillOpacity="0.88"
-                        stroke="rgba(255,255,255,0.22)"
-                        strokeWidth="1"
-                        strokeLinejoin="round"
-                      />
+                      <>
+                        <path
+                          d={`M ${leftWallX + 1.5} ${y2 - 2} L ${leftWallX + wallW / 2} ${y2 + (compact ? 4 : 6)} L ${leftWallX + wallW - 1.5} ${y2 - 2}`}
+                          fill={color}
+                          fillOpacity="0.88"
+                          stroke="rgba(255,255,255,0.22)"
+                          strokeWidth="1"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d={`M ${rightWallX + 1.5} ${y2 - 2} L ${rightWallX + wallW / 2} ${y2 + (compact ? 4 : 6)} L ${rightWallX + wallW - 1.5} ${y2 - 2}`}
+                          fill={color}
+                          fillOpacity="0.88"
+                          stroke="rgba(255,255,255,0.22)"
+                          strokeWidth="1"
+                          strokeLinejoin="round"
+                        />
+                      </>
                     )}
                   </>
-                )}
-
-                {spec.kind === "plug" && (
-                  <rect
-                    x={visualX}
-                    y={y1}
-                    width={visualW}
-                    height={h}
-                    rx={Math.min(visualW / 2, compact ? 7 : 9)}
-                    fill={color}
-                    fillOpacity="0.84"
-                    stroke="rgba(255,255,255,0.24)"
-                    strokeWidth="1.1"
-                  />
-                )}
+                  )}
+                  {spec.kind === "plug" &&
+                    plugBandYs.map((bandY) => (
+                      <g key={`${it.id || i}-plug-${bandY}`}>
+                        <line
+                          x1={leftWallX + 1.5}
+                          y1={bandY}
+                          x2={leftWallX + wallW - 1.5}
+                          y2={bandY}
+                          stroke="rgba(15,23,42,0.42)"
+                          strokeWidth="1.1"
+                          strokeLinecap="round"
+                        />
+                        <line
+                          x1={rightWallX + 1.5}
+                          y1={bandY}
+                          x2={rightWallX + wallW - 1.5}
+                          y2={bandY}
+                          stroke="rgba(15,23,42,0.42)"
+                          strokeWidth="1.1"
+                          strokeLinecap="round"
+                        />
+                      </g>
+                    ))}
+                </>
 
               </g>
             );
