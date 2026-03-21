@@ -43,6 +43,8 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
   const [selectedHoleId, setSelectedHoleId] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [drawerTab, setDrawerTab] = useState("hole");
+  const [isMobileDrawerViewport, setIsMobileDrawerViewport] = useState(false);
+  const [mobileTabCollapsed, setMobileTabCollapsed] = useState(false);
   const [expandedProjects, setExpandedProjects] = useState({});
 
   // Planned depth editor (existing)
@@ -148,6 +150,26 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
     setLocalProjectScope((prev) => (prev === requestedProjectScope ? prev : requestedProjectScope));
   }, [externalProjectScope, requestedProjectScope]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const mediaQuery = window.matchMedia("(max-width: 1279px)");
+    const syncViewport = (event) => {
+      const matches = typeof event?.matches === "boolean" ? event.matches : mediaQuery.matches;
+      setIsMobileDrawerViewport(matches);
+      if (!matches) {
+        setMobileTabCollapsed(false);
+      }
+    };
+
+    syncViewport(mediaQuery);
+    mediaQuery.addEventListener("change", syncViewport);
+
+    return () => {
+      mediaQuery.removeEventListener("change", syncViewport);
+    };
+  }, []);
+
   // Keep the planned depth editor in sync with the selected hole
   useEffect(() => {
     if (!selectedHole) {
@@ -195,6 +217,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
     setSelectedHoleId((prev) => (prev === requestedHoleId ? prev : requestedHoleId));
     setDrawerOpen(true);
     setDrawerTab("attributes");
+    setMobileTabCollapsed(false);
   }, [holes, requestedHoleId]);
 
   // Group holes by project
@@ -1669,10 +1692,23 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
 
   const canEditHole = canEdit;
 
+  const isDrawerTabContentVisible = !isMobileDrawerViewport || !mobileTabCollapsed;
+
+  const handleDrawerTabChange = (nextTab) => {
+    if (isMobileDrawerViewport && nextTab === drawerTab) {
+      setMobileTabCollapsed((prev) => !prev);
+      return;
+    }
+
+    setDrawerTab(nextTab);
+    setMobileTabCollapsed(false);
+  };
+
   const onSelectHole = (holeId) => {
     setSelectedHoleId(holeId);
     setDrawerTab("attributes");
     setDrawerOpen(true);
+    setMobileTabCollapsed(false);
   };
 
   const onViewInMap = () => {
@@ -2020,12 +2056,12 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
             "overflow-hidden bg-slate-950/55 backdrop-blur-xl transition-all duration-200",
             "xl:h-full xl:shrink-0 xl:shadow-[0_24px_80px_rgba(2,6,23,0.24)]",
             drawerOpen
-              ? "w-full max-h-[72svh] border-b border-white/10 xl:max-h-none xl:w-[460px] xl:max-w-[92vw] xl:border-b-0 xl:border-r"
-              : "w-full max-h-0 border-b-0 xl:w-0 xl:max-h-none xl:border-r-0",
+              ? "w-full h-[72svh] border-b border-white/10 xl:h-full xl:w-[460px] xl:max-w-[92vw] xl:border-b-0 xl:border-r"
+              : "w-full h-0 border-b-0 xl:w-0 xl:h-full xl:border-r-0",
             "transition-all duration-200 overflow-hidden",
           ].join(" ")}
         >
-          <div className="h-full flex flex-col">
+          <div className="flex h-full min-h-0 flex-col">
             {/* Tabs */}
             {drawerOpen && (
               <div className="border-b border-white/10 px-4 py-4 md:px-5">
@@ -2034,53 +2070,53 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
                   <div className="mt-1 text-lg font-semibold text-white">Projects and intervals</div>
                 </div>
                 <HorizontalScrollTabs className="mt-4 border-b border-white/10" railClassName="pb-1" hint="Swipe tabs" hintClassName="text-slate-500">
-                    <TabButton active={drawerTab === "hole"} onClick={() => setDrawerTab("hole")} label="Hole" />
+                    <TabButton active={drawerTab === "hole" && isDrawerTabContentVisible} onClick={() => handleDrawerTabChange("hole")} label="Hole" />
                     <TabButton
-                      active={drawerTab === "attributes"}
-                      onClick={() => setDrawerTab("attributes")}
+                      active={drawerTab === "attributes" && isDrawerTabContentVisible}
+                      onClick={() => handleDrawerTabChange("attributes")}
                       label="Attributes"
                       disabled={!selectedHoleId}
                       title={!selectedHoleId ? "Select a hole first" : ""}
                     />
                     <TabButton
-                      active={drawerTab === "geology"}
-                      onClick={() => setDrawerTab("geology")}
+                      active={drawerTab === "geology" && isDrawerTabContentVisible}
+                      onClick={() => handleDrawerTabChange("geology")}
                       label="Geology"
                       disabled={!selectedHoleId}
                       title={!selectedHoleId ? "Select a hole first" : ""}
                     />
                     <TabButton
-                      active={drawerTab === "construction"}
-                      onClick={() => setDrawerTab("construction")}
+                      active={drawerTab === "construction" && isDrawerTabContentVisible}
+                      onClick={() => handleDrawerTabChange("construction")}
                       label="Construction"
                       disabled={!selectedHoleId}
                       title={!selectedHoleId ? "Select a hole first" : ""}
                     />
                     <TabButton
-                      active={drawerTab === "components"}
-                      onClick={() => setDrawerTab("components")}
+                      active={drawerTab === "components" && isDrawerTabContentVisible}
+                      onClick={() => handleDrawerTabChange("components")}
                       label="Components"
                       disabled={!selectedHoleId}
                       title={!selectedHoleId ? "Select a hole first" : ""}
                     />
                     <TabButton
-                      active={drawerTab === "annulus"}
-                      onClick={() => setDrawerTab("annulus")}
+                      active={drawerTab === "annulus" && isDrawerTabContentVisible}
+                      onClick={() => handleDrawerTabChange("annulus")}
                       label="Annulus"
                       disabled={!selectedHoleId}
                       title={!selectedHoleId ? "Select a hole first" : ""}
                     />
 
                     {canSeeTypesTab && (
-                      <TabButton active={drawerTab === "types"} onClick={() => setDrawerTab("types")} label="Setup" />
+                      <TabButton active={drawerTab === "types" && isDrawerTabContentVisible} onClick={() => handleDrawerTabChange("types")} label="Setup" />
                     )}
                 </HorizontalScrollTabs>
               </div>
             )}
 
             {/* Tab content */}
-            <div className="flex-1 overflow-auto p-4 md:p-5">
-              {!drawerOpen ? null : loading ? (
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 md:p-5">
+              {!drawerOpen || !isDrawerTabContentVisible ? null : loading ? (
                 <div className="text-sm text-slate-300">Loading…</div>
               ) : drawerTab === "hole" ? (
                 <HoleTab
