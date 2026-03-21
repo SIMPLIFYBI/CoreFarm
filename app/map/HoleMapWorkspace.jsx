@@ -299,7 +299,7 @@ function ProjectAccordionList({
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold text-slate-100">{hole.hole_id}</div>
                         <div className="mt-1 truncate text-xs text-slate-400">
-                          {formatValue(hole.depth, "m")} drilled · {formatValue(hole.planned_depth, "m")} planned
+                          {formatValue(hole.planned_depth, "m")} planned · {formatValue(hole.depth, "m")} drilled
                         </div>
                       </div>
                       <div className="rounded-full border border-white/10 bg-slate-950/60 px-2 py-1 text-[11px] text-slate-300">
@@ -433,8 +433,7 @@ function HoleAttributesPanel({ selectedHole, mobile = false }) {
 
         <div className="grid grid-cols-2 gap-3">
           {[
-            ["Depth", formatValue(selectedHole?.depth, " m")],
-            ["Planned", formatValue(selectedHole?.planned_depth, " m")],
+            ["Planned Depth", formatValue(selectedHole?.planned_depth, " m")],
             ["Water", formatValue(selectedHole?.water_level_m, " m")],
             ["Elevation", formatValue(selectedHole?.collar_elevation_m, " m")],
             ["Easting", formatValue(selectedHole?.collar_easting)],
@@ -488,10 +487,6 @@ function HoleAttributesPanel({ selectedHole, mobile = false }) {
           <tr className="border-b border-white/10">
             <th className="bg-white/[0.03] px-4 py-3 text-left font-medium text-slate-300">Descriptors</th>
             <td className="px-4 py-3">{formatDescriptorSummary(selectedHole?.descriptors)}</td>
-          </tr>
-          <tr className="border-b border-white/10">
-            <th className="bg-white/[0.03] px-4 py-3 text-left font-medium text-slate-300">Depth</th>
-            <td className="px-4 py-3">{formatValue(selectedHole?.depth, " m")}</td>
           </tr>
           <tr className="border-b border-white/10">
             <th className="bg-white/[0.03] px-4 py-3 text-left font-medium text-slate-300">Planned Depth</th>
@@ -717,12 +712,12 @@ function HoleSchematicModal({
               <div className="space-y-4">
                 <div className="grid gap-3 md:grid-cols-4">
                   <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Depth</div>
-                    <div className="mt-2 text-lg font-semibold text-white">{formatValue(hole.depth, " m")}</div>
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Planned Depth</div>
+                    <div className="mt-2 text-lg font-semibold text-white">{formatValue(hole.planned_depth, " m")}</div>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Planned</div>
-                    <div className="mt-2 text-lg font-semibold text-white">{formatValue(hole.planned_depth, " m")}</div>
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Actual Depth</div>
+                    <div className="mt-2 text-lg font-semibold text-white">{formatValue(hole.depth, " m")}</div>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
                     <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Water</div>
@@ -1481,8 +1476,8 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         </div>
         <div style="margin-top:9px;display:grid;grid-template-columns:minmax(0,1fr);gap:6px;">
           <div style="width:calc(100% - 6px);margin-right:auto;border:1px solid rgba(148,163,184,0.18);background:rgba(15,23,42,0.5);border-radius:12px;padding:7px 9px;box-sizing:border-box;">
-            <div style="font-size:9px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:rgba(148,163,184,0.84);">Depth</div>
-            <div style="margin-top:4px;font-size:12px;font-weight:700;color:#f8fafc;">${formatValue(hole.depth, " m")}</div>
+            <div style="font-size:9px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:rgba(148,163,184,0.84);">Planned Depth</div>
+            <div style="margin-top:4px;font-size:12px;font-weight:700;color:#f8fafc;">${formatValue(hole.planned_depth, " m")}</div>
           </div>
         </div>
         <button type="button" data-popup-action="open-schematic" style="display:block;margin-top:8px;width:calc(100% - 6px);margin-right:auto;box-sizing:border-box;border:none;border-radius:10px;background:linear-gradient(135deg,#22d3ee,#0ea5e9);padding:8px 10px;color:#082f49;font-size:9px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;cursor:pointer;box-shadow:0 10px 24px rgba(14,165,233,0.2);line-height:1.05;">
