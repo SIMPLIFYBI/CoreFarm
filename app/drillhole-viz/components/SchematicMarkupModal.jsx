@@ -122,6 +122,7 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
   const [textValue, setTextValue] = useState("Note");
   const [exporting, setExporting] = useState(false);
   const [availableStageArea, setAvailableStageArea] = useState({ width: 1400, height: 900 });
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -140,6 +141,23 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
       document.body.style.overflow = previous;
     };
   }, [open]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
+    const syncViewport = (event) => {
+      const matches = typeof event?.matches === "boolean" ? event.matches : mediaQuery.matches;
+      setIsMobileViewport(matches);
+    };
+
+    syncViewport(mediaQuery);
+    mediaQuery.addEventListener("change", syncViewport);
+
+    return () => {
+      mediaQuery.removeEventListener("change", syncViewport);
+    };
+  }, []);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -262,8 +280,8 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
   };
 
   return (
-    <div className="fixed inset-0 z-[120] bg-[rgba(2,6,23,0.86)] backdrop-blur-md">
-      <div className="flex h-[100dvh] min-h-0 flex-col overflow-hidden px-2 py-2 md:h-full md:px-6 md:py-5">
+    <div className="fixed inset-0 z-[120] overflow-y-auto bg-[rgba(2,6,23,0.86)] backdrop-blur-md">
+      <div className="flex min-h-[100dvh] flex-col px-2 py-2 md:h-full md:min-h-0 md:overflow-hidden md:px-6 md:py-5">
         <div className="sticky top-0 z-20 shrink-0 rounded-[20px] border border-white/10 bg-slate-950/92 px-3 py-3 shadow-[0_24px_80px_rgba(2,6,23,0.42)] backdrop-blur-md md:hidden">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -405,8 +423,13 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
           </div>
         </div>
 
-        <div ref={viewportRef} className="mt-2 min-h-0 flex-1 overflow-auto rounded-[24px] border border-white/10 bg-slate-950/65 p-2 overscroll-contain md:mt-4 md:rounded-[28px] md:p-5">
-          <div className="flex min-h-full items-start justify-center md:items-center">
+        <div
+          ref={viewportRef}
+          className={`mt-2 rounded-[24px] border border-white/10 bg-slate-950/65 p-2 md:mt-4 md:rounded-[28px] md:p-5 ${
+            isMobileViewport ? "overflow-visible" : "min-h-0 flex-1 overflow-auto overscroll-contain"
+          }`}
+        >
+          <div className={`flex ${isMobileViewport ? "items-start justify-start" : "min-h-full items-start justify-center md:items-center"}`}>
             <div
               ref={stageRef}
               className="relative max-w-full max-h-full overflow-hidden rounded-[16px] border border-white/10 bg-[#08111d] shadow-[0_24px_80px_rgba(2,6,23,0.35)] md:rounded-[20px]"
