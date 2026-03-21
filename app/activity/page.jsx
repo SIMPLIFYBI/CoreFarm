@@ -424,15 +424,15 @@ export default function ActivityPage() {
         </p>
       </section>
 
-      <section className="glass rounded-2xl border border-white/10 p-4 md:hidden space-y-4">
-        <div className="grid grid-cols-2 gap-2">
-          <label className="block min-w-0 text-[11px] text-slate-300">
+      <section className="glass rounded-2xl border border-white/10 p-4 md:hidden space-y-4 overflow-hidden">
+        <div className="grid grid-cols-2 gap-1.5">
+          <label className="block min-w-0 overflow-hidden text-[10px] leading-tight text-slate-300">
             Date From
-            <input className="input mt-1 h-9 min-w-0 w-full px-2 text-[10px]" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+            <input className="input compact-mobile-date-input mt-1 h-9 min-w-0 w-full px-1.5" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
           </label>
-          <label className="block min-w-0 text-[11px] text-slate-300">
+          <label className="block min-w-0 overflow-hidden text-[10px] leading-tight text-slate-300">
             Date To
-            <input className="input mt-1 h-9 min-w-0 w-full px-2 text-[10px]" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+            <input className="input compact-mobile-date-input mt-1 h-9 min-w-0 w-full px-1.5" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
           </label>
         </div>
 
