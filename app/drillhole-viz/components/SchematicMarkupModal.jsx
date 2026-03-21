@@ -123,6 +123,10 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
   const [exporting, setExporting] = useState(false);
   const [availableStageArea, setAvailableStageArea] = useState({ width: 1400, height: 900 });
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [usesCoarsePointer, setUsesCoarsePointer] = useState(false);
+  const [touchDrawingEnabled, setTouchDrawingEnabled] = useState(false);
+
+  const drawingEnabled = !usesCoarsePointer || touchDrawingEnabled;
 
   useEffect(() => {
     if (!open) {
@@ -130,6 +134,7 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
       setDraft(null);
       setIsDrawing(false);
       setTool("pen");
+      setTouchDrawingEnabled(false);
     }
   }, [open]);
 
@@ -156,6 +161,26 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
 
     return () => {
       mediaQuery.removeEventListener("change", syncViewport);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const mediaQuery = window.matchMedia("(pointer: coarse)");
+    const syncPointerMode = (event) => {
+      const matches = typeof event?.matches === "boolean" ? event.matches : mediaQuery.matches;
+      setUsesCoarsePointer(matches);
+      if (!matches) {
+        setTouchDrawingEnabled(false);
+      }
+    };
+
+    syncPointerMode(mediaQuery);
+    mediaQuery.addEventListener("change", syncPointerMode);
+
+    return () => {
+      mediaQuery.removeEventListener("change", syncPointerMode);
     };
   }, []);
 
@@ -203,6 +228,7 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
   if (!open || !snapshot?.src) return null;
 
   const beginDraw = (event) => {
+    if (!drawingEnabled) return;
     if (!snapshot?.width || !snapshot?.height) return;
     const point = getPointFromEvent(svgRef.current, event, snapshot.width, snapshot.height);
     if (!point) return;
@@ -227,6 +253,7 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
   };
 
   const moveDraw = (event) => {
+    if (!drawingEnabled) return;
     if (!isDrawing || !draft || !snapshot?.width || !snapshot?.height) return;
     const point = getPointFromEvent(svgRef.current, event, snapshot.width, snapshot.height);
     if (!point) return;
@@ -317,6 +344,16 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
 
           <div className="mt-2 overflow-x-auto pb-1">
             <div className="flex min-w-max items-center gap-2">
+              {usesCoarsePointer ? (
+                <button
+                  type="button"
+                  className={`btn btn-xs ${touchDrawingEnabled ? "btn-primary" : ""}`}
+                  onClick={() => setTouchDrawingEnabled((prev) => !prev)}
+                >
+                  {touchDrawingEnabled ? "Scroll page" : "Enable drawing"}
+                </button>
+              ) : null}
+
               <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2 py-1">
                 {COLOR_OPTIONS.map((swatch) => (
                   <button
@@ -355,6 +392,14 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
               placeholder="Text to place"
             />
           ) : null}
+
+          {usesCoarsePointer ? (
+            <div className="mt-2 text-[11px] leading-5 text-slate-400">
+              {touchDrawingEnabled
+                ? "Drawing is active inside the schematic. Switch back to scroll the page normally."
+                : "Page scrolling is active. Enable drawing when you want to mark up the schematic."}
+            </div>
+          ) : null}
         </div>
 
         <div className="sticky top-0 z-20 hidden shrink-0 rounded-[24px] border border-white/10 bg-slate-950/90 px-4 py-4 shadow-[0_24px_80px_rgba(2,6,23,0.42)] backdrop-blur-md md:block">
@@ -366,6 +411,16 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              {usesCoarsePointer ? (
+                <button
+                  type="button"
+                  className={`btn btn-xs ${touchDrawingEnabled ? "btn-primary" : ""}`}
+                  onClick={() => setTouchDrawingEnabled((prev) => !prev)}
+                >
+                  {touchDrawingEnabled ? "Scroll page" : "Enable drawing"}
+                </button>
+              ) : null}
+
               {TOOL_OPTIONS.map(([value, label]) => (
                 <button
                   key={value}
@@ -421,6 +476,14 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
               </button>
             </div>
           </div>
+
+          {usesCoarsePointer ? (
+            <div className="mt-3 text-xs leading-5 text-slate-400">
+              {touchDrawingEnabled
+                ? "Drawing is active only inside the schematic canvas. Turn it off to pan or scroll the page."
+                : "The page can scroll normally. Turn drawing on when you want touch gestures to annotate the schematic."}
+            </div>
+          ) : null}
         </div>
 
         <div
@@ -439,7 +502,7 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
               <svg
                 ref={svgRef}
                 viewBox={`0 0 ${snapshot.width} ${snapshot.height}`}
-                className="absolute inset-0 h-full w-full touch-none"
+                className={`absolute inset-0 h-full w-full ${drawingEnabled ? "pointer-events-auto touch-none" : "pointer-events-none"}`}
                 onPointerDown={beginDraw}
                 onPointerMove={moveDraw}
                 onPointerUp={endDraw}
