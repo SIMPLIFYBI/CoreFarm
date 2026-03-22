@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
 import { supabaseBrowser } from "@/lib/supabaseClient";
@@ -176,6 +177,7 @@ function DescriptorMultiSelect({ options, value, onChange, disabled = false, emp
 }
 
 export default function TestTab({ projectScope = "own" }) {
+  const router = useRouter();
   const supabase = supabaseBrowser();
   const { orgId } = useOrg();
 
@@ -1068,6 +1070,22 @@ export default function TestTab({ projectScope = "own" }) {
     return createPortal(content, document.body);
   };
 
+  const viewHoleInMap = (holeId) => {
+    const params = new URLSearchParams({ holeId });
+    if (projectScope === "own" || projectScope === "shared") {
+      params.set("scope", projectScope);
+    }
+    router.push(`/map?${params.toString()}`);
+  };
+
+  const viewHoleSchematic = (holeId) => {
+    const params = new URLSearchParams({ holeId });
+    if (projectScope === "own" || projectScope === "shared") {
+      params.set("scope", projectScope);
+    }
+    router.push(`/drillhole-viz?${params.toString()}`);
+  };
+
   return (
     <div className="p-4 md:p-5 space-y-5">
       <CoreTaskPanelHeader
@@ -1301,6 +1319,23 @@ export default function TestTab({ projectScope = "own" }) {
                     <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Diameter</div>
                     <div className="mt-1 font-medium">{hole.drilling_diameter || "-"}</div>
                   </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2" onClick={(event) => event.stopPropagation()}>
+                  <button
+                    type="button"
+                    className="btn btn-xs"
+                    onClick={() => viewHoleInMap(hole.id)}
+                  >
+                    View in Map
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-xs"
+                    onClick={() => viewHoleSchematic(hole.id)}
+                  >
+                    View Schematic
+                  </button>
                 </div>
 
                 <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
