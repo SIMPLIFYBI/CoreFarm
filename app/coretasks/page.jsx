@@ -4,7 +4,6 @@ import { usePathname } from "next/navigation";
 import HorizontalScrollTabs from "@/app/components/HorizontalScrollTabs";
 import CorePage from "./CorePage";
 import SampleDispatchPage from "./SampleDispatchPage";
-import DrillholeVizPage from "../drillhole-viz/page";
 import CoreTasksManagerPage from "./CoreTasksPage";
 import TestTab from "./TestTab";
 import BulkUploaderTab from "./BulkUploaderTab";
@@ -17,7 +16,6 @@ export default function CoreTasksPage() {
   const [tab, setTab] = useState(initialTab);
   const [projectScope, setProjectScope] = useState("own"); // 'own' | 'shared'
   const [isMobileViewport, setIsMobileViewport] = useState(false);
-  const isDrillholeVizTab = tab === "drillholeviz";
 
   useEffect(() => {
     setTab(pathname === "/addcore" || pathname === "/coretasks" ? "coreworkbench" : "coreworkbench");
@@ -112,40 +110,28 @@ export default function CoreTasksPage() {
           >
             Core Tasks
           </button>
-          <button
-            className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "drillholeviz" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
-            onClick={() => setTab("drillholeviz")}
-          >
-            Drillhole Viz
-          </button>
         </HorizontalScrollTabs>
       </div>
 
-      {isDrillholeVizTab ? (
-        <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/30">
-          <DrillholeVizPage projectScope={projectScope} />
-        </div>
-      ) : (
-        <div className="max-w-6xl mx-auto">
-          {tab === "coreworkbench" ? (
-            <div className="card overflow-hidden">
-              <TestTab projectScope={projectScope} />
-            </div>
-          ) : tab === "bulkuploader" ? (
-            <div className="card overflow-hidden">
-              <BulkUploaderTab projectScope={projectScope} />
-            </div>
-          ) : tab === "coretasks" ? (
-            <div className="card overflow-hidden">
-              <CoreTasksManagerPage />
-            </div>
-          ) : (
-            <div className="card overflow-hidden">
-              {tab === "logging" ? <CorePage projectScope={projectScope} /> : <SampleDispatchPage projectScope={projectScope} />}
-            </div>
-          )}
-        </div>
-      )}
+      <div className="max-w-6xl mx-auto">
+        {tab === "coreworkbench" ? (
+          <div className="card overflow-hidden">
+            <TestTab projectScope={projectScope} />
+          </div>
+        ) : tab === "bulkuploader" ? (
+          <div className="card overflow-hidden">
+            <BulkUploaderTab projectScope={projectScope} />
+          </div>
+        ) : tab === "coretasks" ? (
+          <div className="card overflow-hidden">
+            <CoreTasksManagerPage />
+          </div>
+        ) : (
+          <div className="card overflow-hidden">
+            {tab === "logging" ? <CorePage projectScope={projectScope} /> : <SampleDispatchPage projectScope={projectScope} />}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
