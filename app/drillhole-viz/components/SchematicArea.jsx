@@ -139,8 +139,13 @@ export default function SchematicArea({
                     </div>
 
                     <div className="inline-flex items-center gap-2 self-start rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-2 text-xs text-slate-300">
-                      <button type="button" className="btn btn-xs" onClick={openMarkupMode} disabled={!selectedHole || openingMarkup}>
-                        {openingMarkup ? "Opening markup..." : "Markup mode"}
+                      <button
+                        type="button"
+                        className="btn btn-xs"
+                        onClick={openMarkupMode}
+                        disabled={!selectedHole || openingMarkup}
+                      >
+                        Markup mode
                       </button>
                       <button type="button" className="btn btn-xs btn-primary" onClick={onExportPdf} disabled={!!exportDisabledReason} title={exportDisabledReason || "Export PDF"}>
                         Export PDF

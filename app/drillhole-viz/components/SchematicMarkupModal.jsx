@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import { exportMarkedupSchematicPdf } from "../utils/exportMarkedupSchematicPdf";
 
 const COLOR_OPTIONS = ["#f8fafc", "#ef4444", "#f59e0b", "#22c55e", "#38bdf8", "#a855f7"];
-const SIZE_OPTIONS = [2, 4, 6, 10];
+const SIZE_OPTIONS = [6, 12];
 const TOOL_OPTIONS = [
   ["pen", "Pen"],
   ["highlighter", "Highlight"],
@@ -112,7 +112,7 @@ function AnnotationPreview({ annotation }) {
 export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) {
   const svgRef = useRef(null);
   const stageRef = useRef(null);
-  const viewportRef = useRef(null);
+  const stageHostRef = useRef(null);
   const [tool, setTool] = useState("pen");
   const [color, setColor] = useState(COLOR_OPTIONS[1]);
   const [size, setSize] = useState(4);
@@ -121,8 +121,7 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
   const [isDrawing, setIsDrawing] = useState(false);
   const [textValue, setTextValue] = useState("Note");
   const [exporting, setExporting] = useState(false);
-  const [availableStageArea, setAvailableStageArea] = useState({ width: 1400, height: 900 });
-  const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [availableStageWidth, setAvailableStageWidth] = useState(960);
   const [usesCoarsePointer, setUsesCoarsePointer] = useState(false);
   const [touchDrawingEnabled, setTouchDrawingEnabled] = useState(false);
 
@@ -137,32 +136,6 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
       setTouchDrawingEnabled(false);
     }
   }, [open]);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-
-    const mediaQuery = window.matchMedia("(max-width: 767px)");
-    const syncViewport = (event) => {
-      const matches = typeof event?.matches === "boolean" ? event.matches : mediaQuery.matches;
-      setIsMobileViewport(matches);
-    };
-
-    syncViewport(mediaQuery);
-    mediaQuery.addEventListener("change", syncViewport);
-
-    return () => {
-      mediaQuery.removeEventListener("change", syncViewport);
-    };
-  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -187,43 +160,38 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
   useEffect(() => {
     if (!open) return undefined;
 
-    const updateAvailableArea = () => {
-      const rect = viewportRef.current?.getBoundingClientRect?.();
-      if (!rect?.width || !rect?.height) return;
-      setAvailableStageArea({
-        width: rect.width,
-        height: rect.height,
-      });
+    const updateStageWidth = () => {
+      const rect = stageHostRef.current?.getBoundingClientRect?.();
+      if (!rect?.width) return;
+      setAvailableStageWidth(rect.width);
     };
 
-    updateAvailableArea();
+    updateStageWidth();
 
-    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateAvailableArea) : null;
-    if (observer && viewportRef.current) {
-      observer.observe(viewportRef.current);
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateStageWidth) : null;
+    if (observer && stageHostRef.current) {
+      observer.observe(stageHostRef.current);
     }
 
-    window.addEventListener("resize", updateAvailableArea);
+    window.addEventListener("resize", updateStageWidth);
     return () => {
-      window.removeEventListener("resize", updateAvailableArea);
+      window.removeEventListener("resize", updateStageWidth);
       observer?.disconnect();
     };
   }, [open]);
 
   const stageStyle = useMemo(() => {
     if (!snapshot?.width || !snapshot?.height) return { width: "100%", aspectRatio: "1 / 1" };
-    const compactViewport = availableStageArea.width < 768 || availableStageArea.height < 720;
-    const stageInset = compactViewport ? 8 : 24;
-    const maxWidth = Math.max(120, availableStageArea.width - stageInset);
-    const maxHeight = Math.max(120, availableStageArea.height - stageInset);
-    const scale = Math.min(maxWidth / snapshot.width, maxHeight / snapshot.height, 1);
+    const maxWidth = Math.max(260, availableStageWidth - 2);
+    const scale = Math.min(maxWidth / snapshot.width, 1);
     return {
       width: `${snapshot.width * scale}px`,
       height: `${snapshot.height * scale}px`,
       maxWidth: "100%",
-      maxHeight: "100%",
     };
-  }, [availableStageArea.height, availableStageArea.width, snapshot?.height, snapshot?.width]);
+  }, [availableStageWidth, snapshot?.height, snapshot?.width]);
+
+  const annotationCount = annotations.length + (draft ? 1 : 0);
 
   if (!open || !snapshot?.src) return null;
 
@@ -308,212 +276,159 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
 
   return (
     <div className="fixed inset-0 z-[120] overflow-y-auto bg-[rgba(2,6,23,0.86)] backdrop-blur-md">
-      <div className="flex min-h-[100dvh] flex-col px-2 py-2 md:h-full md:min-h-0 md:overflow-hidden md:px-6 md:py-5">
-        <div className="sticky top-0 z-20 shrink-0 rounded-[20px] border border-white/10 bg-slate-950/92 px-3 py-3 shadow-[0_24px_80px_rgba(2,6,23,0.42)] backdrop-blur-md md:hidden">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Markup Mode</div>
-              <div className="mt-1 text-base font-semibold text-white">Static schematic review</div>
-              <div className="mt-1 text-xs leading-5 text-slate-300">Markup the frozen schematic, then export the result.</div>
-            </div>
-
-            <div className="flex shrink-0 items-center gap-2">
-              <button type="button" className="btn btn-xs btn-primary" onClick={onExport} disabled={exporting}>
-                {exporting ? "Exporting..." : "Export"}
-              </button>
-              <button type="button" className="btn btn-xs" onClick={onClose}>
-                Close
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-3 overflow-x-auto pb-1">
-            <div className="flex min-w-max items-center gap-2">
-              {TOOL_OPTIONS.map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  className={`btn btn-xs ${tool === value ? "btn-primary" : ""}`}
-                  onClick={() => setTool(value)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-2 overflow-x-auto pb-1">
-            <div className="flex min-w-max items-center gap-2">
-              {usesCoarsePointer ? (
-                <button
-                  type="button"
-                  className={`btn btn-xs ${touchDrawingEnabled ? "btn-primary" : ""}`}
-                  onClick={() => setTouchDrawingEnabled((prev) => !prev)}
-                >
-                  {touchDrawingEnabled ? "Scroll page" : "Enable drawing"}
-                </button>
-              ) : null}
-
-              <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2 py-1">
-                {COLOR_OPTIONS.map((swatch) => (
-                  <button
-                    key={swatch}
-                    type="button"
-                    className={`h-6 w-6 rounded-full border ${color === swatch ? "border-white" : "border-white/10"}`}
-                    style={{ backgroundColor: swatch }}
-                    onClick={() => setColor(swatch)}
-                    aria-label={`Use ${swatch} annotation color`}
-                  />
-                ))}
+      <div className="mx-auto min-h-[100dvh] w-full max-w-[1600px] px-3 py-3 md:px-6 md:py-6">
+        <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,0.98))] shadow-[0_30px_120px_rgba(2,6,23,0.55)]">
+          <div className="rounded-t-[30px] border-b border-white/10 bg-[rgba(2,6,23,0.84)] px-4 py-4 backdrop-blur-xl md:px-6 md:py-5">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div className="min-w-0">
+                <div className="text-[11px] uppercase tracking-[0.24em] text-cyan-100/70">Markup Studio</div>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <h2 className="text-xl font-semibold text-white md:text-2xl">Static schematic markup</h2>
+                  <div className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-xs text-slate-300">
+                    {hole?.hole_id || "Unnamed hole"}
+                  </div>
+                  <div className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-xs text-slate-300">
+                    {annotationCount} markups
+                  </div>
+                </div>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
+                  The marked-up schematic scales to fit the available width, and the page itself handles vertical scrolling.
+                </p>
               </div>
 
-              <select className="select h-8 min-h-0 w-[88px]" value={size} onChange={(event) => setSize(Number(event.target.value))}>
-                {SIZE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    Size {option}
-                  </option>
-                ))}
-              </select>
-
-              <button type="button" className="btn btn-xs" onClick={undo} disabled={!annotations.length}>
-                Undo
-              </button>
-              <button type="button" className="btn btn-xs" onClick={clear} disabled={!annotations.length && !draft}>
-                Clear
-              </button>
-            </div>
-          </div>
-
-          {tool === "text" ? (
-            <input
-              className="input mt-2 h-9 min-h-0 w-full"
-              value={textValue}
-              onChange={(event) => setTextValue(event.target.value)}
-              placeholder="Text to place"
-            />
-          ) : null}
-
-          {usesCoarsePointer ? (
-            <div className="mt-2 text-[11px] leading-5 text-slate-400">
-              {touchDrawingEnabled
-                ? "Drawing is active inside the schematic. Switch back to scroll the page normally."
-                : "Page scrolling is active. Enable drawing when you want to mark up the schematic."}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="sticky top-0 z-20 hidden shrink-0 rounded-[24px] border border-white/10 bg-slate-950/90 px-4 py-4 shadow-[0_24px_80px_rgba(2,6,23,0.42)] backdrop-blur-md md:block">
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div>
-              <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Markup Mode</div>
-              <div className="mt-1 text-lg font-semibold text-white">Static schematic review layer</div>
-              <div className="mt-1 text-sm text-slate-300">Annotate a frozen snapshot, then export the marked-up result as PDF.</div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              {usesCoarsePointer ? (
-                <button
-                  type="button"
-                  className={`btn btn-xs ${touchDrawingEnabled ? "btn-primary" : ""}`}
-                  onClick={() => setTouchDrawingEnabled((prev) => !prev)}
-                >
-                  {touchDrawingEnabled ? "Scroll page" : "Enable drawing"}
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" className="btn btn-xs" onClick={undo} disabled={!annotations.length}>
+                  Undo
                 </button>
-              ) : null}
-
-              {TOOL_OPTIONS.map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  className={`btn btn-xs ${tool === value ? "btn-primary" : ""}`}
-                  onClick={() => setTool(value)}
-                >
-                  {label}
+                <button type="button" className="btn btn-xs" onClick={clear} disabled={!annotations.length && !draft}>
+                  Clear
                 </button>
-              ))}
-
-              <div className="ml-0 flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 md:ml-2">
-                {COLOR_OPTIONS.map((swatch) => (
-                  <button
-                    key={swatch}
-                    type="button"
-                    className={`h-6 w-6 rounded-full border ${color === swatch ? "border-white" : "border-white/10"}`}
-                    style={{ backgroundColor: swatch }}
-                    onClick={() => setColor(swatch)}
-                    aria-label={`Use ${swatch} annotation color`}
-                  />
-                ))}
+                <button type="button" className="btn btn-xs btn-primary" onClick={onExport} disabled={exporting}>
+                  {exporting ? "Exporting..." : "Export PDF"}
+                </button>
+                <button type="button" className="btn btn-xs" onClick={onClose}>
+                  Close
+                </button>
               </div>
-
-              <select className="select h-8 min-h-0 w-[88px]" value={size} onChange={(event) => setSize(Number(event.target.value))}>
-                {SIZE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    Size {option}
-                  </option>
-                ))}
-              </select>
-
-              {tool === "text" ? (
-                <input
-                  className="input h-8 min-h-0 w-[180px]"
-                  value={textValue}
-                  onChange={(event) => setTextValue(event.target.value)}
-                  placeholder="Text to place"
-                />
-              ) : null}
-
-              <button type="button" className="btn btn-xs" onClick={undo} disabled={!annotations.length}>
-                Undo
-              </button>
-              <button type="button" className="btn btn-xs" onClick={clear} disabled={!annotations.length && !draft}>
-                Clear
-              </button>
-              <button type="button" className="btn btn-xs btn-primary" onClick={onExport} disabled={exporting}>
-                {exporting ? "Exporting..." : "Export PDF"}
-              </button>
-              <button type="button" className="btn btn-xs" onClick={onClose}>
-                Close
-              </button>
             </div>
           </div>
 
-          {usesCoarsePointer ? (
-            <div className="mt-3 text-xs leading-5 text-slate-400">
-              {touchDrawingEnabled
-                ? "Drawing is active only inside the schematic canvas. Turn it off to pan or scroll the page."
-                : "The page can scroll normally. Turn drawing on when you want touch gestures to annotate the schematic."}
-            </div>
-          ) : null}
-        </div>
+          <div className="grid gap-4 px-3 py-3 xl:grid-cols-[320px_minmax(0,1fr)] md:px-5 md:py-5">
+            <aside className="space-y-4">
+              <section className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4 shadow-[0_20px_60px_rgba(2,6,23,0.24)]">
+                <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Interaction</div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {usesCoarsePointer ? (
+                    <button
+                      type="button"
+                      className={`btn btn-xs ${touchDrawingEnabled ? "btn-primary" : ""}`}
+                      onClick={() => setTouchDrawingEnabled((prev) => !prev)}
+                    >
+                      {touchDrawingEnabled ? "Switch To Scroll" : "Enable Drawing"}
+                    </button>
+                  ) : (
+                    <div className="inline-flex rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-xs text-emerald-100">
+                      Desktop drawing enabled
+                    </div>
+                  )}
+                </div>
+                <p className="mt-3 text-sm leading-6 text-slate-300">
+                  {usesCoarsePointer
+                    ? touchDrawingEnabled
+                      ? "Touch drawing is active inside the schematic canvas. Switch back to scroll the page normally."
+                      : "Page scrolling is active. Turn drawing on when you want touch gestures to create markup."
+                    : "Use your mouse or stylus directly on the schematic canvas to mark up the snapshot."}
+                </p>
+              </section>
 
-        <div
-          ref={viewportRef}
-          className={`mt-2 rounded-[24px] border border-white/10 bg-slate-950/65 p-2 md:mt-4 md:rounded-[28px] md:p-5 ${
-            isMobileViewport ? "overflow-visible" : "min-h-0 flex-1 overflow-auto overscroll-contain"
-          }`}
-        >
-          <div className={`flex ${isMobileViewport ? "items-start justify-start" : "min-h-full items-start justify-center md:items-center"}`}>
-            <div
-              ref={stageRef}
-              className="relative max-w-full max-h-full overflow-hidden rounded-[16px] border border-white/10 bg-[#08111d] shadow-[0_24px_80px_rgba(2,6,23,0.35)] md:rounded-[20px]"
-              style={stageStyle}
-            >
-              <img src={snapshot.src} alt="Schematic snapshot for markup" className="block h-full w-full select-none object-contain" draggable={false} />
-              <svg
-                ref={svgRef}
-                viewBox={`0 0 ${snapshot.width} ${snapshot.height}`}
-                className={`absolute inset-0 h-full w-full ${drawingEnabled ? "pointer-events-auto touch-none" : "pointer-events-none"}`}
-                onPointerDown={beginDraw}
-                onPointerMove={moveDraw}
-                onPointerUp={endDraw}
-                onPointerLeave={endDraw}
-              >
-                {annotations.map((annotation, index) => (
-                  <g key={`${annotation.type}-${index}`}>{renderAnnotation(annotation)}</g>
-                ))}
-                <AnnotationPreview annotation={draft} />
-              </svg>
-            </div>
+              <section className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4 shadow-[0_20px_60px_rgba(2,6,23,0.24)]">
+                <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Tools</div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {TOOL_OPTIONS.map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={`btn btn-xs justify-center ${tool === value ? "btn-primary" : ""}`}
+                      onClick={() => setTool(value)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {tool === "text" ? (
+                  <input
+                    className="input mt-3"
+                    value={textValue}
+                    onChange={(event) => setTextValue(event.target.value)}
+                    placeholder="Text to place"
+                  />
+                ) : null}
+
+                <div className="mt-4 text-[11px] uppercase tracking-[0.22em] text-slate-400">Color</div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {COLOR_OPTIONS.map((swatch) => (
+                    <button
+                      key={swatch}
+                      type="button"
+                      className={`h-9 w-9 rounded-full border-2 transition ${color === swatch ? "border-white shadow-[0_0_0_3px_rgba(255,255,255,0.14)]" : "border-white/10"}`}
+                      style={{ backgroundColor: swatch }}
+                      onClick={() => setColor(swatch)}
+                      aria-label={`Use ${swatch} annotation color`}
+                    />
+                  ))}
+                </div>
+
+                <div className="mt-4 text-[11px] uppercase tracking-[0.22em] text-slate-400">Stroke</div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {SIZE_OPTIONS.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      className={`btn btn-xs justify-center ${size === option ? "btn-primary" : ""}`}
+                      onClick={() => setSize(option)}
+                    >
+                      Size {option}
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4 shadow-[0_20px_60px_rgba(2,6,23,0.24)]">
+                <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Export</div>
+                <p className="mt-3 text-sm leading-6 text-slate-300">
+                  Export captures the frozen schematic image with all current markup layers into a PDF, ready for sharing or review.
+                </p>
+              </section>
+            </aside>
+
+            <main className="space-y-4">
+              <section ref={stageHostRef} className="rounded-[28px] border border-white/10 bg-slate-950/55 p-3 shadow-[0_24px_80px_rgba(2,6,23,0.28)] md:p-5">
+                <div className="flex items-start justify-center p-2 md:p-4">
+                  <div
+                    ref={stageRef}
+                    className="relative overflow-hidden rounded-[20px] border border-white/10 bg-[#08111d] shadow-[0_24px_80px_rgba(2,6,23,0.35)]"
+                    style={stageStyle}
+                  >
+                    <img src={snapshot.src} alt="Schematic snapshot for markup" className="block h-full w-full select-none object-contain" draggable={false} />
+                    <svg
+                      ref={svgRef}
+                      viewBox={`0 0 ${snapshot.width} ${snapshot.height}`}
+                      className={`absolute inset-0 h-full w-full ${drawingEnabled ? "pointer-events-auto touch-none" : "pointer-events-none"}`}
+                      onPointerDown={beginDraw}
+                      onPointerMove={moveDraw}
+                      onPointerUp={endDraw}
+                      onPointerLeave={endDraw}
+                    >
+                      {annotations.map((annotation, index) => (
+                        <g key={`${annotation.type}-${index}`}>{renderAnnotation(annotation)}</g>
+                      ))}
+                      <AnnotationPreview annotation={draft} />
+                    </svg>
+                  </div>
+                </div>
+              </section>
+            </main>
           </div>
         </div>
       </div>

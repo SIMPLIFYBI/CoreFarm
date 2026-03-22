@@ -1080,7 +1080,7 @@ export default function TestTab({ projectScope = "own" }) {
             <div className="rounded-full border border-cyan-300/15 bg-cyan-300/10 px-3 py-1.5 text-xs text-cyan-100">
               Live search and interval autosave
             </div>
-            <button type="button" className="btn btn-3d-glass" onClick={openBulkEditModal} disabled={projectScope === "shared" || !selectedHoleIds.length}>
+            <button type="button" className="btn btn-3d-glass hidden md:inline-flex" onClick={openBulkEditModal} disabled={projectScope === "shared" || !selectedHoleIds.length}>
               Bulk editor
             </button>
             <button type="button" className="btn btn-3d-primary" onClick={openCreateHole} disabled={projectScope === "shared"}>
@@ -1091,20 +1091,21 @@ export default function TestTab({ projectScope = "own" }) {
       />
 
       {projectScope !== "shared" && selectedHoleIds.length > 0 ? (
-        <section className="rounded-[24px] border border-white/10 bg-slate-950/40 p-4 shadow-[0_18px_60px_rgba(2,6,23,0.22)]">
+        <section className="rounded-[24px] border border-white/10 bg-slate-950/40 p-3 shadow-[0_18px_60px_rgba(2,6,23,0.22)] md:p-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <div className="text-sm font-medium text-slate-100">{selectedHoleIds.length} hole{selectedHoleIds.length === 1 ? "" : "s"} selected</div>
-              <div className="mt-1 text-xs text-slate-400">Use the bulk editor here for updates. Bulk import now lives in the separate Bulk Uploader tab.</div>
+              <div className="mt-1 text-xs text-slate-400 md:hidden">Quick actions for the current selection.</div>
+              <div className="mt-1 hidden text-xs text-slate-400 md:block">Use the available actions below for quick selection management.</div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="btn btn-3d-primary" onClick={openBulkEditModal} disabled={bulkUpdating}>
+            <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap">
+              <button type="button" className="btn btn-3d-primary hidden md:inline-flex" onClick={openBulkEditModal} disabled={bulkUpdating}>
                 Open bulk editor
               </button>
-              <button type="button" className="btn btn-3d-glass" onClick={() => setSelectedHoleIds([])} disabled={bulkUpdating}>
+              <button type="button" className="btn btn-3d-glass w-full justify-center px-3 md:w-auto" onClick={() => setSelectedHoleIds([])} disabled={bulkUpdating}>
                 Clear selection
               </button>
-              <button type="button" className="btn btn-3d-glass" onClick={toggleSelectAllFiltered}>
+              <button type="button" className="btn btn-3d-glass w-full justify-center px-3 md:w-auto" onClick={toggleSelectAllFiltered}>
                 {allFilteredSelected ? "Unselect filtered" : "Select filtered"}
               </button>
             </div>

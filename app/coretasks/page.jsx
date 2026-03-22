@@ -16,6 +16,7 @@ export default function CoreTasksPage() {
   const initialTab = pathname === "/addcore" || pathname === "/coretasks" ? "coreworkbench" : "coreworkbench";
   const [tab, setTab] = useState(initialTab);
   const [projectScope, setProjectScope] = useState("own"); // 'own' | 'shared'
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const isDrillholeVizTab = tab === "drillholeviz";
 
   useEffect(() => {
@@ -34,6 +35,29 @@ export default function CoreTasksPage() {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(PROJECT_SCOPE_STORAGE_KEY, projectScope);
   }, [projectScope]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
+    const syncViewport = (event) => {
+      const matches = typeof event?.matches === "boolean" ? event.matches : mediaQuery.matches;
+      setIsMobileViewport(matches);
+    };
+
+    syncViewport(mediaQuery);
+    mediaQuery.addEventListener("change", syncViewport);
+
+    return () => {
+      mediaQuery.removeEventListener("change", syncViewport);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isMobileViewport && tab === "bulkuploader") {
+      setTab("coreworkbench");
+    }
+  }, [isMobileViewport, tab]);
 
   return (
     <div className="p-4">
@@ -62,12 +86,14 @@ export default function CoreTasksPage() {
           >
             Core Workbench
           </button>
-          <button
-            className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "bulkuploader" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
-            onClick={() => setTab("bulkuploader")}
-          >
-            Bulk Uploader
-          </button>
+          {!isMobileViewport ? (
+            <button
+              className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "bulkuploader" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
+              onClick={() => setTab("bulkuploader")}
+            >
+              Bulk Uploader
+            </button>
+          ) : null}
           <button
             className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "logging" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
             onClick={() => setTab("logging")}

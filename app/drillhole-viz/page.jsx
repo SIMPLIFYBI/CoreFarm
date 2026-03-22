@@ -1940,46 +1940,9 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
     }
   };
 
-  const totalProjects = projects.length;
-  const totalHoles = holes.length;
-  const totalShared = holes.filter((hole) => hole.organization_id !== selectedOrgId).length;
-
   return (
-    <div className="min-h-screen overflow-x-hidden bg-transparent px-3 pb-24 pt-2 md:px-5 md:pb-8 md:pt-5">
+    <div className="min-h-screen overflow-x-hidden bg-transparent px-3 pb-24 pt-3 md:px-5 md:pb-8 md:pt-4">
       <div className="mx-auto max-w-[1600px] space-y-4">
-        <section className="hidden overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/40 shadow-[0_30px_120px_rgba(2,6,23,0.45)] backdrop-blur-xl xl:block">
-          <div className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(15,23,42,0.82),rgba(8,47,73,0.65)_45%,rgba(120,53,15,0.48))] px-4 py-5 md:px-6">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-              <div className="space-y-2">
-                <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-cyan-100">
-                  Spatial Drillhole Workspace
-                </div>
-                <div>
-                  <h1 className="text-2xl font-semibold tracking-tight text-white md:text-4xl">Inspect drillhole intervals, attributes, and schematic output in one place.</h1>
-                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300 md:text-base">
-                    Use the navigator to move between projects and holes, then edit attributes and interval data while previewing the full borehole schematic beside it.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:min-w-[420px] xl:max-w-[520px]">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3">
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Visible Projects</div>
-                  <div className="mt-2 text-2xl font-semibold text-white">{loading ? "..." : totalProjects}</div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3">
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Loaded Holes</div>
-                  <div className="mt-2 text-2xl font-semibold text-white">{loading ? "..." : totalHoles}</div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3">
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Shared In View</div>
-                  <div className="mt-2 text-2xl font-semibold text-white">{loading ? "..." : totalShared}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
         <section className="overflow-hidden rounded-[32px] border border-white/10 bg-slate-950/60 shadow-[0_30px_100px_rgba(2,6,23,0.42)] backdrop-blur-xl">
           <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(180deg,rgba(8,47,73,0.28),transparent)]" />
           <div className="relative flex flex-col gap-3 border-b border-white/10 px-4 py-4 md:px-5 lg:flex-row lg:items-center lg:justify-between">
