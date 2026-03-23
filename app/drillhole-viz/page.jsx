@@ -1693,6 +1693,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
   const canEditHole = canEdit;
 
   const isDrawerTabContentVisible = !isMobileDrawerViewport || !mobileTabCollapsed;
+  const isCollapsedMobileDrawer = isMobileDrawerViewport && drawerOpen && !isDrawerTabContentVisible;
 
   const handleDrawerTabChange = (nextTab) => {
     if (isMobileDrawerViewport && nextTab === drawerTab) {
@@ -2019,12 +2020,14 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
             "overflow-hidden bg-slate-950/55 backdrop-blur-xl transition-all duration-200",
             "xl:h-full xl:shrink-0 xl:shadow-[0_24px_80px_rgba(2,6,23,0.24)]",
             drawerOpen
-              ? "w-full h-[72svh] border-b border-white/10 xl:h-full xl:w-[460px] xl:max-w-[92vw] xl:border-b-0 xl:border-r"
+              ? isCollapsedMobileDrawer
+                ? "w-full h-auto border-b border-white/10 xl:h-full xl:w-[460px] xl:max-w-[92vw] xl:border-b-0 xl:border-r"
+                : "w-full h-[72svh] border-b border-white/10 xl:h-full xl:w-[460px] xl:max-w-[92vw] xl:border-b-0 xl:border-r"
               : "w-full h-0 border-b-0 xl:w-0 xl:h-full xl:border-r-0",
             "transition-all duration-200 overflow-hidden",
           ].join(" ")}
         >
-          <div className="flex h-full min-h-0 flex-col">
+          <div className={["flex min-h-0 flex-col", isCollapsedMobileDrawer ? "h-auto" : "h-full"].join(" ")}>
             {/* Tabs */}
             {drawerOpen && (
               <div className="border-b border-white/10 px-4 py-4 md:px-5">
@@ -2078,8 +2081,9 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
             )}
 
             {/* Tab content */}
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 md:p-5">
-              {!drawerOpen || !isDrawerTabContentVisible ? null : loading ? (
+            {!drawerOpen || !isDrawerTabContentVisible ? null : (
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 md:p-5">
+                {loading ? (
                 <div className="text-sm text-slate-300">Loading…</div>
               ) : drawerTab === "hole" ? (
                 <HoleTab
@@ -2219,8 +2223,9 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
                 />
               ) : (
                 <div className="text-sm text-slate-300">Unknown tab: {drawerTab}</div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
