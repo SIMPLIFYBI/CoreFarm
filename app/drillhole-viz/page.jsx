@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import toast from "react-hot-toast";
@@ -46,6 +46,8 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
   const [isMobileDrawerViewport, setIsMobileDrawerViewport] = useState(false);
   const [mobileTabCollapsed, setMobileTabCollapsed] = useState(false);
   const [expandedProjects, setExpandedProjects] = useState({});
+  const drawerContentRef = useRef(null);
+  const shouldResetDrawerScrollRef = useRef(false);
 
   // Planned depth editor (existing)
   const [plannedDepthInput, setPlannedDepthInput] = useState("");
@@ -1705,7 +1707,16 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
     setMobileTabCollapsed(false);
   };
 
+  useEffect(() => {
+    if (!shouldResetDrawerScrollRef.current) return;
+    if (!isMobileDrawerViewport || !drawerOpen || drawerTab !== "attributes") return;
+
+    drawerContentRef.current?.scrollTo({ top: 0, behavior: "auto" });
+    shouldResetDrawerScrollRef.current = false;
+  }, [drawerOpen, drawerTab, isMobileDrawerViewport, selectedHoleId]);
+
   const onSelectHole = (holeId) => {
+    shouldResetDrawerScrollRef.current = true;
     setSelectedHoleId(holeId);
     setDrawerTab("attributes");
     setDrawerOpen(true);
@@ -2082,7 +2093,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
 
             {/* Tab content */}
             {!drawerOpen || !isDrawerTabContentVisible ? null : (
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 md:p-5">
+              <div ref={drawerContentRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 md:p-5">
                 {loading ? (
                 <div className="text-sm text-slate-300">Loading…</div>
               ) : drawerTab === "hole" ? (
