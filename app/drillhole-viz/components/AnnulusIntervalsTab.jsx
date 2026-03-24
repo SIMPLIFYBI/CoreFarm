@@ -64,8 +64,9 @@ export default function AnnulusIntervalsTab({
 
                 return (
                   <div key={r.id || `new-ann-${idx}`} className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-                    <div className="grid grid-cols-1 md:grid-cols-[minmax(92px,1fr)_minmax(92px,1fr)_minmax(0,2.6fr)_48px] gap-3 items-end">
-                      <div>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_44px] gap-2 items-end">
+                        <div>
                         <label className="mb-1 block text-[11px] uppercase tracking-wide text-slate-400">From (m)</label>
                         <input
                           className="input h-10 min-h-0 w-full"
@@ -76,9 +77,9 @@ export default function AnnulusIntervalsTab({
                           disabled={!canEdit}
                           onChange={(e) => onUpdateRow(idx, { from_m: e.target.value })}
                         />
-                      </div>
+                        </div>
 
-                      <div>
+                        <div>
                         <label className="mb-1 block text-[11px] uppercase tracking-wide text-slate-400">To (m)</label>
                         <input
                           className="input h-10 min-h-0 w-full"
@@ -89,18 +90,32 @@ export default function AnnulusIntervalsTab({
                           disabled={!canEdit}
                           onChange={(e) => onUpdateRow(idx, { to_m: e.target.value })}
                         />
+                        </div>
+
+                        <div>
+                          <label className="mb-1 block text-[11px] uppercase tracking-wide text-slate-400">Remove</label>
+                          <button
+                            type="button"
+                            className="h-10 min-h-0 w-full rounded-xl border border-rose-300/35 bg-rose-500/10 text-rose-200 transition-base hover:bg-rose-500/20 disabled:opacity-50 flex items-center justify-center"
+                            onClick={() => onRemoveRow(idx)}
+                            disabled={!canEdit}
+                            title="Remove interval"
+                          >
+                            X
+                          </button>
+                        </div>
                       </div>
 
                       <div className="min-w-0">
                         <label className="mb-1 block text-[11px] uppercase tracking-wide text-slate-400">Annulus Type</label>
                         <div className="flex items-center gap-2 min-w-0">
                           <span
-                            className="inline-block h-3 w-3 rounded-sm border border-white/20 shrink-0"
+                            className="mt-0.5 inline-block h-3 w-3 rounded-sm border border-white/20 shrink-0"
                             style={{ backgroundColor: swatch }}
                             title={t?.name || "Annulus color"}
                           />
                           <select
-                            className="select h-10 min-h-0 w-full"
+                            className="select h-10 min-h-0 w-full min-w-0"
                             value={r.annulus_type_id || ""}
                             disabled={!canEdit}
                             onChange={(e) => onUpdateRow(idx, { annulus_type_id: e.target.value })}
@@ -113,18 +128,6 @@ export default function AnnulusIntervalsTab({
                             ))}
                           </select>
                         </div>
-                      </div>
-
-                      <div>
-                        <button
-                          type="button"
-                          className="h-10 min-h-0 w-full rounded-xl border border-rose-300/35 bg-rose-500/10 text-rose-200 transition-base hover:bg-rose-500/20 disabled:opacity-50 flex items-center justify-center"
-                          onClick={() => onRemoveRow(idx)}
-                          disabled={!canEdit}
-                          title="Remove interval"
-                        >
-                          X
-                        </button>
                       </div>
                     </div>
                   </div>

@@ -790,7 +790,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const [expandedAssetProjects, setExpandedAssetProjects] = useState({});
   const [selectedHoleId, setSelectedHoleId] = useState("");
   const [selectedAssetId, setSelectedAssetId] = useState("");
-  const [mobilePanelTab, setMobilePanelTab] = useState("projects");
+  const [mobilePanelTab, setMobilePanelTab] = useState("holes");
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [schematicHole, setSchematicHole] = useState(null);
   const [schematicLoading, setSchematicLoading] = useState(false);
@@ -836,7 +836,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
       if (snapshot.navigatorTab === "holes" || snapshot.navigatorTab === "assets") {
         setNavigatorTab(snapshot.navigatorTab);
       }
-      if (["projects", "holes", "assets", "all"].includes(snapshot.mobilePanelTab)) {
+      if (["holes", "assets"].includes(snapshot.mobilePanelTab)) {
         setMobilePanelTab(snapshot.mobilePanelTab);
       }
       if (typeof snapshot.selectedHoleId === "string") {
@@ -1769,9 +1769,8 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     const map = mapRef.current;
     if (!map || !mapReadyRef.current) return;
 
-    const showAllLayers = !isMobileViewport || mobilePanelTab === "all";
-    const showAssetLayers = showAllLayers || mobilePanelTab === "assets";
-    const showHoleLayers = showAllLayers || mobilePanelTab === "projects" || mobilePanelTab === "holes";
+    const showAssetLayers = !isMobileViewport || mobilePanelTab === "assets";
+    const showHoleLayers = !isMobileViewport || mobilePanelTab === "holes";
 
     const setLayerVisibility = (layerId, visible) => {
       if (!map.getLayer(layerId)) return;
@@ -1794,13 +1793,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
 
     if (pendingMapRestoreRef.current || applyingMapRestoreRef.current) return;
 
-    const visibleMapRows = isMobileViewport
-      ? mobilePanelTab === "assets"
-        ? visibleAssets
-        : mobilePanelTab === "all"
-          ? [...visibleHoles, ...visibleAssets]
-          : visibleHoles
-      : [...visibleHoles, ...visibleAssets];
+    const visibleMapRows = isMobileViewport ? (mobilePanelTab === "assets" ? visibleAssets : visibleHoles) : [...visibleHoles, ...visibleAssets];
 
     if (!visibleMapRows.length) {
       if (popupRef.current) popupRef.current.remove();
@@ -2006,14 +1999,14 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                 <div className="mt-1 flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-1.5">
                   <button
                     type="button"
-                    className={`flex-1 rounded-2xl px-3 py-2 text-sm font-medium transition ${navigatorTab === "holes" ? "bg-amber-300 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
+                    className={`flex-1 rounded-2xl px-3 py-2 text-sm font-medium transition ${navigatorTab === "holes" ? "bg-cyan-300 text-slate-950 shadow-[0_12px_28px_rgba(34,211,238,0.22)]" : "text-slate-200 hover:bg-white/8"}`}
                     onClick={() => setNavigatorTab("holes")}
                   >
                     Holes
                   </button>
                   <button
                     type="button"
-                    className={`flex-1 rounded-2xl px-3 py-2 text-sm font-medium transition ${navigatorTab === "assets" ? "bg-cyan-300 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
+                    className={`flex-1 rounded-2xl px-3 py-2 text-sm font-medium transition ${navigatorTab === "assets" ? "bg-rose-300 text-slate-950 shadow-[0_12px_28px_rgba(244,114,182,0.22)]" : "text-slate-200 hover:bg-white/8"}`}
                     onClick={() => setNavigatorTab("assets")}
                   >
                     Assets
@@ -2051,26 +2044,13 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                 <div className="flex flex-col items-start gap-3 min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
                   <div>
                     <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Mobile Map View</div>
-                    <div className="mt-1 text-lg font-semibold text-white">{mobilePanelTab === "projects" ? "Projects and holes" : mobilePanelTab === "holes" ? "Hole attributes" : mobilePanelTab === "assets" ? "Mapped assets" : "All mapped items"}</div>
+                    <div className="mt-1 text-lg font-semibold text-white">{mobilePanelTab === "holes" ? "Hole attributes" : "Mapped assets"}</div>
                   </div>
                   <div className="self-start rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-300 min-[360px]:self-auto">
-                    {mobilePanelTab === "projects"
-                      ? `${totalVisibleProjects} projects`
-                      : mobilePanelTab === "holes"
-                        ? selectedHole?.hole_id || "No selection"
-                        : mobilePanelTab === "assets"
-                          ? `${totalVisibleAssets} assets`
-                        : `${totalVisibleHoles + totalVisibleAssets} items`}
+                    {mobilePanelTab === "holes" ? selectedHole?.hole_id || "No selection" : `${totalVisibleAssets} assets`}
                   </div>
                 </div>
                 <div className="mt-4 grid w-full grid-cols-2 gap-2 rounded-2xl bg-white/[0.04] p-1.5">
-                  <button
-                    type="button"
-                    className={`min-w-0 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "projects" ? "bg-cyan-300 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
-                    onClick={() => setMobilePanelTab("projects")}
-                  >
-                    Projects
-                  </button>
                   <button
                     type="button"
                     className={`min-w-0 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "holes" ? "bg-amber-300 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
@@ -2084,13 +2064,6 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                     onClick={() => setMobilePanelTab("assets")}
                   >
                     Assets
-                  </button>
-                  <button
-                    type="button"
-                    className={`min-w-0 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "all" ? "bg-slate-200 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
-                    onClick={() => setMobilePanelTab("all")}
-                  >
-                    All
                   </button>
                 </div>
               </div>
@@ -2125,16 +2098,10 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                 <div className="flex flex-col items-start gap-3 min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
                   <div>
                     <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Mobile Navigator</div>
-                    <div className="mt-1 text-lg font-semibold text-white">{mobilePanelTab === "projects" ? "Projects and holes" : mobilePanelTab === "holes" ? "Hole attributes" : mobilePanelTab === "assets" ? "Mapped assets" : "All mapped items"}</div>
+                    <div className="mt-1 text-lg font-semibold text-white">{mobilePanelTab === "holes" ? "Hole attributes" : "Mapped assets"}</div>
                   </div>
                   <div className="self-start rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-300 min-[360px]:self-auto">
-                    {mobilePanelTab === "projects"
-                      ? `${totalVisibleProjects} projects`
-                      : mobilePanelTab === "holes"
-                        ? selectedHole?.hole_id || "No selection"
-                        : mobilePanelTab === "assets"
-                          ? `${totalVisibleAssets} assets`
-                        : `${totalVisibleHoles + totalVisibleAssets} items`}
+                    {mobilePanelTab === "holes" ? selectedHole?.hole_id || "No selection" : `${totalVisibleAssets} assets`}
                   </div>
                 </div>
                 <div className="mt-4 flex flex-col gap-3">
@@ -2195,17 +2162,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                 </div>
               </div>
 
-              {mobilePanelTab === "projects" ? (
-                <ProjectAccordionList
-                  loading={loading}
-                  projects={filteredProjects}
-                  expandedProjects={expandedProjects}
-                  onToggleProject={toggleProjectExpanded}
-                  selectedHoleId={selectedHole?.id || ""}
-                  onSelectHole={focusHole}
-                  compact
-                />
-              ) : mobilePanelTab === "holes" ? (
+              {mobilePanelTab === "holes" ? (
                 <HoleAttributesPanel selectedHole={selectedHole} mobile />
               ) : mobilePanelTab === "assets" ? (
                 <AssetAccordionList
@@ -2217,35 +2174,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   onSelectAsset={focusAsset}
                   compact
                 />
-              ) : (
-                <div className="space-y-5 p-4">
-                  <div>
-                    <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Hole Programs</div>
-                    <ProjectAccordionList
-                      loading={loading}
-                      projects={filteredProjects}
-                      expandedProjects={expandedProjects}
-                      onToggleProject={toggleProjectExpanded}
-                      selectedHoleId={selectedHole?.id || ""}
-                      onSelectHole={focusHole}
-                      compact
-                    />
-                  </div>
-
-                  <div>
-                    <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Mapped Assets</div>
-                    <AssetAccordionList
-                      loading={loading}
-                      projects={filteredAssetProjects}
-                      expandedProjects={expandedAssetProjects}
-                      onToggleProject={toggleAssetProjectExpanded}
-                      selectedAssetId={selectedAsset?.id || ""}
-                      onSelectAsset={focusAsset}
-                      compact
-                    />
-                  </div>
-                </div>
-              )}
+              ) : null}
             </div>
 
             <div className="hidden overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/55 shadow-[0_24px_80px_rgba(2,6,23,0.32)] backdrop-blur-xl xl:block">

@@ -3,6 +3,10 @@
 export default function AttributesTab({
   selectedHole,
   canEditHole,
+  actualDepthInput,
+  savingActualDepth,
+  onActualDepthChange,
+  onSaveActualDepth,
   plannedDepthInput,
   savingPlannedDepth,
   onPlannedDepthChange,
@@ -62,6 +66,30 @@ export default function AttributesTab({
               </button>
             </div>
             <div className="text-[11px] text-slate-500">Used for planned vs actual markers.</div>
+          </div>
+
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3 space-y-2">
+            <div className="text-xs text-slate-300 font-medium">Actual depth (m)</div>
+            <div className="flex items-center gap-2">
+              <input
+                className="input input-xs w-full"
+                type="number"
+                step="0.1"
+                placeholder="e.g. 118.4"
+                value={actualDepthInput ?? ""}
+                disabled={!canEditHole}
+                onChange={(e) => onActualDepthChange?.(e.target.value)}
+              />
+              <button
+                type="button"
+                className="btn btn-xs btn-primary shrink-0"
+                onClick={onSaveActualDepth}
+                disabled={!canEditHole || savingActualDepth}
+              >
+                {savingActualDepth ? "Saving..." : "Save"}
+              </button>
+            </div>
+            <div className="text-[11px] text-slate-500">Current recorded drillhole depth.</div>
           </div>
 
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3 space-y-2">

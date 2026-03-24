@@ -50,6 +50,8 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
   const shouldResetDrawerScrollRef = useRef(false);
 
   // Planned depth editor (existing)
+  const [actualDepthInput, setActualDepthInput] = useState("");
+  const [savingActualDepth, setSavingActualDepth] = useState(false);
   const [plannedDepthInput, setPlannedDepthInput] = useState("");
   const [savingPlannedDepth, setSavingPlannedDepth] = useState(false);
 
@@ -175,6 +177,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
   // Keep the planned depth editor in sync with the selected hole
   useEffect(() => {
     if (!selectedHole) {
+      setActualDepthInput("");
       setPlannedDepthInput("");
       setWaterLevelInput("");
       setAttributeTouched({});
@@ -195,6 +198,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
       return;
     }
 
+    setActualDepthInput(selectedHole.depth ?? "");
     setPlannedDepthInput(selectedHole.planned_depth ?? "");
     setWaterLevelInput(selectedHole.water_level_m ?? "");
   setAttributeTouched({});
@@ -212,7 +216,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
       completion_status: selectedHole.completion_status ?? "",
       completion_notes: selectedHole.completion_notes ?? "",
     });
-  }, [selectedHole?.id, selectedHole?.planned_depth, selectedHole?.water_level_m, selectedHole?.azimuth, selectedHole?.dip, selectedHole?.collar_longitude, selectedHole?.collar_latitude, selectedHole?.collar_easting, selectedHole?.collar_northing, selectedHole?.collar_elevation_m, selectedHole?.collar_source, selectedHole?.started_at, selectedHole?.completed_at, selectedHole?.completion_status, selectedHole?.completion_notes]);
+  }, [selectedHole?.id, selectedHole?.depth, selectedHole?.planned_depth, selectedHole?.water_level_m, selectedHole?.azimuth, selectedHole?.dip, selectedHole?.collar_longitude, selectedHole?.collar_latitude, selectedHole?.collar_easting, selectedHole?.collar_northing, selectedHole?.collar_elevation_m, selectedHole?.collar_source, selectedHole?.started_at, selectedHole?.completed_at, selectedHole?.completion_status, selectedHole?.completion_notes]);
 
   useEffect(() => {
     if (!requestedHoleId || !(holes || []).some((hole) => hole.id === requestedHoleId)) return;
@@ -1617,7 +1621,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
         if (sharedProjectIds.length) {
           const res = await supabase
             .from("holes")
-            .select("id, organization_id, hole_id, project_id, depth, planned_depth, water_level_m, azimuth, dip, collar_longitude, collar_latitude, collar_easting, collar_northing, collar_elevation_m, collar_source, started_at, completed_at, completion_status, completion_notes, projects ( id, name, coordinate_crs_code, coordinate_crs_name )")
+            .select("id, organization_id, hole_id, project_id, state, depth, planned_depth, water_level_m, azimuth, dip, collar_longitude, collar_latitude, collar_easting, collar_northing, collar_elevation_m, collar_source, started_at, completed_at, completion_status, completion_notes, projects ( id, name, coordinate_crs_code, coordinate_crs_name )")
             .in("project_id", sharedProjectIds)
             .neq("organization_id", selectedOrgId)
             .order("project_id", { ascending: true })
@@ -1628,7 +1632,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
       } else {
         const res = await supabase
           .from("holes")
-          .select("id, organization_id, hole_id, project_id, depth, planned_depth, water_level_m, azimuth, dip, collar_longitude, collar_latitude, collar_easting, collar_northing, collar_elevation_m, collar_source, started_at, completed_at, completion_status, completion_notes, projects ( id, name, coordinate_crs_code, coordinate_crs_name )")
+          .select("id, organization_id, hole_id, project_id, state, depth, planned_depth, water_level_m, azimuth, dip, collar_longitude, collar_latitude, collar_easting, collar_northing, collar_elevation_m, collar_source, started_at, completed_at, completion_status, completion_notes, projects ( id, name, coordinate_crs_code, coordinate_crs_name )")
           .eq("organization_id", selectedOrgId)
           .order("project_id", { ascending: true })
           .order("hole_id", { ascending: true });
@@ -1665,6 +1669,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
         organization_id: h.organization_id,
         hole_id: h.hole_id,
         project_id: h.project_id ?? null,
+        state: h.state ?? null,
         projects: h.projects ?? null,
         depth: h.depth ?? null,
         planned_depth: h.planned_depth ?? null,
@@ -1813,6 +1818,37 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
       toast.error(e?.message || "Could not save planned depth");
     } finally {
       setSavingPlannedDepth(false);
+    }
+  };
+
+  const updateActualDepth = async () => {
+    if (!selectedHole) return;
+    if (!selectedHole.project_id) {
+      toast.error("Assign the hole to a project in Hole Details before saving.");
+      return;
+    }
+
+    const trimmed = String(actualDepthInput ?? "").trim();
+    const next = trimmed === "" ? null : Number(trimmed);
+
+    if (next !== null && (!Number.isFinite(next) || next <= 0)) {
+      toast.error("Actual depth must be a number > 0 (or blank to unset).");
+      return;
+    }
+
+    try {
+      setSavingActualDepth(true);
+
+      const { error } = await supabase.from("holes").update({ depth: next }).eq("id", selectedHole.id);
+      if (error) throw error;
+
+      setHoles((prev) => (prev || []).map((h) => (h.id === selectedHole.id ? { ...h, depth: next } : h)));
+      toast.success("Actual depth saved");
+    } catch (e) {
+      console.error(e);
+      toast.error(e?.message || "Could not save actual depth");
+    } finally {
+      setSavingActualDepth(false);
     }
   };
 
@@ -2063,9 +2099,9 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
                       title={!selectedHoleId ? "Select a hole first" : ""}
                     />
                     <TabButton
-                      active={drawerTab === "construction" && isDrawerTabContentVisible}
-                      onClick={() => handleDrawerTabChange("construction")}
-                      label="Construction"
+                      active={drawerTab === "annulus" && isDrawerTabContentVisible}
+                      onClick={() => handleDrawerTabChange("annulus")}
+                      label="Annulus"
                       disabled={!selectedHoleId}
                       title={!selectedHoleId ? "Select a hole first" : ""}
                     />
@@ -2077,9 +2113,9 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
                       title={!selectedHoleId ? "Select a hole first" : ""}
                     />
                     <TabButton
-                      active={drawerTab === "annulus" && isDrawerTabContentVisible}
-                      onClick={() => handleDrawerTabChange("annulus")}
-                      label="Annulus"
+                      active={drawerTab === "construction" && isDrawerTabContentVisible}
+                      onClick={() => handleDrawerTabChange("construction")}
+                      label="Construction"
                       disabled={!selectedHoleId}
                       title={!selectedHoleId ? "Select a hole first" : ""}
                     />
@@ -2114,6 +2150,10 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
                 <AttributesTab
                   selectedHole={selectedHole}
                   canEditHole={canEditHole}
+                  actualDepthInput={actualDepthInput}
+                  savingActualDepth={savingActualDepth}
+                  onActualDepthChange={setActualDepthInput}
+                  onSaveActualDepth={updateActualDepth}
                   plannedDepthInput={plannedDepthInput}
                   savingPlannedDepth={savingPlannedDepth}
                   onPlannedDepthChange={setPlannedDepthInput}
@@ -2157,20 +2197,6 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
                   onUpdateRow={updateGeoRow}
                   onRemoveRow={removeGeoRow}
                 />
-              ) : drawerTab === "construction" ? (
-                <ConstructionIntervalsTab
-                  selectedHole={selectedHole}
-                  canEdit={canEdit}
-                  constructionLoading={constructionLoading}
-                  constructionSaving={constructionSaving}
-                  constructionRows={constructionRows}
-                  constructionTypesActive={constructionTypesActive}
-                  constructionById={constructionById}
-                  onAddRow={addConstructionRow}
-                  onSave={saveConstruction}
-                  onUpdateRow={updateConstructionRow}
-                  onRemoveRow={removeConstructionRow}
-                />
               ) : drawerTab === "annulus" ? (
                 <AnnulusIntervalsTab
                   selectedHole={selectedHole}
@@ -2184,6 +2210,20 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
                   onSave={saveAnnulus}
                   onUpdateRow={updateAnnulusRow}
                   onRemoveRow={removeAnnulusRow}
+                />
+              ) : drawerTab === "construction" ? (
+                <ConstructionIntervalsTab
+                  selectedHole={selectedHole}
+                  canEdit={canEdit}
+                  constructionLoading={constructionLoading}
+                  constructionSaving={constructionSaving}
+                  constructionRows={constructionRows}
+                  constructionTypesActive={constructionTypesActive}
+                  constructionById={constructionById}
+                  onAddRow={addConstructionRow}
+                  onSave={saveConstruction}
+                  onUpdateRow={updateConstructionRow}
+                  onRemoveRow={removeConstructionRow}
                 />
               ) : drawerTab === "components" ? (
                 <ComponentsTab

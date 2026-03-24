@@ -175,6 +175,7 @@ export default function SchematicArea({
                           />
 
                           <BoreholeSchematicPreview
+                            holeState={selectedHole.state}
                             plannedDepth={selectedHole.planned_depth}
                             actualDepth={selectedHole.depth}
                             waterLevel={selectedHole.water_level_m}
@@ -202,6 +203,7 @@ export default function SchematicArea({
                           />
 
                           <BoreholeSchematicPreview
+                            holeState={selectedHole.state}
                             plannedDepth={selectedHole.planned_depth}
                             actualDepth={selectedHole.depth}
                             waterLevel={selectedHole.water_level_m}

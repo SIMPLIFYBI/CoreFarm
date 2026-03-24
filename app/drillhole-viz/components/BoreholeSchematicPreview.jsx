@@ -138,6 +138,7 @@ function getConstructionVisualSpec(typeName) {
 }
 
 export default function BoreholeSchematicPreview({
+  holeState,
   plannedDepth,
   actualDepth,
   geologyIntervals,
@@ -162,6 +163,7 @@ export default function BoreholeSchematicPreview({
   const hasPlanned = Number.isFinite(planned) && planned > 0;
   const hasActual = Number.isFinite(actual) && actual > 0;
   const hasWater = Number.isFinite(water) && water >= 0;
+  const isDrillingActive = String(holeState || "").toLowerCase() === "in_progress" && hasActual;
 
   const maxDepth = useMemo(() => {
     return computeMaxDepth({ plannedDepth, actualDepth, minDepth: 30, step: 10 });
@@ -180,6 +182,10 @@ export default function BoreholeSchematicPreview({
   const waterY = hasWater ? yForDepth(water) : null;
 
   const clipId = `schemClip-${uid}`;
+  const drillBitGlowId = `drillBitGlow-${uid}`;
+  const drillBitBodyGradientId = `drillBitBodyGradient-${uid}`;
+  const drillBitCrownGradientId = `drillBitCrownGradient-${uid}`;
+  const drillBitBoreGradientId = `drillBitBoreGradient-${uid}`;
   const boreVoidFill = "none";
   const boreVoidStroke = compact ? "rgba(255,255,255,0.09)" : "rgba(255,255,255,0.12)";
 
@@ -251,11 +257,20 @@ export default function BoreholeSchematicPreview({
   const annulusBandW = compact ? 16 : 34;
   const spacing = compact ? 8 : 18;
   const showRightGeology = !compact;
+  const boreInset = compact ? 6 : 10;
+  const drillStringWidth = compact ? 8 : 12;
+  const bitHeight = compact ? 24 : 36;
+  const bitHalfWidth = compact ? 11 : 16;
+  const drillTopY = padTop + (compact ? 4 : 6);
+  const drillBitShoulderY = actualY != null ? Math.max(drillTopY + 8, actualY - bitHeight) : null;
+  const drillStringHeight = drillBitShoulderY != null ? Math.max(0, drillBitShoulderY - drillTopY) : 0;
 
   const compactLeftPanelW = 130;
   const compactHoleX = sidePad + compactLeftPanelW + spacing + annulusBandW;
 
   const holeX = compact ? compactHoleX : 420;
+  const boreInnerX = holeX + boreInset;
+  const boreInnerW = holeW - boreInset * 2;
 
   const leftPanelEndX = holeX - annulusBandW - spacing;
   const rightPanelStartX = holeX + holeW + annulusBandW + spacing;
@@ -272,6 +287,19 @@ export default function BoreholeSchematicPreview({
   const geologyRightW = showRightGeology ? geologyPanelW : 0;
   const componentRailX = holeX + holeW / 2;
   const componentCalloutX = compact ? holeX + holeW + annulusBandW + 10 : holeX + holeW + annulusBandW + 44;
+  const rodJointYs = useMemo(() => {
+    if (!isDrillingActive || !hasActual || drillBitShoulderY == null) return [];
+
+    const joints = [];
+    for (let depthMark = 6; depthMark < actual; depthMark += 6) {
+      const y = yForDepth(depthMark);
+      if (y > drillTopY + 2 && y < drillBitShoulderY - 2) {
+        joints.push(y);
+      }
+    }
+
+    return joints;
+  }, [actual, drillBitShoulderY, drillTopY, hasActual, isDrillingActive]);
 
   const fitLabel = (text, panelWidth, isCompact) => {
     const raw = String(text || "").trim();
@@ -383,6 +411,33 @@ export default function BoreholeSchematicPreview({
       <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMinYMin meet" className="block">
         <defs>
           <LithologyPatternDefs uid={uid} types={lithologyPatternTypes} />
+          <linearGradient id={drillBitBodyGradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#fde68a" />
+            <stop offset="40%" stopColor="#f59e0b" />
+            <stop offset="100%" stopColor="#b45309" />
+          </linearGradient>
+          <linearGradient id={drillBitCrownGradientId} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#fef3c7" />
+            <stop offset="45%" stopColor="#fbbf24" />
+            <stop offset="100%" stopColor="#ea580c" />
+          </linearGradient>
+          <linearGradient id={drillBitBoreGradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="rgba(30,41,59,0.96)" />
+            <stop offset="100%" stopColor="rgba(15,23,42,0.98)" />
+          </linearGradient>
+          <filter id={drillBitGlowId} x="-120%" y="-120%" width="340%" height="340%">
+            <feGaussianBlur stdDeviation={compact ? "2.4" : "3.6"} result="blur" />
+            <feColorMatrix
+              in="blur"
+              type="matrix"
+              values="1 0 0 0 0.98 0 1 0 0 0.63 0 0 1 0 0.12 0 0 0 0.75 0"
+              result="glow"
+            />
+            <feMerge>
+              <feMergeNode in="glow" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
           <clipPath id={clipId}>
             <rect x="0" y={padTop} width={W} height={H - padTop - padBottom} />
           </clipPath>
@@ -423,9 +478,9 @@ export default function BoreholeSchematicPreview({
           stroke="rgba(255,255,255,0.18)"
         />
         <rect
-          x={holeX + (compact ? 6 : 10)}
+          x={boreInnerX}
           y={padTop + 2}
-          width={holeW - (compact ? 12 : 20)}
+          width={boreInnerW}
           height={H - padTop - padBottom - 4}
           rx={compact ? 8 : 10}
           fill={boreVoidFill}
@@ -747,6 +802,204 @@ export default function BoreholeSchematicPreview({
               </g>
             );
           })}
+
+          {isDrillingActive && actualY != null ? (
+            <g aria-label="Active drilling status">
+              {(() => {
+                const centerX = holeX + holeW / 2;
+                const shoulderY = drillBitShoulderY;
+                const crownTopY = shoulderY + bitHeight * 0.7;
+                const crownBaseY = actualY - bitHeight * 0.12;
+                const bodyMidY = shoulderY + bitHeight * 0.42;
+                const boreHalfWidth = bitHalfWidth * 0.32;
+                const innerCrownHalfWidth = boreHalfWidth * 1.16;
+                const outerPath = [
+                  `M ${centerX - bitHalfWidth * 0.56} ${shoulderY}`,
+                  `L ${centerX + bitHalfWidth * 0.56} ${shoulderY}`,
+                  `L ${centerX + bitHalfWidth * 0.56} ${bodyMidY}`,
+                  `L ${centerX + bitHalfWidth * 0.42} ${crownTopY}`,
+                  `L ${centerX + bitHalfWidth} ${crownTopY}`,
+                  `L ${centerX + bitHalfWidth} ${crownBaseY}`,
+                  `L ${centerX + bitHalfWidth * 0.72} ${crownBaseY}`,
+                  `L ${centerX + bitHalfWidth * 0.34} ${actualY - bitHeight * 0.08}`,
+                  `L ${centerX} ${actualY}`,
+                  `L ${centerX - bitHalfWidth * 0.34} ${actualY - bitHeight * 0.08}`,
+                  `L ${centerX - bitHalfWidth * 0.72} ${crownBaseY}`,
+                  `L ${centerX - bitHalfWidth} ${crownBaseY}`,
+                  `L ${centerX - bitHalfWidth} ${crownTopY}`,
+                  `L ${centerX - bitHalfWidth * 0.42} ${crownTopY}`,
+                  `L ${centerX - bitHalfWidth * 0.56} ${bodyMidY}`,
+                  "Z",
+                ].join(" ");
+                const borePath = [
+                  `M ${centerX - boreHalfWidth} ${shoulderY + bitHeight * 0.04}`,
+                  `L ${centerX + boreHalfWidth} ${shoulderY + bitHeight * 0.04}`,
+                  `L ${centerX + boreHalfWidth} ${shoulderY + bitHeight * 0.62}`,
+                  `L ${centerX + innerCrownHalfWidth} ${crownTopY}`,
+                  `L ${centerX + innerCrownHalfWidth} ${crownBaseY}`,
+                  `L ${centerX - innerCrownHalfWidth} ${crownBaseY}`,
+                  `L ${centerX - innerCrownHalfWidth} ${crownTopY}`,
+                  `L ${centerX - boreHalfWidth} ${shoulderY + bitHeight * 0.62}`,
+                  "Z",
+                ].join(" ");
+                const crownY = crownTopY;
+                const crownHeight = crownBaseY - crownTopY;
+                const hatchStartY = shoulderY + bitHeight * 0.18;
+                const hatchEndY = crownTopY - bitHeight * 0.05;
+                const leftWaterwayX = centerX - bitHalfWidth * 0.92;
+                const leftInnerWaterwayX = centerX - bitHalfWidth * 0.42;
+                const rightInnerWaterwayX = centerX + bitHalfWidth * 0.2;
+                const rightWaterwayX = centerX + bitHalfWidth * 0.66;
+                const outerWaterwayW = compact ? 2.3 : 3.2;
+                const innerWaterwayW = compact ? 2 : 2.8;
+                const crownDiamondPoints = [-0.64, -0.22, 0.22, 0.64];
+
+                return (
+                  <g filter={`url(#${drillBitGlowId})`}>
+                    <ellipse
+                      cx={centerX}
+                      cy={actualY - bitHeight * 0.24}
+                      rx={bitHalfWidth * 1.18}
+                      ry={compact ? 9 : 13}
+                      fill="rgba(251,191,36,0.18)"
+                    />
+                    <path
+                      d={outerPath}
+                      fill={`url(#${drillBitBodyGradientId})`}
+                      stroke="rgba(120,53,15,0.56)"
+                      strokeWidth={compact ? "0.9" : "1.15"}
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d={borePath}
+                      fill={`url(#${drillBitBoreGradientId})`}
+                      stroke="rgba(255,248,220,0.20)"
+                      strokeWidth={compact ? "0.65" : "0.9"}
+                      strokeLinejoin="round"
+                    />
+                    {[0.14, 0.28, 0.42].map((offset) => {
+                      const y = shoulderY + bitHeight * offset;
+                      return (
+                        <line
+                          key={`bit-thread-${offset}`}
+                          x1={centerX - bitHalfWidth * 0.52}
+                          y1={y}
+                          x2={centerX + bitHalfWidth * 0.52}
+                          y2={y}
+                          stroke="rgba(120,53,15,0.44)"
+                          strokeWidth={compact ? "0.7" : "0.9"}
+                          strokeLinecap="round"
+                        />
+                      );
+                    })}
+                    <rect
+                      x={centerX - bitHalfWidth}
+                      y={crownY}
+                      width={bitHalfWidth * 2}
+                      height={crownHeight}
+                      fill={`url(#${drillBitCrownGradientId})`}
+                      stroke="rgba(120,53,15,0.58)"
+                      strokeWidth={compact ? "0.9" : "1.1"}
+                    />
+                    <rect x={leftWaterwayX} y={crownY + crownHeight * 0.08} width={outerWaterwayW} height={crownHeight * 0.92} fill="rgba(255,244,214,0.88)" stroke="rgba(120,53,15,0.34)" strokeWidth="0.6" />
+                    <rect x={leftInnerWaterwayX} y={crownY + crownHeight * 0.18} width={innerWaterwayW} height={crownHeight * 0.82} fill="rgba(255,244,214,0.88)" stroke="rgba(120,53,15,0.34)" strokeWidth="0.6" />
+                    <rect x={rightInnerWaterwayX} y={crownY + crownHeight * 0.18} width={innerWaterwayW} height={crownHeight * 0.82} fill="rgba(255,244,214,0.88)" stroke="rgba(120,53,15,0.34)" strokeWidth="0.6" />
+                    <rect x={rightWaterwayX} y={crownY + crownHeight * 0.08} width={outerWaterwayW} height={crownHeight * 0.92} fill="rgba(255,244,214,0.88)" stroke="rgba(120,53,15,0.34)" strokeWidth="0.6" />
+                    {[0, 1, 2].map((index) => {
+                      const startY = hatchStartY + index * ((hatchEndY - hatchStartY) / 2.4);
+                      return (
+                        <g key={`bit-hatch-${index}`}>
+                          <line
+                            x1={centerX - bitHalfWidth * 0.9}
+                            y1={startY}
+                            x2={centerX - bitHalfWidth * 0.46}
+                            y2={startY + bitHeight * 0.16}
+                            stroke="rgba(120,53,15,0.24)"
+                            strokeWidth={compact ? "0.6" : "0.75"}
+                          />
+                          <line
+                            x1={centerX + bitHalfWidth * 0.46}
+                            y1={startY + bitHeight * 0.16}
+                            x2={centerX + bitHalfWidth * 0.9}
+                            y2={startY}
+                            stroke="rgba(120,53,15,0.24)"
+                            strokeWidth={compact ? "0.6" : "0.75"}
+                          />
+                        </g>
+                      );
+                    })}
+                    {crownDiamondPoints.map((point, index) => {
+                      const diamondCx = centerX + bitHalfWidth * point;
+                      const diamondCy = crownY + crownHeight * (index % 2 === 0 ? 0.34 : 0.58);
+                      const diamondR = compact ? 1.2 : 1.7;
+                      return (
+                        <polygon
+                          key={`bit-diamond-${point}`}
+                          points={[
+                            `${diamondCx},${diamondCy - diamondR}`,
+                            `${diamondCx + diamondR},${diamondCy}`,
+                            `${diamondCx},${diamondCy + diamondR}`,
+                            `${diamondCx - diamondR},${diamondCy}`,
+                          ].join(" ")}
+                          fill="rgba(255,251,235,0.95)"
+                          stroke="rgba(217,119,6,0.70)"
+                          strokeWidth="0.55"
+                        />
+                      );
+                    })}
+                    <line
+                      x1={centerX - innerCrownHalfWidth}
+                      y1={crownBaseY}
+                      x2={centerX + innerCrownHalfWidth}
+                      y2={crownBaseY}
+                      stroke="rgba(255,247,200,0.42)"
+                      strokeWidth={compact ? "0.75" : "1"}
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d={`M ${centerX - bitHalfWidth * 0.56} ${crownY + crownHeight * 0.08} L ${centerX} ${actualY - bitHeight * 0.1} L ${centerX + bitHalfWidth * 0.56} ${crownY + crownHeight * 0.08}`}
+                      fill="none"
+                      stroke="rgba(255,247,200,0.55)"
+                      strokeWidth={compact ? "0.95" : "1.35"}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </g>
+                );
+              })()}
+              <rect
+                x={holeX + holeW / 2 - drillStringWidth / 2}
+                y={drillTopY}
+                width={drillStringWidth}
+                height={drillStringHeight}
+                rx={drillStringWidth / 2}
+                fill="rgba(71,85,105,0.96)"
+                stroke="rgba(248,250,252,0.18)"
+                strokeWidth="1"
+              />
+              <line
+                x1={holeX + holeW / 2 - drillStringWidth / 4}
+                y1={drillTopY + 2}
+                x2={holeX + holeW / 2 - drillStringWidth / 4}
+                y2={drillBitShoulderY}
+                stroke="rgba(255,255,255,0.32)"
+                strokeWidth={compact ? "0.9" : "1.2"}
+                strokeLinecap="round"
+              />
+              {rodJointYs.map((jointY) => (
+                <line
+                  key={`rod-joint-${jointY}`}
+                  x1={holeX + holeW / 2 - drillStringWidth / 2 - (compact ? 0.5 : 1)}
+                  y1={jointY}
+                  x2={holeX + holeW / 2 + drillStringWidth / 2 + (compact ? 0.5 : 1)}
+                  y2={jointY}
+                  stroke="rgba(226,232,240,0.72)"
+                  strokeWidth={compact ? "1" : "1.2"}
+                  strokeLinecap="round"
+                />
+              ))}
+            </g>
+          ) : null}
 
           {constructionCallouts.map((callout) => (
             <g key={callout.key}>
