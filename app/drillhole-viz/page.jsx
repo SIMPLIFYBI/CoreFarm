@@ -1988,75 +1988,130 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
     }
   };
 
+  const formattedHoleState = selectedHole?.state
+    ? String(selectedHole.state)
+        .split("_")
+        .map((part) => (part ? part.charAt(0).toUpperCase() + part.slice(1) : ""))
+        .join(" ")
+    : null;
+  const holeStateBadgeClassName = selectedHole?.state === "drilled"
+    ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-100"
+    : selectedHole?.state === "in_progress"
+      ? "border-amber-300/25 bg-amber-300/12 text-amber-100"
+      : "border-slate-300/18 bg-slate-300/10 text-slate-200";
+  const formattedPlannedDepth = selectedHole?.planned_depth != null && Number.isFinite(Number(selectedHole.planned_depth))
+    ? `${roundToTenth(selectedHole.planned_depth)} m`
+    : "Not set";
+  const formattedActualDepth = selectedHole?.depth != null && Number.isFinite(Number(selectedHole.depth))
+    ? `${roundToTenth(selectedHole.depth)} m`
+    : "Not set";
+  const formattedWaterLevel = selectedHole?.water_level_m != null && Number.isFinite(Number(selectedHole.water_level_m))
+    ? `${roundToTenth(selectedHole.water_level_m)} m`
+    : "Not set";
+  const selectedProjectName = selectedHole?.projects?.name || (selectedHole?.project_id ? "Untitled project" : "No project assigned");
+  const primaryDescriptorName = selectedHole?.descriptors?.[0]?.name || null;
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-transparent px-3 pb-24 pt-3 md:px-5 md:pb-8 md:pt-4">
       <div className="mx-auto max-w-[1600px] space-y-4">
-        <section className="overflow-hidden rounded-[32px] border border-white/10 bg-slate-950/60 shadow-[0_30px_100px_rgba(2,6,23,0.42)] backdrop-blur-xl">
+        <section className="relative overflow-hidden rounded-[32px] border border-white/10 bg-slate-950/60 shadow-[0_30px_100px_rgba(2,6,23,0.42)] backdrop-blur-xl">
           <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(180deg,rgba(8,47,73,0.28),transparent)]" />
-          <div className="relative flex flex-col gap-3 border-b border-white/10 px-4 py-4 md:px-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-3 min-w-0">
-              <button
-                type="button"
-                className={[
-                  "relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl",
-                  "border border-white/20 bg-white/10 backdrop-blur-xl shadow-lg shadow-black/30 text-slate-100 hover:border-white/30 hover:bg-white/15",
-                  "active:scale-95 transition-base focus-ring",
-                ].join(" ")}
-                onClick={() => setDrawerOpen((v) => !v)}
-                title={drawerOpen ? "Collapse attributes pane" : "Expand attributes pane"}
-                aria-label={drawerOpen ? "Collapse attributes pane" : "Expand attributes pane"}
-              >
-                <span className="relative text-base leading-none text-slate-100/95">{drawerOpen ? "◀" : "▶"}</span>
-              </button>
-
-              <div className="min-w-0">
-                <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Drillhole Viz</div>
-                <div className="mt-1 truncate text-lg font-semibold text-white">
-                  {selectedHole ? `Schematic: ${selectedHole.hole_id}` : "Hole schematic workspace"}
-                </div>
-              </div>
-            </div>
-
-            {selectedHole?.descriptors?.length ? (
-              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
-                {selectedHole.descriptors.map((descriptor) => (
-                  <span key={descriptor.id} className="rounded-full border border-cyan-300/15 bg-cyan-300/10 px-3 py-1.5 text-cyan-100">
-                    {descriptor.name}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-
-            <div className="flex flex-col gap-3 md:flex-row md:items-center">
-              {selectedHole ? (
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-2xl border border-cyan-300/25 bg-cyan-300/10 px-4 py-2.5 text-sm font-medium text-cyan-100 transition hover:bg-cyan-300/15"
-                  onClick={onViewInMap}
-                >
-                  View in Map
-                </button>
-              ) : null}
-
-              {!externalProjectScope && (
-                <div className="inline-flex w-full flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-slate-900/45 p-1.5 md:w-auto">
+          <div className="relative border-b border-white/10 px-4 py-4 md:px-5 md:py-5">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.85fr)] xl:items-start">
+              <div className="min-w-0 space-y-4">
+                <div className="flex items-start gap-3">
                   <button
                     type="button"
-                    className={`rounded-xl px-4 py-2.5 text-sm font-medium transition ${projectScope === "own" ? "bg-amber-400 text-slate-950 shadow-[0_12px_28px_rgba(251,191,36,0.28)]" : "text-slate-200 hover:bg-white/8"}`}
-                    onClick={() => setLocalProjectScope("own")}
+                    className={[
+                      "relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl",
+                      "border border-white/20 bg-white/10 backdrop-blur-xl shadow-lg shadow-black/30 text-slate-100 hover:border-white/30 hover:bg-white/15",
+                      "active:scale-95 transition-base focus-ring",
+                    ].join(" ")}
+                    onClick={() => setDrawerOpen((v) => !v)}
+                    title={drawerOpen ? "Collapse attributes pane" : "Expand attributes pane"}
+                    aria-label={drawerOpen ? "Collapse attributes pane" : "Expand attributes pane"}
                   >
-                    My Projects
+                    <span className="relative text-base leading-none text-slate-100/95">{drawerOpen ? "◀" : "▶"}</span>
                   </button>
-                  <button
-                    type="button"
-                    className={`rounded-xl px-4 py-2.5 text-sm font-medium transition ${projectScope === "shared" ? "bg-cyan-300 text-slate-950 shadow-[0_12px_28px_rgba(34,211,238,0.25)]" : "text-slate-200 hover:bg-white/8"}`}
-                    onClick={() => setLocalProjectScope("shared")}
-                  >
-                    Client Shared
-                  </button>
-                </div>
-              )}
 
+                  <div className="min-w-0 flex-1 space-y-3">
+                    {primaryDescriptorName ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center rounded-full border border-cyan-300/15 bg-cyan-300/10 px-3 py-1 text-[11px] font-medium text-cyan-100">
+                          {primaryDescriptorName}
+                        </span>
+                      </div>
+                    ) : null}
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h1 className="min-w-0 text-lg font-semibold tracking-[-0.02em] text-white md:text-[1.55rem]">
+                        {selectedHole ? `Schematic: ${selectedHole.hole_id}` : "Hole schematic workspace"}
+                      </h1>
+                      {formattedHoleState ? (
+                        <div className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-medium tracking-[0.08em] ${holeStateBadgeClassName}`}>
+                          State: {formattedHoleState}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.045] px-3 py-3">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Project</div>
+                        <div className="mt-1 truncate text-sm font-medium text-slate-100">{selectedProjectName}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.045] px-3 py-3">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Planned Depth</div>
+                        <div className="mt-1 text-sm font-medium text-slate-100">{formattedPlannedDepth}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.045] px-3 py-3">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Actual Depth</div>
+                        <div className="mt-1 text-sm font-medium text-slate-100">{formattedActualDepth}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.045] px-3 py-3">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Water Level</div>
+                        <div className="mt-1 text-sm font-medium text-slate-100">{formattedWaterLevel}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-3 xl:justify-self-end xl:w-full xl:max-w-[420px]">
+                {selectedHole ? (
+                  <div className="rounded-[24px] border border-cyan-300/15 bg-cyan-400/[0.07] p-2">
+                    <div className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-100/70">Actions</div>
+                    <button
+                      type="button"
+                      className="inline-flex w-full items-center justify-center rounded-2xl border border-cyan-300/25 bg-cyan-300/10 px-4 py-3 text-sm font-medium text-cyan-100 transition hover:bg-cyan-300/15"
+                      onClick={onViewInMap}
+                    >
+                      View in Map
+                    </button>
+                  </div>
+                ) : null}
+
+                {!externalProjectScope && (
+                  <div className="rounded-[24px] border border-white/10 bg-slate-900/45 p-2">
+                    <div className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Project Scope</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${projectScope === "own" ? "bg-amber-400 text-slate-950 shadow-[0_12px_28px_rgba(251,191,36,0.28)]" : "border border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/8"}`}
+                        onClick={() => setLocalProjectScope("own")}
+                      >
+                        My Projects
+                      </button>
+                      <button
+                        type="button"
+                        className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${projectScope === "shared" ? "bg-cyan-300 text-slate-950 shadow-[0_12px_28px_rgba(34,211,238,0.25)]" : "border border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/8"}`}
+                        onClick={() => setLocalProjectScope("shared")}
+                      >
+                        Client Shared
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
