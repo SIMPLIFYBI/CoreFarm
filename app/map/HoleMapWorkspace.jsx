@@ -1214,6 +1214,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const visibleHolesRef = useRef([]);
   const visibleAssetsRef = useRef([]);
   const createPlacementActiveRef = useRef(false);
+  const moveSelectionRef = useRef(null);
   const createEntityTypeRef = useRef("hole");
   const pendingMapRestoreRef = useRef(null);
   const pendingHoleFocusRef = useRef("");
@@ -1242,6 +1243,8 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const [showCreatePanel, setShowCreatePanel] = useState(false);
   const [createEntityType, setCreateEntityType] = useState("hole");
   const [savingCreateEntity, setSavingCreateEntity] = useState(false);
+  const [moveSelection, setMoveSelection] = useState(null);
+  const [savingMoveSelection, setSavingMoveSelection] = useState(false);
   const [savingAdminAction, setSavingAdminAction] = useState(false);
   const [deletingAdminAction, setDeletingAdminAction] = useState(false);
   const [holeDraft, setHoleDraft] = useState(createMapHoleDraft());
@@ -1268,6 +1271,10 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   useEffect(() => {
     createPlacementActiveRef.current = createPlacementActive;
   }, [createPlacementActive]);
+
+  useEffect(() => {
+    moveSelectionRef.current = moveSelection;
+  }, [moveSelection]);
 
   useEffect(() => {
     createEntityTypeRef.current = createEntityType;
@@ -1343,6 +1350,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   useEffect(() => {
     if (projectScope !== "own") {
       setShowCreatePanel(false);
+      setMoveSelection(null);
     }
   }, [projectScope]);
 
@@ -1845,6 +1853,45 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     setEditingAsset(null);
   };
 
+  const cancelMoveSelection = useCallback(() => {
+    if (savingMoveSelection) return;
+    setMoveSelection(null);
+  }, [savingMoveSelection]);
+
+  const requestMoveSelection = useCallback((entityType, entity) => {
+    if (!canManageSelections || !entity?.id) return;
+    const label = entityType === "hole" ? entity.hole_id || "this hole" : entity.name || "this asset";
+    if (typeof window !== "undefined" && !window.confirm(`Are you sure you want to move the point for ${label}?`)) return;
+
+    setShowCreatePanel(false);
+    setCreatePlacementActive(false);
+    setMoveSelection({
+      entityType,
+      entityId: entity.id,
+      label,
+    });
+
+    if (popupRef.current) {
+      popupRef.current.remove();
+      popupRef.current = null;
+    }
+
+    toast(`Click a free point on the map to move ${label}.`);
+  }, [canManageSelections]);
+
+  useEffect(() => {
+    if (!moveSelection) return undefined;
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        cancelMoveSelection();
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [cancelMoveSelection, moveSelection]);
+
   const saveHoleEdits = async (form) => {
     if (!editingHole || !canManageSelections) return;
 
@@ -2186,6 +2233,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         <button type="button" data-popup-action="open-schematic" style="display:block;margin-top:8px;width:calc(100% - 6px);margin-right:auto;box-sizing:border-box;border:none;border-radius:10px;background:linear-gradient(135deg,#22d3ee,#0ea5e9);padding:8px 10px;color:#082f49;font-size:9px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;cursor:pointer;box-shadow:0 10px 24px rgba(14,165,233,0.2);line-height:1.05;">
           View Schematic
         </button>
+        ${canManageSelections ? `<button type="button" data-popup-action="move-hole" style="display:block;margin-top:6px;width:calc(100% - 6px);margin-right:auto;box-sizing:border-box;border:1px solid rgba(249,115,22,0.3);border-radius:10px;background:rgba(249,115,22,0.14);padding:8px 10px;color:#fed7aa;font-size:9px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;cursor:pointer;line-height:1.05;">Move</button>` : ""}
       </div>
     `;
   };
@@ -2209,6 +2257,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
             <div style="margin-top:5px;font-size:14px;font-weight:700;color:#f8fafc;">${asset.asset_type_name || "-"}</div>
           </div>
         </div>
+        ${canManageSelections ? `<button type="button" data-popup-action="move-asset" style="display:block;margin-top:10px;width:calc(100% - 8px);margin-right:auto;box-sizing:border-box;border:1px solid rgba(249,115,22,0.3);border-radius:10px;background:rgba(249,115,22,0.14);padding:8px 10px;color:#fed7aa;font-size:10px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;cursor:pointer;line-height:1.05;">Move</button>` : ""}
       </div>
     `;
   };
@@ -2253,6 +2302,15 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         void openSchematicModal(hole);
       }, { once: true });
     }
+
+    const moveButton = popupRef.current.getElement()?.querySelector('[data-popup-action="move-hole"]');
+    if (moveButton) {
+      moveButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        requestMoveSelection("hole", hole);
+      }, { once: true });
+    }
   };
 
   const focusAsset = (asset, options = {}) => {
@@ -2279,6 +2337,15 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
 
     popupRef.current.setLngLat([lng, lat]).setHTML(renderAssetPopupHtml(asset)).addTo(map);
     applyPopupViewportLayout(popupRef.current);
+
+    const moveButton = popupRef.current.getElement()?.querySelector('[data-popup-action="move-asset"]');
+    if (moveButton) {
+      moveButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        requestMoveSelection("asset", asset);
+      }, { once: true });
+    }
   };
 
   useEffect(() => {
@@ -2460,7 +2527,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         map.getCanvas().style.cursor = "pointer";
       };
       const clearPointerCursor = () => {
-        map.getCanvas().style.cursor = createPlacementActiveRef.current ? "crosshair" : "";
+        map.getCanvas().style.cursor = createPlacementActiveRef.current || !!moveSelectionRef.current ? "crosshair" : "";
       };
       const handleHoleLayerClick = (event) => {
         const feature = event.features?.[0];
@@ -2477,7 +2544,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         focusAsset(asset);
       };
       const handleMapCreateClick = (event) => {
-        if (!createPlacementActiveRef.current) return;
+        if (!createPlacementActiveRef.current && !moveSelectionRef.current) return;
 
         const overlappingFeatures = map.queryRenderedFeatures(event.point, {
           layers: [HOLES_CIRCLE_LAYER_ID, HOLES_SELECTED_LAYER_ID, ASSETS_CIRCLE_LAYER_ID, ASSETS_SELECTED_LAYER_ID],
@@ -2487,6 +2554,58 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
 
         const nextLongitude = roundCoordinate(event.lngLat.lng);
         const nextLatitude = roundCoordinate(event.lngLat.lat);
+
+        if (moveSelectionRef.current) {
+          void (async () => {
+            if (savingMoveSelection) return;
+
+            setSavingMoveSelection(true);
+            try {
+              if (moveSelectionRef.current.entityType === "hole") {
+                const { error: updateError } = await supabase
+                  .from("holes")
+                  .update({
+                    collar_longitude: Number(nextLongitude),
+                    collar_latitude: Number(nextLatitude),
+                    collar_source: "map_picked",
+                  })
+                  .eq("id", moveSelectionRef.current.entityId)
+                  .eq("organization_id", orgId);
+
+                if (updateError) throw updateError;
+
+                const { holes: freshHoles } = await loadData();
+                const movedHole = freshHoles.find((hole) => hole.id === moveSelectionRef.current.entityId) || null;
+                setMoveSelection(null);
+                if (movedHole) focusHole(movedHole);
+                toast.success("Hole moved");
+              } else {
+                const { error: updateError } = await supabase
+                  .from("assets")
+                  .update({
+                    longitude: Number(nextLongitude),
+                    latitude: Number(nextLatitude),
+                    coordinate_source: "manual",
+                  })
+                  .eq("id", moveSelectionRef.current.entityId)
+                  .eq("organization_id", orgId);
+
+                if (updateError) throw updateError;
+
+                const { assets: freshAssets } = await loadData();
+                const movedAsset = freshAssets.find((asset) => asset.id === moveSelectionRef.current.entityId) || null;
+                setMoveSelection(null);
+                if (movedAsset) focusAsset(movedAsset);
+                toast.success("Asset moved");
+              }
+            } catch (error) {
+              toast.error(error?.message || "Failed to move point");
+            } finally {
+              setSavingMoveSelection(false);
+            }
+          })();
+          return;
+        }
 
         if (createEntityTypeRef.current === "hole") {
           setHoleDraft((current) => ({
@@ -2565,8 +2684,8 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     const map = mapRef.current;
     if (!map || !mapReadyRef.current) return;
 
-    map.getCanvas().style.cursor = createPlacementActive ? "crosshair" : "";
-  }, [createPlacementActive]);
+    map.getCanvas().style.cursor = createPlacementActive || !!moveSelection ? "crosshair" : "";
+  }, [createPlacementActive, moveSelection]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -3021,10 +3140,20 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Map canvas</div>
                   <div className="mt-1 text-lg font-semibold text-white">Hole collars and mapped assets</div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+                <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-slate-300">
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{totalVisibleHoles} visible holes</span>
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{totalVisibleAssets} visible assets</span>
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{projectFilter ? "Filtered project" : "Portfolio view"}</span>
+                  {!showCreateProjectPrompt && projectScope === "own" ? (
+                    <button
+                      type="button"
+                      aria-label="Add hole or asset on map"
+                      className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[linear-gradient(135deg,#22d3ee,#0ea5e9)] text-3xl font-light leading-none text-slate-950 shadow-[0_18px_42px_rgba(34,211,238,0.32)] transition hover:brightness-105"
+                      onClick={() => openCreatePanel(createEntityType)}
+                    >
+                      +
+                    </button>
+                  ) : null}
                 </div>
               </div>
               <div className="pointer-events-none absolute bottom-3 left-3 z-10 md:bottom-4 md:left-4">
@@ -3043,7 +3172,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                 <button
                   type="button"
                   aria-label="Add hole or asset on map"
-                  className="absolute right-3 top-3 z-20 inline-flex h-12 w-12 items-center justify-center rounded-full bg-[linear-gradient(135deg,#22d3ee,#0ea5e9)] text-3xl font-light leading-none text-slate-950 shadow-[0_18px_42px_rgba(34,211,238,0.32)] transition hover:brightness-105 md:right-4 md:top-4"
+                  className="absolute right-3 top-3 z-20 inline-flex h-12 w-12 items-center justify-center rounded-full bg-[linear-gradient(135deg,#22d3ee,#0ea5e9)] text-3xl font-light leading-none text-slate-950 shadow-[0_18px_42px_rgba(34,211,238,0.32)] transition hover:brightness-105 md:hidden"
                   onClick={() => openCreatePanel(createEntityType)}
                 >
                   +
@@ -3053,6 +3182,21 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                 <div className="pointer-events-none absolute inset-x-3 top-20 z-20 flex justify-center md:inset-x-4 md:top-24">
                   <div className="rounded-full border border-cyan-300/20 bg-slate-950/82 px-4 py-2 text-xs font-medium tracking-[0.16em] text-cyan-100 shadow-[0_18px_48px_rgba(2,6,23,0.42)] backdrop-blur-xl">
                     Click a free point on the map to place your new item
+                  </div>
+                </div>
+              ) : null}
+              {moveSelection ? (
+                <div className="pointer-events-none absolute inset-x-3 top-20 z-20 flex justify-center md:inset-x-4 md:top-24">
+                  <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-orange-300/25 bg-slate-950/88 px-4 py-2 text-xs font-medium tracking-[0.14em] text-orange-100 shadow-[0_18px_48px_rgba(2,6,23,0.42)] backdrop-blur-xl">
+                    <span>{savingMoveSelection ? `Moving ${moveSelection.label}...` : `Click a free point to move ${moveSelection.label}`}</span>
+                    <button
+                      type="button"
+                      onClick={cancelMoveSelection}
+                      disabled={savingMoveSelection}
+                      className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-[11px] font-semibold tracking-[0.1em] text-slate-100 transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
                   </div>
                 </div>
               ) : null}
