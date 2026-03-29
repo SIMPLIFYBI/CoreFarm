@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseClient";
@@ -18,6 +19,8 @@ import ContractsTab from "./ContractsTab";
 import ActivitiesTab from "./ActivitiesTab";
 import PlodTypesAdminPanel from "./PlodTypesAdminPanel";
 import DrillingTypesAdminPanel from "./DrillingTypesAdminPanel";
+import WorkflowStudioPanel from "./WorkflowStudioPanel";
+import { normalizeWorkflows } from "@/lib/workflows";
 
 const DEFAULT_TAB = "projects";
 const VALID_TABS = new Set([
@@ -30,6 +33,7 @@ const VALID_TABS = new Set([
   "activities",
   "plodtypes",
   "drillingtypes",
+  "workflows",
 ]);
 
 export default function ProjectsView() {
@@ -59,8 +63,11 @@ export default function ProjectsView() {
     wbs_code: "",
     coordinate_crs_code: "",
     coordinate_crs_name: "",
+    current_workflow_id: "",
+    current_workflow_stage_id: "",
   };
   const [form, setForm] = useState(emptyForm);
+  const [projectWorkflows, setProjectWorkflows] = useState([]);
 
   const [activeTab, setActiveTab] = useState(urlTab);
 
@@ -130,7 +137,20 @@ export default function ProjectsView() {
       setLoading(true);
       const { data, error } = await supabase
         .from("projects")
-        .select("id,name,start_date,finish_date,cost_code,wbs_code,coordinate_crs_code,coordinate_crs_name,created_at")
+        .select(`
+          id,
+          name,
+          start_date,
+          finish_date,
+          cost_code,
+          wbs_code,
+          coordinate_crs_code,
+          coordinate_crs_name,
+          created_at,
+          current_workflow_id,
+          current_workflow_stage_id,
+          current_workflow_stage:workflow_stages!projects_current_workflow_stage_id_fkey(id,name,color)
+        `)
         .eq("organization_id", orgId)
         .order("created_at", { ascending: false });
 
@@ -138,6 +158,47 @@ export default function ProjectsView() {
       setLoading(false);
     })();
   }, [orgId, supabase]);
+
+  useEffect(() => {
+    if (!orgId) {
+      setProjectWorkflows([]);
+      return;
+    }
+
+    void loadProjectWorkflows();
+  }, [orgId, supabase]);
+
+  const loadProjectWorkflows = async () => {
+    if (!orgId) {
+      setProjectWorkflows([]);
+      return;
+    }
+
+    const [workflowRes, stageRes] = await Promise.all([
+      supabase
+        .from("workflow_definitions")
+        .select("id, organization_id, entity_type, key, name, description, color, sort_order, is_active, created_at")
+        .eq("organization_id", orgId)
+        .eq("entity_type", "project"),
+      supabase
+        .from("workflow_stages")
+        .select("id, workflow_id, key, name, description, color, sort_order, is_terminal, is_active, created_at"),
+    ]);
+
+    if (workflowRes.error) {
+      console.error("Failed to load project workflows:", workflowRes.error);
+      setProjectWorkflows([]);
+      return;
+    }
+
+    if (stageRes.error) {
+      console.error("Failed to load project workflow stages:", stageRes.error);
+      setProjectWorkflows([]);
+      return;
+    }
+
+    setProjectWorkflows(normalizeWorkflows(workflowRes.data || [], stageRes.data || []));
+  };
 
   // Load tenements when tab becomes active
   useEffect(() => {
@@ -246,6 +307,8 @@ export default function ProjectsView() {
       wbs_code: p.wbs_code || "",
       coordinate_crs_code: p.coordinate_crs_code || "",
       coordinate_crs_name: selectedCrs?.name || p.coordinate_crs_name || "",
+      current_workflow_id: p.current_workflow_id || "",
+      current_workflow_stage_id: p.current_workflow_stage_id || "",
     });
     setShowModal(true);
   };
@@ -266,6 +329,8 @@ export default function ProjectsView() {
         wbs_code: form.wbs_code || null,
         coordinate_crs_code: selectedCrs?.code || null,
         coordinate_crs_name: selectedCrs?.name || null,
+        current_workflow_id: form.current_workflow_id || null,
+        current_workflow_stage_id: form.current_workflow_stage_id || null,
         organization_id: orgId,
       };
 
@@ -280,7 +345,20 @@ export default function ProjectsView() {
 
       const { data } = await supabase
         .from("projects")
-        .select("id,name,start_date,finish_date,cost_code,wbs_code,coordinate_crs_code,coordinate_crs_name,created_at")
+        .select(`
+          id,
+          name,
+          start_date,
+          finish_date,
+          cost_code,
+          wbs_code,
+          coordinate_crs_code,
+          coordinate_crs_name,
+          created_at,
+          current_workflow_id,
+          current_workflow_stage_id,
+          current_workflow_stage:workflow_stages!projects_current_workflow_stage_id_fkey(id,name,color)
+        `)
         .eq("organization_id", orgId)
         .order("created_at", { ascending: false });
 
@@ -547,6 +625,16 @@ export default function ProjectsView() {
         >
           Drilling Types
         </button>
+
+        <button
+          className={`px-4 py-2 -mb-px font-medium text-sm ${
+            activeTab === "workflows" ? "border-b-2 border-indigo-500 text-indigo-300" : "text-slate-300/70"
+          }`}
+          onClick={() => setTab("workflows")}
+          type="button"
+        >
+          Workflow Studio
+        </button>
       </HorizontalScrollTabs>
 
       {/* header actions per tab */}
@@ -644,6 +732,21 @@ export default function ProjectsView() {
         </div>
       )}
 
+      {activeTab === "workflows" && (
+        <div className="space-y-4">
+          <div className="card flex flex-col gap-3 border-cyan-300/15 bg-[linear-gradient(135deg,rgba(34,211,238,0.1),rgba(15,23,42,0.92))] p-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-sm font-semibold text-slate-100">Dedicated workflow builder</div>
+              <div className="mt-1 text-sm text-slate-300/80">Use the full-screen studio for a more visual workflow editing experience.</div>
+            </div>
+            <Link href="/workflows" className="btn btn-primary">
+              Open Workflow Studio
+            </Link>
+          </div>
+          <WorkflowStudioPanel orgId={orgId} onChange={loadProjectWorkflows} />
+        </div>
+      )}
+
       {showModal && (
         <ProjectModal
           editingId={editingId}
@@ -659,6 +762,7 @@ export default function ProjectsView() {
             setEditingId(null);
             setForm(emptyForm);
           }}
+          workflows={projectWorkflows}
         />
       )}
 

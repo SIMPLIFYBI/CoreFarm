@@ -32,6 +32,7 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
   const projectScope = externalProjectScope ?? localProjectScope;
   const requestedHoleId = searchParams.get("holeId") || "";
   const requestedProjectScope = searchParams.get("scope") || "";
+  const requestedFrom = searchParams.get("from") || "";
 
   const myRole = useMemo(() => {
     const m = (memberships || []).find((m) => m.organization_id === selectedOrgId);
@@ -222,9 +223,14 @@ export default function DrillholeVizPage({ projectScope: externalProjectScope })
     if (!requestedHoleId || !(holes || []).some((hole) => hole.id === requestedHoleId)) return;
     setSelectedHoleId((prev) => (prev === requestedHoleId ? prev : requestedHoleId));
     setDrawerOpen(true);
+    if (requestedFrom === "map" && isMobileDrawerViewport) {
+      setDrawerTab("");
+      setMobileTabCollapsed(true);
+      return;
+    }
     setDrawerTab("attributes");
     setMobileTabCollapsed(false);
-  }, [holes, requestedHoleId]);
+  }, [holes, isMobileDrawerViewport, requestedFrom, requestedHoleId]);
 
   // Group holes by project
   const projects = useMemo(() => {

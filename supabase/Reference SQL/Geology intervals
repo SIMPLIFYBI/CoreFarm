@@ -1,0 +1,32 @@
+create table public.drillhole_geology_intervals (
+  id uuid not null default gen_random_uuid (),
+  organization_id uuid not null,
+  hole_id uuid not null,
+  lithology_type_id uuid not null,
+  from_m numeric(10, 1) not null,
+  to_m numeric(10, 1) not null,
+  notes text null,
+  created_at timestamp with time zone not null default now(),
+  created_by uuid null,
+  depth_range numrange GENERATED ALWAYS as (numrange (from_m, to_m, '[)'::text)) STORED null,
+  constraint drillhole_geology_intervals_pkey primary key (id),
+  constraint drillhole_geology_intervals_created_by_fkey foreign KEY (created_by) references auth.users (id) on delete set null,
+  constraint drillhole_geology_intervals_hole_fk foreign KEY (hole_id, organization_id) references holes (id, organization_id) on delete CASCADE,
+  constraint drillhole_geology_intervals_lithology_type_id_fkey foreign KEY (lithology_type_id) references drillhole_lithology_types (id),
+  constraint drillhole_geology_intervals_depth_check check (
+    (
+      (from_m >= (0)::numeric)
+      and (to_m > from_m)
+    )
+  ),
+  constraint drillhole_geology_no_overlap EXCLUDE using gist (
+    hole_id
+    with
+      =,
+      depth_range
+    with
+      &&
+  )
+) TABLESPACE pg_default;
+
+create index IF not exists drillhole_geology_intervals_hole_idx on public.drillhole_geology_intervals using btree (hole_id) TABLESPACE pg_default;

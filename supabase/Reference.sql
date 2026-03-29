@@ -66,11 +66,18 @@ CREATE TABLE public.assets (
   updated_by uuid,
   updated_at timestamp with time zone DEFAULT now(),
   asset_type_id uuid,
+  project_id uuid,
+  easting numeric,
+  northing numeric,
+  longitude double precision CHECK (longitude IS NULL OR longitude >= '-180'::integer::double precision AND longitude <= 180::double precision),
+  latitude double precision CHECK (latitude IS NULL OR latitude >= '-90'::integer::double precision AND latitude <= 90::double precision),
+  coordinate_source text CHECK (coordinate_source IS NULL OR (coordinate_source = ANY (ARRAY['gps'::text, 'survey'::text, 'imported'::text, 'manual'::text, 'estimated'::text]))),
   CONSTRAINT assets_pkey PRIMARY KEY (id),
   CONSTRAINT assets_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
   CONSTRAINT assets_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.asset_locations(id),
   CONSTRAINT assets_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES auth.users(id),
-  CONSTRAINT assets_asset_type_id_fkey FOREIGN KEY (asset_type_id) REFERENCES public.asset_types(id)
+  CONSTRAINT assets_asset_type_id_fkey FOREIGN KEY (asset_type_id) REFERENCES public.asset_types(id),
+  CONSTRAINT assets_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id)
 );
 CREATE TABLE public.consumable_items (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -85,6 +92,22 @@ CREATE TABLE public.consumable_items (
   unit_size integer NOT NULL DEFAULT 1 CHECK (unit_size > 0),
   CONSTRAINT consumable_items_pkey PRIMARY KEY (id),
   CONSTRAINT consumable_items_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id)
+);
+CREATE TABLE public.consumable_location_inventory (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  consumable_item_id uuid NOT NULL,
+  location_id uuid NOT NULL,
+  count integer NOT NULL DEFAULT 0 CHECK (count >= 0),
+  reorder_value integer NOT NULL DEFAULT 0 CHECK (reorder_value >= 0),
+  created_by uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT consumable_location_inventory_pkey PRIMARY KEY (id),
+  CONSTRAINT consumable_location_inventory_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT consumable_location_inventory_consumable_item_id_fkey FOREIGN KEY (consumable_item_id) REFERENCES public.consumable_items(id),
+  CONSTRAINT consumable_location_inventory_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.asset_locations(id),
+  CONSTRAINT consumable_location_inventory_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
 CREATE TABLE public.contract_activity_type_rates (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -204,6 +227,49 @@ CREATE TABLE public.drillhole_annulus_types (
   CONSTRAINT drillhole_annulus_types_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
   CONSTRAINT drillhole_annulus_types_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
+CREATE TABLE public.drillhole_component_types (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  key text NOT NULL,
+  name text NOT NULL,
+  category text NOT NULL DEFAULT 'sensor'::text CHECK (category = ANY (ARRAY['sensor'::text, 'pump'::text, 'packer'::text, 'valve'::text, 'instrument'::text, 'other'::text])),
+  icon text NOT NULL DEFAULT 'dot'::text,
+  color text NOT NULL DEFAULT '#38bdf8'::text,
+  sort_order integer NOT NULL DEFAULT 0,
+  is_active boolean NOT NULL DEFAULT true,
+  details_schema jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid,
+  CONSTRAINT drillhole_component_types_pkey PRIMARY KEY (id),
+  CONSTRAINT drillhole_component_types_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT drillhole_component_types_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
+);
+CREATE TABLE public.drillhole_components (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  hole_id uuid NOT NULL,
+  component_type_id uuid NOT NULL,
+  depth_m numeric NOT NULL CHECK (depth_m >= 0::numeric),
+  label text,
+  status text NOT NULL DEFAULT 'installed'::text CHECK (status = ANY (ARRAY['planned'::text, 'installed'::text, 'inactive'::text, 'removed'::text])),
+  details jsonb NOT NULL DEFAULT '{}'::jsonb,
+  notes text,
+  installed_at timestamp with time zone,
+  removed_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid,
+  CONSTRAINT drillhole_components_pkey PRIMARY KEY (id),
+  CONSTRAINT drillhole_components_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT drillhole_components_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id),
+  CONSTRAINT drillhole_components_hole_fk FOREIGN KEY (organization_id) REFERENCES public.holes(id),
+  CONSTRAINT drillhole_components_hole_fk FOREIGN KEY (hole_id) REFERENCES public.holes(id),
+  CONSTRAINT drillhole_components_hole_fk FOREIGN KEY (organization_id) REFERENCES public.holes(organization_id),
+  CONSTRAINT drillhole_components_hole_fk FOREIGN KEY (hole_id) REFERENCES public.holes(organization_id),
+  CONSTRAINT drillhole_components_type_fk FOREIGN KEY (organization_id) REFERENCES public.drillhole_component_types(id),
+  CONSTRAINT drillhole_components_type_fk FOREIGN KEY (component_type_id) REFERENCES public.drillhole_component_types(id),
+  CONSTRAINT drillhole_components_type_fk FOREIGN KEY (organization_id) REFERENCES public.drillhole_component_types(organization_id),
+  CONSTRAINT drillhole_components_type_fk FOREIGN KEY (component_type_id) REFERENCES public.drillhole_component_types(organization_id)
+);
 CREATE TABLE public.drillhole_construction_intervals (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL,
@@ -260,11 +326,11 @@ CREATE TABLE public.drillhole_lithology_types (
   organization_id uuid NOT NULL,
   name text NOT NULL,
   color text NOT NULL,
-  pattern_key text NOT NULL DEFAULT 'solid',
   sort_order integer NOT NULL DEFAULT 0,
   is_active boolean NOT NULL DEFAULT true,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   created_by uuid,
+  pattern_key text NOT NULL DEFAULT 'solid'::text,
   CONSTRAINT drillhole_lithology_types_pkey PRIMARY KEY (id),
   CONSTRAINT drillhole_lithology_types_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
   CONSTRAINT drillhole_lithology_types_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
@@ -301,29 +367,78 @@ CREATE TABLE public.drillhole_sensors (
   CONSTRAINT drillhole_sensors_hole_fk FOREIGN KEY (hole_id) REFERENCES public.holes(organization_id),
   CONSTRAINT drillhole_sensors_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
+CREATE TABLE public.hole_descriptor_assignments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  hole_id uuid NOT NULL,
+  descriptor_id uuid NOT NULL,
+  created_by uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT hole_descriptor_assignments_pkey PRIMARY KEY (id),
+  CONSTRAINT hole_descriptor_assignments_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT hole_descriptor_assignments_hole_id_fkey FOREIGN KEY (hole_id) REFERENCES public.holes(id),
+  CONSTRAINT hole_descriptor_assignments_descriptor_id_fkey FOREIGN KEY (descriptor_id) REFERENCES public.hole_descriptors(id),
+  CONSTRAINT hole_descriptor_assignments_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
+);
+CREATE TABLE public.hole_descriptors (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  key text NOT NULL CHECK (btrim(key) <> ''::text),
+  name text NOT NULL CHECK (btrim(name) <> ''::text),
+  category text,
+  color text,
+  sort_order integer NOT NULL DEFAULT 0,
+  is_active boolean NOT NULL DEFAULT true,
+  created_by uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT hole_descriptors_pkey PRIMARY KEY (id),
+  CONSTRAINT hole_descriptors_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT hole_descriptors_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
+);
 CREATE TABLE public.hole_task_intervals (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   hole_id uuid NOT NULL,
-  task_type text NOT NULL CHECK (task_type = ANY (ARRAY['orientation'::text, 'magnetic_susceptibility'::text, 'whole_core_sampling'::text, 'cutting'::text, 'rqd'::text, 'specific_gravity'::text])),
+  task_type text NOT NULL CHECK (btrim(task_type) <> ''::text),
   from_m numeric NOT NULL,
   to_m numeric NOT NULL,
   created_at timestamp with time zone DEFAULT now(),
+  task_type_id uuid,
   CONSTRAINT hole_task_intervals_pkey PRIMARY KEY (id),
-  CONSTRAINT hole_task_intervals_hole_id_fkey FOREIGN KEY (hole_id) REFERENCES public.holes(id)
+  CONSTRAINT hole_task_intervals_hole_id_fkey FOREIGN KEY (hole_id) REFERENCES public.holes(id),
+  CONSTRAINT hole_task_intervals_task_type_id_fkey FOREIGN KEY (task_type_id) REFERENCES public.hole_task_types(id)
 );
 CREATE TABLE public.hole_task_progress (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   hole_id uuid NOT NULL,
-  task_type text NOT NULL CHECK (task_type = ANY (ARRAY['orientation'::text, 'magnetic_susceptibility'::text, 'whole_core_sampling'::text, 'cutting'::text, 'rqd'::text, 'specific_gravity'::text])),
+  task_type text NOT NULL CHECK (btrim(task_type) <> ''::text),
   from_m numeric NOT NULL,
   to_m numeric NOT NULL,
   user_id uuid NOT NULL DEFAULT auth.uid(),
   created_at timestamp with time zone DEFAULT now(),
   interval numrange DEFAULT numrange(from_m, to_m, '[)'::text),
   logged_on date DEFAULT CURRENT_DATE,
+  task_type_id uuid,
   CONSTRAINT hole_task_progress_pkey PRIMARY KEY (id),
   CONSTRAINT hole_task_progress_hole_id_fkey FOREIGN KEY (hole_id) REFERENCES public.holes(id),
-  CONSTRAINT hole_task_progress_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+  CONSTRAINT hole_task_progress_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT hole_task_progress_task_type_id_fkey FOREIGN KEY (task_type_id) REFERENCES public.hole_task_types(id)
+);
+CREATE TABLE public.hole_task_types (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  key text NOT NULL CHECK (btrim(key) <> ''::text),
+  name text NOT NULL CHECK (btrim(name) <> ''::text),
+  description text,
+  color text,
+  sort_order integer NOT NULL DEFAULT 0,
+  is_active boolean NOT NULL DEFAULT true,
+  created_by uuid DEFAULT auth.uid(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT hole_task_types_pkey PRIMARY KEY (id),
+  CONSTRAINT hole_task_types_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT hole_task_types_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
 CREATE TABLE public.holes (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -334,7 +449,7 @@ CREATE TABLE public.holes (
   created_at timestamp with time zone DEFAULT now(),
   created_by uuid NOT NULL DEFAULT auth.uid(),
   organization_id uuid,
-  project_id uuid,
+  project_id uuid CHECK (project_id IS NOT NULL) NOT VALI),
   tenement_id uuid,
   planned_depth numeric CHECK (planned_depth IS NULL OR planned_depth >= 0::numeric),
   state text NOT NULL DEFAULT 'proposed'::text CHECK (state = ANY (ARRAY['proposed'::text, 'in_progress'::text, 'drilled'::text])),
@@ -349,9 +464,10 @@ CREATE TABLE public.holes (
   completed_at timestamp with time zone,
   completion_status text CHECK (completion_status IS NULL OR (completion_status = ANY (ARRAY['completed'::text, 'abandoned'::text, 'suspended'::text]))),
   completion_notes text,
+  collar_easting numeric,
+  collar_northing numeric,
   CONSTRAINT holes_pkey PRIMARY KEY (id),
   CONSTRAINT holes_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
-  CONSTRAINT holes_project_required_check CHECK (project_id IS NOT NULL) NOT VALID,
   CONSTRAINT holes_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id),
   CONSTRAINT holes_tenement_id_fkey FOREIGN KEY (tenement_id) REFERENCES public.tenements(id),
   CONSTRAINT holes_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
@@ -598,6 +714,8 @@ CREATE TABLE public.projects (
   created_by uuid NOT NULL DEFAULT auth.uid(),
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  coordinate_crs_code text,
+  coordinate_crs_name text,
   CONSTRAINT projects_pkey PRIMARY KEY (id),
   CONSTRAINT projects_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
   CONSTRAINT projects_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)

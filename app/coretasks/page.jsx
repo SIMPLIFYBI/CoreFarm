@@ -5,7 +5,7 @@ import HorizontalScrollTabs from "@/app/components/HorizontalScrollTabs";
 import CorePage from "./CorePage";
 import SampleDispatchPage from "./SampleDispatchPage";
 import CoreTasksManagerPage from "./CoreTasksPage";
-import TestTab from "./TestTab";
+import HoleDetailsTab from "./HoleDetailsTab";
 import BulkUploaderTab from "./BulkUploaderTab";
 
 const PROJECT_SCOPE_STORAGE_KEY = "coretasks:projectScope";
@@ -116,7 +116,7 @@ export default function CoreTasksPage() {
       <div className="max-w-6xl mx-auto">
         {tab === "coreworkbench" ? (
           <div className="card overflow-hidden">
-            <TestTab projectScope={projectScope} />
+            <HoleDetailsTab projectScope={projectScope} />
           </div>
         ) : tab === "bulkuploader" ? (
           <div className="card overflow-hidden">

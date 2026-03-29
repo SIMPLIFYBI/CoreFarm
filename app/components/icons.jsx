@@ -83,6 +83,18 @@ export function IconClipboard(props) {
   );
 }
 
+export function IconWorkflow(props) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <rect x="3" y="4" width="7" height="5" rx="2" stroke="currentColor" strokeWidth="1.7" />
+      <rect x="14" y="4" width="7" height="5" rx="2" stroke="currentColor" strokeWidth="1.7" />
+      <rect x="8.5" y="15" width="7" height="5" rx="2" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M10 6.5h4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      <path d="M12 9.5v3.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function IconCoreTasks(props) {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>

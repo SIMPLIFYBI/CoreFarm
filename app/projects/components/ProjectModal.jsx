@@ -1,9 +1,12 @@
 "use client";
 
 import { AUSTRALIAN_PROJECT_CRS, getAustralianProjectCrsByCode } from "@/lib/coordinateSystems";
+import { formatWorkflowStageLabel, getWorkflowStageOptions } from "@/lib/workflows";
 
-export default function ProjectModal({ editingId, form, setForm, saving, onClose, onSave, onNew }) {
+export default function ProjectModal({ editingId, form, setForm, saving, onClose, onSave, onNew, workflows = [] }) {
   const selectedCrs = getAustralianProjectCrsByCode(form.coordinate_crs_code);
+  const selectedWorkflow = workflows.find((workflow) => workflow.id === form.current_workflow_id) || null;
+  const stageOptions = getWorkflowStageOptions(selectedWorkflow);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -67,6 +70,57 @@ export default function ProjectModal({ editingId, form, setForm, saving, onClose
               className="input"
             />
           </label>
+
+          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+            <div className="text-sm font-medium text-slate-100">Workflow</div>
+            <div className="mt-1 text-xs text-slate-300/70">
+              Track the current business workflow stage for this project.
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label className="flex flex-col gap-1.5 text-sm">
+                Workflow
+                <select
+                  value={form.current_workflow_id || ""}
+                  onChange={(e) => {
+                    const workflow = workflows.find((item) => item.id === e.target.value) || null;
+                    const nextStage = getWorkflowStageOptions(workflow)[0] || null;
+
+                    setForm((prev) => ({
+                      ...prev,
+                      current_workflow_id: workflow?.id || "",
+                      current_workflow_stage_id: nextStage?.id || "",
+                    }));
+                  }}
+                  className="input"
+                >
+                  <option value="">No workflow</option>
+                  {workflows.map((workflow) => (
+                    <option key={workflow.id} value={workflow.id} disabled={workflow.is_active === false}>
+                      {workflow.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1.5 text-sm">
+                Current stage
+                <select
+                  value={form.current_workflow_stage_id || ""}
+                  onChange={(e) => setForm((prev) => ({ ...prev, current_workflow_stage_id: e.target.value }))}
+                  className="input"
+                  disabled={!selectedWorkflow}
+                >
+                  <option value="">{selectedWorkflow ? "Select a stage" : "Choose a workflow first"}</option>
+                  {stageOptions.map((stage) => (
+                    <option key={stage.id} value={stage.id} disabled={stage.is_active === false}>
+                      {formatWorkflowStageLabel(stage)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
 
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
             <div className="text-sm font-medium text-slate-100">Coordinate system</div>

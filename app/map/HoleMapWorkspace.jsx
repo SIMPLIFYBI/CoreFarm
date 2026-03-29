@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
@@ -11,6 +11,7 @@ import DepthAxisBar from "@/app/drillhole-viz/components/DepthAxisBar";
 import BoreholeSchematicPreview from "@/app/drillhole-viz/components/BoreholeSchematicPreview";
 import { convertProjectedToWgs84 } from "@/lib/coordinateTransforms";
 import { deriveHoleCoordinates } from "@/lib/holeCoordinates";
+import MapCreateEntityPanel from "./MapCreateEntityPanel";
 
 const MAP_SCOPE_STORAGE_KEY = "map:projectScope";
 const MAP_RETURN_STATE_STORAGE_KEY = "map:returnState";
@@ -23,6 +24,9 @@ const ASSETS_SOURCE_ID = "prod-asset-map-source";
 const ASSETS_GLOW_LAYER_ID = "prod-asset-map-glow";
 const ASSETS_CIRCLE_LAYER_ID = "prod-asset-map-circles";
 const ASSETS_SELECTED_LAYER_ID = "prod-asset-map-selected";
+const CREATE_POINT_SOURCE_ID = "prod-map-create-point-source";
+const CREATE_POINT_FILL_LAYER_ID = "prod-map-create-point-fill";
+const CREATE_POINT_RING_LAYER_ID = "prod-map-create-point-ring";
 const DEFAULT_CENTER = [133.7751, -25.2744];
 const DEFAULT_ZOOM = 3;
 const MAPBOX_STYLE_URL = "mapbox://styles/jamesblue/cmmhkajfi000w01shgzr5c1op";
@@ -40,6 +44,56 @@ const HOLE_STATE_STYLES = [
 
 const ASSET_COLOR = "#f472b6";
 const ASSET_STATUS_STYLES = [{ value: "assets", label: "Assets", color: ASSET_COLOR }];
+
+function roundCoordinate(value, decimals = 6) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return "";
+  return String(Number(numericValue.toFixed(decimals)));
+}
+
+function createMapHoleDraft(projectId = "") {
+  return {
+    project_id: projectId,
+    hole_id: "",
+    state: "proposed",
+    longitude: "",
+    latitude: "",
+    collar_source: "map_picked",
+  };
+}
+
+function createMapAssetDraft(projectId = "") {
+  return {
+    project_id: projectId,
+    name: "",
+    asset_type_id: "",
+    location_id: "",
+    status: "Active",
+    longitude: "",
+    latitude: "",
+    coordinate_source: "manual",
+  };
+}
+
+function makeCreatePointCollection(point) {
+  if (!point?.longitude || !point?.latitude) {
+    return { type: "FeatureCollection", features: [] };
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        geometry: {
+          type: "Point",
+          coordinates: [Number(point.longitude), Number(point.latitude)],
+        },
+        properties: {},
+      },
+    ],
+  };
+}
 
 const HOLE_STATE_COLOR_EXPRESSION = [
   "match",
@@ -161,6 +215,17 @@ function formatDateTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleString();
+}
+
+function toNullableNumber(value) {
+  if (value === "" || value == null) return null;
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : null;
+}
+
+function toTextOrNull(value) {
+  const trimmedValue = String(value || "").trim();
+  return trimmedValue || null;
 }
 
 function makeHoleFeatureCollection(rows) {
@@ -405,7 +470,7 @@ function AssetAccordionList({
   );
 }
 
-function HoleAttributesPanel({ selectedHole, mobile = false }) {
+function HoleAttributesPanel({ selectedHole, canManage = false, onEdit, onDelete, deleting = false, mobile = false }) {
   if (mobile) {
     return (
       <div className="space-y-3 p-4">
@@ -420,6 +485,25 @@ function HoleAttributesPanel({ selectedHole, mobile = false }) {
               {selectedHole?.state || "-"}
             </div>
           </div>
+          {canManage && selectedHole ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={onEdit}
+                className="rounded-2xl border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-cyan-100 transition hover:bg-cyan-300/16"
+              >
+                Edit Hole
+              </button>
+              <button
+                type="button"
+                onClick={onDelete}
+                disabled={deleting}
+                className="rounded-2xl border border-rose-300/25 bg-rose-300/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-rose-100 transition hover:bg-rose-300/16 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {deleting ? "Deleting..." : "Delete Hole"}
+              </button>
+            </div>
+          ) : null}
           {selectedHole?.descriptors?.length ? (
             <div className="mt-3 flex flex-wrap gap-2">
               {selectedHole.descriptors.map((descriptor) => (
@@ -469,7 +553,27 @@ function HoleAttributesPanel({ selectedHole, mobile = false }) {
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="space-y-3">
+      {canManage && selectedHole ? (
+        <div className="flex flex-wrap items-center justify-end gap-2 px-4 pt-4">
+          <button
+            type="button"
+            onClick={onEdit}
+            className="rounded-2xl border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-cyan-100 transition hover:bg-cyan-300/16"
+          >
+            Edit Hole
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={deleting}
+            className="rounded-2xl border border-rose-300/25 bg-rose-300/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-rose-100 transition hover:bg-rose-300/16 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {deleting ? "Deleting..." : "Delete Hole"}
+          </button>
+        </div>
+      ) : null}
+      <div className="overflow-x-auto">
       <table className="min-w-full text-sm text-slate-200">
         <tbody>
           <tr className="border-b border-white/10">
@@ -546,11 +650,12 @@ function HoleAttributesPanel({ selectedHole, mobile = false }) {
           </tr>
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
 
-function AssetAttributesPanel({ selectedAsset, mobile = false }) {
+function AssetAttributesPanel({ selectedAsset, canManage = false, onEdit, onDelete, deleting = false, mobile = false }) {
   if (mobile) {
     return (
       <div className="space-y-3 p-4">
@@ -565,6 +670,25 @@ function AssetAttributesPanel({ selectedAsset, mobile = false }) {
               {selectedAsset?.status || "-"}
             </div>
           </div>
+          {canManage && selectedAsset ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={onEdit}
+                className="rounded-2xl border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-cyan-100 transition hover:bg-cyan-300/16"
+              >
+                Edit Asset
+              </button>
+              <button
+                type="button"
+                onClick={onDelete}
+                disabled={deleting}
+                className="rounded-2xl border border-rose-300/25 bg-rose-300/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-rose-100 transition hover:bg-rose-300/16 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {deleting ? "Deleting..." : "Delete Asset"}
+              </button>
+            </div>
+          ) : null}
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -599,7 +723,27 @@ function AssetAttributesPanel({ selectedAsset, mobile = false }) {
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="space-y-3">
+      {canManage && selectedAsset ? (
+        <div className="flex flex-wrap items-center justify-end gap-2 px-4 pt-4">
+          <button
+            type="button"
+            onClick={onEdit}
+            className="rounded-2xl border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-cyan-100 transition hover:bg-cyan-300/16"
+          >
+            Edit Asset
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={deleting}
+            className="rounded-2xl border border-rose-300/25 bg-rose-300/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-rose-100 transition hover:bg-rose-300/16 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {deleting ? "Deleting..." : "Delete Asset"}
+          </button>
+        </div>
+      ) : null}
+      <div className="overflow-x-auto">
       <table className="min-w-full text-sm text-slate-200">
         <tbody>
           <tr className="border-b border-white/10">
@@ -644,6 +788,303 @@ function AssetAttributesPanel({ selectedAsset, mobile = false }) {
           </tr>
         </tbody>
       </table>
+      </div>
+    </div>
+  );
+}
+
+function HoleEditorModal({ hole, projects, saving, onClose, onSave }) {
+  const [form, setForm] = useState({
+    project_id: "",
+    hole_id: "",
+    state: "proposed",
+    planned_depth: "",
+    depth: "",
+    water_level_m: "",
+    azimuth: "",
+    dip: "",
+    collar_longitude: "",
+    collar_latitude: "",
+    collar_source: "",
+    completion_status: "",
+    completion_notes: "",
+  });
+
+  useEffect(() => {
+    if (!hole) return;
+    setForm({
+      project_id: hole.project_id || "",
+      hole_id: hole.hole_id || "",
+      state: hole.state || "proposed",
+      planned_depth: hole.planned_depth ?? "",
+      depth: hole.depth ?? "",
+      water_level_m: hole.water_level_m ?? "",
+      azimuth: hole.azimuth ?? "",
+      dip: hole.dip ?? "",
+      collar_longitude: hole.collar_longitude ?? "",
+      collar_latitude: hole.collar_latitude ?? "",
+      collar_source: hole.collar_source || "",
+      completion_status: hole.completion_status || "",
+      completion_notes: hole.completion_notes || "",
+    });
+  }, [hole]);
+
+  useEffect(() => {
+    if (!hole) return undefined;
+    const handleEscape = (event) => {
+      if (event.key === "Escape" && !saving) onClose();
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [hole, onClose, saving]);
+
+  if (!hole) return null;
+
+  return (
+    <div className="fixed inset-0 z-[90] bg-slate-950/78 backdrop-blur-md" onClick={() => (!saving ? onClose() : null)}>
+      <div className="flex h-full w-full items-center justify-center p-3 md:p-6">
+        <div
+          className="flex h-[min(92vh,860px)] w-full max-w-3xl flex-col overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.99))] shadow-[0_30px_120px_rgba(2,6,23,0.5)]"
+          onClick={(event) => event.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="map-hole-editor-title"
+        >
+          <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4 md:px-6">
+            <div className="min-w-0">
+              <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-100/75">Map Admin</div>
+              <div id="map-hole-editor-title" className="mt-2 text-2xl font-semibold text-white">Edit Hole</div>
+              <div className="mt-1 text-sm text-slate-300">Update the selected hole directly from the map view.</div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="inline-flex items-center rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Close
+            </button>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 md:px-6">
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                Project
+                <select value={form.project_id} onChange={(event) => setForm((current) => ({ ...current, project_id: event.target.value }))} className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40">
+                  <option value="">Select project...</option>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>{project.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                Hole ID
+                <input value={form.hole_id} onChange={(event) => setForm((current) => ({ ...current, hole_id: event.target.value }))} className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40" />
+              </label>
+
+              <label className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                State
+                <select value={form.state} onChange={(event) => setForm((current) => ({ ...current, state: event.target.value }))} className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40">
+                  <option value="proposed">Proposed</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="drilled">Drilled</option>
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                Planned Depth (m)
+                <input value={form.planned_depth} onChange={(event) => setForm((current) => ({ ...current, planned_depth: event.target.value }))} className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40" />
+              </label>
+
+              <label className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                Actual Depth (m)
+                <input value={form.depth} onChange={(event) => setForm((current) => ({ ...current, depth: event.target.value }))} className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40" />
+              </label>
+
+              <label className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                Water Level (m)
+                <input value={form.water_level_m} onChange={(event) => setForm((current) => ({ ...current, water_level_m: event.target.value }))} className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40" />
+              </label>
+
+              <label className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                Azimuth
+                <input value={form.azimuth} onChange={(event) => setForm((current) => ({ ...current, azimuth: event.target.value }))} className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40" />
+              </label>
+
+              <label className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                Dip
+                <input value={form.dip} onChange={(event) => setForm((current) => ({ ...current, dip: event.target.value }))} className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40" />
+              </label>
+
+              <label className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                Longitude
+                <input value={form.collar_longitude} onChange={(event) => setForm((current) => ({ ...current, collar_longitude: event.target.value }))} className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40" />
+              </label>
+
+              <label className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                Latitude
+                <input value={form.collar_latitude} onChange={(event) => setForm((current) => ({ ...current, collar_latitude: event.target.value }))} className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40" />
+              </label>
+
+              <label className="md:col-span-2 flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                Collar Source
+                <input value={form.collar_source} onChange={(event) => setForm((current) => ({ ...current, collar_source: event.target.value }))} className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40" />
+              </label>
+
+              <label className="md:col-span-2 flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                Completion Status
+                <input value={form.completion_status} onChange={(event) => setForm((current) => ({ ...current, completion_status: event.target.value }))} className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40" />
+              </label>
+
+              <label className="md:col-span-2 flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                Completion Notes
+                <textarea value={form.completion_notes} onChange={(event) => setForm((current) => ({ ...current, completion_notes: event.target.value }))} className="min-h-32 rounded-3xl border border-white/10 bg-slate-950/55 px-4 py-3 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40" />
+              </label>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 border-t border-white/10 px-5 py-4 md:px-6">
+            <button type="button" onClick={onClose} disabled={saving} className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-60">Cancel</button>
+            <button type="button" onClick={() => onSave(form)} disabled={saving} className="rounded-2xl bg-[linear-gradient(135deg,#22d3ee,#0ea5e9)] px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-[0_14px_36px_rgba(34,211,238,0.24)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60">{saving ? "Saving..." : "Save Hole"}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AssetEditorModal({ asset, projects, assetTypes, assetLocations, saving, onClose, onSave }) {
+  const [form, setForm] = useState({
+    project_id: "",
+    name: "",
+    asset_type_id: "",
+    location_id: "",
+    status: "Active",
+    longitude: "",
+    latitude: "",
+    coordinate_source: "manual",
+  });
+
+  useEffect(() => {
+    if (!asset) return;
+    setForm({
+      project_id: asset.project_id || "",
+      name: asset.name || "",
+      asset_type_id: asset.asset_type_id || "",
+      location_id: asset.location_id || "",
+      status: asset.status || "Active",
+      longitude: asset.longitude ?? "",
+      latitude: asset.latitude ?? "",
+      coordinate_source: asset.coordinate_source || "manual",
+    });
+  }, [asset]);
+
+  useEffect(() => {
+    if (!asset) return undefined;
+    const handleEscape = (event) => {
+      if (event.key === "Escape" && !saving) onClose();
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [asset, onClose, saving]);
+
+  if (!asset) return null;
+
+  return (
+    <div className="fixed inset-0 z-[90] bg-slate-950/78 backdrop-blur-md" onClick={() => (!saving ? onClose() : null)}>
+      <div className="flex h-full w-full items-center justify-center p-3 md:p-6">
+        <div
+          className="flex h-[min(92vh,760px)] w-full max-w-3xl flex-col overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.99))] shadow-[0_30px_120px_rgba(2,6,23,0.5)]"
+          onClick={(event) => event.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="map-asset-editor-title"
+        >
+          <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4 md:px-6">
+            <div className="min-w-0">
+              <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-100/75">Map Admin</div>
+              <div id="map-asset-editor-title" className="mt-2 text-2xl font-semibold text-white">Edit Asset</div>
+              <div className="mt-1 text-sm text-slate-300">Update the selected asset directly from the map view.</div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="inline-flex items-center rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Close
+            </button>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 md:px-6">
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                Project
+                <select value={form.project_id} onChange={(event) => setForm((current) => ({ ...current, project_id: event.target.value }))} className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40">
+                  <option value="">Select project...</option>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>{project.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                Asset Name
+                <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40" />
+              </label>
+
+              <label className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                Asset Type
+                <select value={form.asset_type_id} onChange={(event) => setForm((current) => ({ ...current, asset_type_id: event.target.value }))} className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40">
+                  <option value="">Select asset type...</option>
+                  {assetTypes.map((type) => (
+                    <option key={type.id} value={type.id}>{type.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                Location
+                <select value={form.location_id} onChange={(event) => setForm((current) => ({ ...current, location_id: event.target.value }))} className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40">
+                  <option value="">Select location...</option>
+                  {assetLocations.map((location) => (
+                    <option key={location.id} value={location.id}>{location.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                Status
+                <select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))} className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40">
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                Longitude
+                <input value={form.longitude} onChange={(event) => setForm((current) => ({ ...current, longitude: event.target.value }))} className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40" />
+              </label>
+
+              <label className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                Latitude
+                <input value={form.latitude} onChange={(event) => setForm((current) => ({ ...current, latitude: event.target.value }))} className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40" />
+              </label>
+
+              <label className="md:col-span-2 flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                Coordinate Source
+                <input value={form.coordinate_source} onChange={(event) => setForm((current) => ({ ...current, coordinate_source: event.target.value }))} className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40" />
+              </label>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 border-t border-white/10 px-5 py-4 md:px-6">
+            <button type="button" onClick={onClose} disabled={saving} className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-60">Cancel</button>
+            <button type="button" onClick={() => onSave(form)} disabled={saving} className="rounded-2xl bg-[linear-gradient(135deg,#22d3ee,#0ea5e9)] px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-[0_14px_36px_rgba(34,211,238,0.24)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60">{saving ? "Saving..." : "Save Asset"}</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -759,7 +1200,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = useMemo(() => supabaseBrowser(), []);
-  const { orgId } = useOrg();
+  const { orgId, memberships } = useOrg();
   const requestedHoleId = searchParams.get("holeId") || "";
   const requestedProjectScope = searchParams.get("scope") || "";
 
@@ -772,6 +1213,8 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const fallbackStyleActiveRef = useRef(false);
   const visibleHolesRef = useRef([]);
   const visibleAssetsRef = useRef([]);
+  const createPlacementActiveRef = useRef(false);
+  const createEntityTypeRef = useRef("hole");
   const pendingMapRestoreRef = useRef(null);
   const pendingHoleFocusRef = useRef("");
   const applyingMapRestoreRef = useRef(false);
@@ -783,6 +1226,9 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const [mapNotice, setMapNotice] = useState("");
   const [allHoles, setAllHoles] = useState([]);
   const [allAssets, setAllAssets] = useState([]);
+  const [ownProjects, setOwnProjects] = useState([]);
+  const [assetTypes, setAssetTypes] = useState([]);
+  const [assetLocations, setAssetLocations] = useState([]);
   const [projectFilter, setProjectFilter] = useState("");
   const [descriptorFilter, setDescriptorFilter] = useState("");
   const [navigatorTab, setNavigatorTab] = useState("holes");
@@ -792,6 +1238,16 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const [selectedAssetId, setSelectedAssetId] = useState("");
   const [mobilePanelTab, setMobilePanelTab] = useState("holes");
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [createPlacementActive, setCreatePlacementActive] = useState(false);
+  const [showCreatePanel, setShowCreatePanel] = useState(false);
+  const [createEntityType, setCreateEntityType] = useState("hole");
+  const [savingCreateEntity, setSavingCreateEntity] = useState(false);
+  const [savingAdminAction, setSavingAdminAction] = useState(false);
+  const [deletingAdminAction, setDeletingAdminAction] = useState(false);
+  const [holeDraft, setHoleDraft] = useState(createMapHoleDraft());
+  const [assetDraft, setAssetDraft] = useState(createMapAssetDraft());
+  const [editingHole, setEditingHole] = useState(null);
+  const [editingAsset, setEditingAsset] = useState(null);
   const [schematicHole, setSchematicHole] = useState(null);
   const [schematicLoading, setSchematicLoading] = useState(false);
   const [schematicError, setSchematicError] = useState("");
@@ -801,6 +1257,21 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const [schematicLithologyTypes, setSchematicLithologyTypes] = useState([]);
   const [schematicConstructionTypes, setSchematicConstructionTypes] = useState([]);
   const [schematicAnnulusTypes, setSchematicAnnulusTypes] = useState([]);
+
+  const myRole = useMemo(() => {
+    const membership = (memberships || []).find((item) => item.organization_id === orgId);
+    return membership?.organization_role ?? membership?.role ?? null;
+  }, [memberships, orgId]);
+
+  const canManageSelections = projectScope !== "shared" && myRole === "admin";
+
+  useEffect(() => {
+    createPlacementActiveRef.current = createPlacementActive;
+  }, [createPlacementActive]);
+
+  useEffect(() => {
+    createEntityTypeRef.current = createEntityType;
+  }, [createEntityType]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -870,6 +1341,12 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   }, [requestedHoleId, requestedProjectScope]);
 
   useEffect(() => {
+    if (projectScope !== "own") {
+      setShowCreatePanel(false);
+    }
+  }, [projectScope]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(MAP_SCOPE_STORAGE_KEY, projectScope);
   }, [projectScope]);
@@ -892,6 +1369,49 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     mediaQuery.addListener(syncViewport);
     return () => mediaQuery.removeListener(syncViewport);
   }, []);
+
+  useEffect(() => {
+    if (!orgId) {
+      setOwnProjects([]);
+      setAssetTypes([]);
+      setAssetLocations([]);
+      return undefined;
+    }
+
+    let active = true;
+
+    (async () => {
+      const [projectsRes, typesRes, locationsRes] = await Promise.all([
+        supabase.from("projects").select("id,name,coordinate_crs_code,coordinate_crs_name").eq("organization_id", orgId).order("name", { ascending: true }),
+        supabase.from("asset_types").select("id,name").order("name", { ascending: true }),
+        supabase.from("asset_locations").select("id,name").eq("organization_id", orgId).order("name", { ascending: true }),
+      ]);
+
+      if (!active) return;
+
+      if (projectsRes.error) {
+        toast.error(projectsRes.error.message || "Failed to load projects for map creation");
+      } else {
+        setOwnProjects(projectsRes.data || []);
+      }
+
+      if (typesRes.error) {
+        toast.error(typesRes.error.message || "Failed to load asset types");
+      } else {
+        setAssetTypes(typesRes.data || []);
+      }
+
+      if (locationsRes.error) {
+        toast.error(locationsRes.error.message || "Failed to load asset locations");
+      } else {
+        setAssetLocations(locationsRes.data || []);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [orgId, supabase]);
 
   useEffect(() => {
     const token = String(publicToken || "").trim();
@@ -997,90 +1517,63 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     };
   }, [publicToken]);
 
-  useEffect(() => {
+  const loadData = useCallback(async () => {
     if (!orgId) {
       setAllHoles([]);
+      setAllAssets([]);
       setLoading(false);
-      return;
+      return { holes: [], assets: [] };
     }
 
-    let active = true;
+    setLoading(true);
+    setError("");
 
-    const loadData = async () => {
-      setLoading(true);
-      setError("");
+    try {
+      let holeRows = [];
+      let assetRows = [];
 
-      try {
-        let holeRows = [];
-        let assetRows = [];
+      if (projectScope === "shared") {
+        const { data: sharedRows, error: sharedErr } = await supabase
+          .from("organization_shared_projects")
+          .select("project_id, relationship:relationship_id(vendor_organization_id,status,permissions,accepted_at)")
+          .limit(5000);
 
-        if (projectScope === "shared") {
-          const { data: sharedRows, error: sharedErr } = await supabase
-            .from("organization_shared_projects")
-            .select("project_id, relationship:relationship_id(vendor_organization_id,status,permissions,accepted_at)")
-            .limit(5000);
+        if (sharedErr) throw sharedErr;
 
-          if (sharedErr) throw sharedErr;
+        const sharedProjectIds = Array.from(
+          new Set(
+            (sharedRows || [])
+              .filter((row) => {
+                const rel = row.relationship;
+                if (!rel) return false;
+                const status = String(rel.status || "");
+                const accepted = status === "active" || status === "accepted" || !!rel.accepted_at;
+                const allowed = !!rel.permissions?.share_project_details;
+                return rel.vendor_organization_id === orgId && accepted && allowed;
+              })
+              .map((row) => row.project_id)
+              .filter(Boolean)
+          )
+        );
 
-          const sharedProjectIds = Array.from(
-            new Set(
-              (sharedRows || [])
-                .filter((row) => {
-                  const rel = row.relationship;
-                  if (!rel) return false;
-                  const status = String(rel.status || "");
-                  const accepted = status === "active" || status === "accepted" || !!rel.accepted_at;
-                  const allowed = !!rel.permissions?.share_project_details;
-                  return rel.vendor_organization_id === orgId && accepted && allowed;
-                })
-                .map((row) => row.project_id)
-                .filter(Boolean)
-            )
-          );
-
-          if (sharedProjectIds.length) {
-            const [holesRes, assetsRes] = await Promise.all([
-              supabase
-                .from("holes")
-                .select(
-                  "id,organization_id,hole_id,project_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_easting,collar_northing,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state,projects(id,name,coordinate_crs_code,coordinate_crs_name)"
-                )
-                .in("project_id", sharedProjectIds)
-                .neq("organization_id", orgId)
-                .order("project_id", { ascending: true })
-                .order("hole_id", { ascending: true }),
-              supabase
-                .from("assets")
-                .select(
-                  "id,organization_id,name,project_id,status,easting,northing,longitude,latitude,coordinate_source,asset_types(name),asset_locations(name),projects(id,name,coordinate_crs_code,coordinate_crs_name)"
-                )
-                .in("project_id", sharedProjectIds)
-                .neq("organization_id", orgId)
-                .order("project_id", { ascending: true })
-                .order("name", { ascending: true }),
-            ]);
-
-            if (holesRes.error) throw holesRes.error;
-            if (assetsRes.error) throw assetsRes.error;
-            holeRows = holesRes.data || [];
-            assetRows = assetsRes.data || [];
-          }
-        } else {
+        if (sharedProjectIds.length) {
           const [holesRes, assetsRes] = await Promise.all([
             supabase
               .from("holes")
               .select(
                 "id,organization_id,hole_id,project_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_easting,collar_northing,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state,projects(id,name,coordinate_crs_code,coordinate_crs_name)"
               )
-              .eq("organization_id", orgId)
+              .in("project_id", sharedProjectIds)
+              .neq("organization_id", orgId)
               .order("project_id", { ascending: true })
               .order("hole_id", { ascending: true }),
             supabase
               .from("assets")
               .select(
-                "id,organization_id,name,project_id,status,easting,northing,longitude,latitude,coordinate_source,asset_types(name),asset_locations(name),projects(id,name,coordinate_crs_code,coordinate_crs_name)"
+                "id,organization_id,name,asset_type_id,location_id,project_id,status,easting,northing,longitude,latitude,coordinate_source,asset_types(name),asset_locations(name),projects(id,name,coordinate_crs_code,coordinate_crs_name)"
               )
-              .eq("organization_id", orgId)
+              .in("project_id", sharedProjectIds)
+              .neq("organization_id", orgId)
               .order("project_id", { ascending: true })
               .order("name", { ascending: true }),
           ]);
@@ -1090,100 +1583,124 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
           holeRows = holesRes.data || [];
           assetRows = assetsRes.data || [];
         }
+      } else {
+        const [holesRes, assetsRes] = await Promise.all([
+          supabase
+            .from("holes")
+            .select(
+              "id,organization_id,hole_id,project_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_easting,collar_northing,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state,projects(id,name,coordinate_crs_code,coordinate_crs_name)"
+            )
+            .eq("organization_id", orgId)
+            .order("project_id", { ascending: true })
+            .order("hole_id", { ascending: true }),
+          supabase
+            .from("assets")
+            .select(
+              "id,organization_id,name,asset_type_id,location_id,project_id,status,easting,northing,longitude,latitude,coordinate_source,asset_types(name),asset_locations(name),projects(id,name,coordinate_crs_code,coordinate_crs_name)"
+            )
+            .eq("organization_id", orgId)
+            .order("project_id", { ascending: true })
+            .order("name", { ascending: true }),
+        ]);
 
-        if (!active) return;
-
-        const mappedHoles = holeRows
-          .map((hole) => {
-            const derived = deriveHoleCoordinates({
-              collarLongitude: hole.collar_longitude ?? null,
-              collarLatitude: hole.collar_latitude ?? null,
-              collarEasting: hole.collar_easting ?? null,
-              collarNorthing: hole.collar_northing ?? null,
-              projectCrsCode: hole.projects?.coordinate_crs_code ?? null,
-            });
-
-            return {
-              id: hole.id,
-              organization_id: hole.organization_id,
-              hole_id: hole.hole_id,
-              project_id: hole.project_id || "",
-              project_name: hole.projects?.name || "No project",
-              state: hole.state || "",
-              depth: hole.depth ?? null,
-              planned_depth: hole.planned_depth ?? null,
-              water_level_m: hole.water_level_m ?? null,
-              azimuth: hole.azimuth ?? null,
-              dip: hole.dip ?? null,
-              collar_longitude: derived.collarLongitude,
-              collar_latitude: derived.collarLatitude,
-              collar_easting: hole.collar_easting ?? null,
-              collar_northing: hole.collar_northing ?? null,
-              collar_elevation_m: hole.collar_elevation_m ?? null,
-              collar_source: hole.collar_source ?? null,
-              started_at: hole.started_at ?? null,
-              completed_at: hole.completed_at ?? null,
-              completion_status: hole.completion_status ?? null,
-              completion_notes: hole.completion_notes ?? null,
-            };
-          })
-          .filter((hole) => hole.collar_longitude != null && hole.collar_latitude != null);
-        const descriptorsByHole = await fetchHoleDescriptorAssignments(
-          supabase,
-          mappedHoles.map((hole) => hole.id)
-        );
-
-        setAllHoles(attachHoleDescriptors(mappedHoles, descriptorsByHole));
-
-        setAllAssets(
-          assetRows
-            .map((asset) => {
-              const baseAsset = {
-                id: asset.id,
-                organization_id: asset.organization_id,
-                name: asset.name || "Unnamed asset",
-                project_id: asset.project_id || "",
-                project_name: asset.projects?.name || "No project",
-                project_crs_code: asset.projects?.coordinate_crs_code || null,
-                project_crs_name: asset.projects?.coordinate_crs_name || null,
-                status: asset.status || "",
-                asset_type_name: asset.asset_types?.name || "",
-                location_name: asset.asset_locations?.name || "",
-                easting: asset.easting ?? null,
-                northing: asset.northing ?? null,
-                longitude: asset.longitude ?? null,
-                latitude: asset.latitude ?? null,
-                coordinate_source: asset.coordinate_source ?? null,
-              };
-
-              const derived = deriveMapAssetCoordinates(baseAsset);
-              return {
-                ...baseAsset,
-                longitude: derived.longitude,
-                latitude: derived.latitude,
-                coordinate_derived: derived.coordinateDerived,
-              };
-            })
-            .filter((asset) => asset.longitude != null && asset.latitude != null)
-        );
-      } catch (evt) {
-        if (!active) return;
-        const message = evt?.message || "Failed to load map holes";
-        setAllHoles([]);
-        setAllAssets([]);
-        setError(message);
-        toast.error(message);
-      } finally {
-        if (active) setLoading(false);
+        if (holesRes.error) throw holesRes.error;
+        if (assetsRes.error) throw assetsRes.error;
+        holeRows = holesRes.data || [];
+        assetRows = assetsRes.data || [];
       }
-    };
 
-    void loadData();
+      const mappedHoles = holeRows
+        .map((hole) => {
+          const derived = deriveHoleCoordinates({
+            collarLongitude: hole.collar_longitude ?? null,
+            collarLatitude: hole.collar_latitude ?? null,
+            collarEasting: hole.collar_easting ?? null,
+            collarNorthing: hole.collar_northing ?? null,
+            projectCrsCode: hole.projects?.coordinate_crs_code ?? null,
+          });
 
-    return () => {
-      active = false;
-    };
+          return {
+            id: hole.id,
+            organization_id: hole.organization_id,
+            hole_id: hole.hole_id,
+            project_id: hole.project_id || "",
+            project_name: hole.projects?.name || "No project",
+            state: hole.state || "",
+            depth: hole.depth ?? null,
+            planned_depth: hole.planned_depth ?? null,
+            water_level_m: hole.water_level_m ?? null,
+            azimuth: hole.azimuth ?? null,
+            dip: hole.dip ?? null,
+            collar_longitude: derived.collarLongitude,
+            collar_latitude: derived.collarLatitude,
+            collar_easting: hole.collar_easting ?? null,
+            collar_northing: hole.collar_northing ?? null,
+            collar_elevation_m: hole.collar_elevation_m ?? null,
+            collar_source: hole.collar_source ?? null,
+            started_at: hole.started_at ?? null,
+            completed_at: hole.completed_at ?? null,
+            completion_status: hole.completion_status ?? null,
+            completion_notes: hole.completion_notes ?? null,
+          };
+        })
+        .filter((hole) => hole.collar_longitude != null && hole.collar_latitude != null);
+
+      const descriptorsByHole = await fetchHoleDescriptorAssignments(
+        supabase,
+        mappedHoles.map((hole) => hole.id)
+      );
+
+      const nextHoles = attachHoleDescriptors(mappedHoles, descriptorsByHole);
+      const nextAssets = assetRows
+        .map((asset) => {
+          const baseAsset = {
+            id: asset.id,
+            organization_id: asset.organization_id,
+            name: asset.name || "Unnamed asset",
+            asset_type_id: asset.asset_type_id || "",
+            location_id: asset.location_id || "",
+            project_id: asset.project_id || "",
+            project_name: asset.projects?.name || "No project",
+            project_crs_code: asset.projects?.coordinate_crs_code || null,
+            project_crs_name: asset.projects?.coordinate_crs_name || null,
+            status: asset.status || "",
+            asset_type_name: asset.asset_types?.name || "",
+            location_name: asset.asset_locations?.name || "",
+            easting: asset.easting ?? null,
+            northing: asset.northing ?? null,
+            longitude: asset.longitude ?? null,
+            latitude: asset.latitude ?? null,
+            coordinate_source: asset.coordinate_source ?? null,
+          };
+
+          const derived = deriveMapAssetCoordinates(baseAsset);
+          return {
+            ...baseAsset,
+            longitude: derived.longitude,
+            latitude: derived.latitude,
+            coordinate_derived: derived.coordinateDerived,
+          };
+        })
+        .filter((asset) => asset.longitude != null && asset.latitude != null);
+
+      setAllHoles(nextHoles);
+      setAllAssets(nextAssets);
+      return { holes: nextHoles, assets: nextAssets };
+    } catch (evt) {
+      const message = evt?.message || "Failed to load map holes";
+      setAllHoles([]);
+      setAllAssets([]);
+      setError(message);
+      toast.error(message);
+      return { holes: [], assets: [] };
+    } finally {
+      setLoading(false);
+    }
   }, [orgId, projectScope, supabase]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   const projects = useMemo(() => {
     const projectMap = new Map();
@@ -1307,6 +1824,192 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const selectedAsset = useMemo(() => {
     return visibleAssets.find((asset) => asset.id === selectedAssetId) || visibleAssets[0] || null;
   }, [selectedAssetId, visibleAssets]);
+
+  const openHoleEditor = () => {
+    if (!selectedHole || !canManageSelections) return;
+    setEditingHole(selectedHole);
+  };
+
+  const openAssetEditor = () => {
+    if (!selectedAsset || !canManageSelections) return;
+    setEditingAsset(selectedAsset);
+  };
+
+  const closeHoleEditor = () => {
+    if (savingAdminAction) return;
+    setEditingHole(null);
+  };
+
+  const closeAssetEditor = () => {
+    if (savingAdminAction) return;
+    setEditingAsset(null);
+  };
+
+  const saveHoleEdits = async (form) => {
+    if (!editingHole || !canManageSelections) return;
+
+    const holeId = String(form.hole_id || "").trim();
+    const longitude = toNullableNumber(form.collar_longitude);
+    const latitude = toNullableNumber(form.collar_latitude);
+    const azimuth = toNullableNumber(form.azimuth);
+    const dip = toNullableNumber(form.dip);
+
+    if (!form.project_id) return toast.error("Select a project");
+    if (!holeId) return toast.error("Enter a hole ID");
+    if ((longitude == null) !== (latitude == null)) return toast.error("Longitude and latitude must both be set or both blank");
+    if (longitude == null || latitude == null) return toast.error("Longitude and latitude are required for mapped holes");
+    if (azimuth != null && (azimuth < 0 || azimuth >= 360)) return toast.error("Azimuth must be between 0 and < 360");
+    if (dip != null && (dip < -90 || dip > 90)) return toast.error("Dip must be between -90 and 90");
+
+    setSavingAdminAction(true);
+    try {
+      const { error: updateError } = await supabase
+        .from("holes")
+        .update({
+          project_id: form.project_id,
+          hole_id: holeId,
+          state: form.state || "proposed",
+          planned_depth: toNullableNumber(form.planned_depth),
+          depth: toNullableNumber(form.depth),
+          water_level_m: toNullableNumber(form.water_level_m),
+          azimuth,
+          dip,
+          collar_longitude: longitude,
+          collar_latitude: latitude,
+          collar_source: toTextOrNull(form.collar_source),
+          completion_status: toTextOrNull(form.completion_status),
+          completion_notes: toTextOrNull(form.completion_notes),
+        })
+        .eq("id", editingHole.id)
+        .eq("organization_id", orgId);
+
+      if (updateError) throw updateError;
+
+      const { holes: freshHoles } = await loadData();
+      const refreshedHole = freshHoles.find((hole) => hole.id === editingHole.id) || null;
+      if (refreshedHole) focusHole(refreshedHole, { flyTo: false });
+      setEditingHole(null);
+      toast.success("Hole updated");
+    } catch (error) {
+      toast.error(error?.message || "Failed to update hole");
+    } finally {
+      setSavingAdminAction(false);
+    }
+  };
+
+  const saveAssetEdits = async (form) => {
+    if (!editingAsset || !canManageSelections) return;
+
+    const trimmedName = String(form.name || "").trim();
+    const longitude = toNullableNumber(form.longitude);
+    const latitude = toNullableNumber(form.latitude);
+    const selectedAssetType = assetTypes.find((type) => type.id === form.asset_type_id) || null;
+
+    if (!form.project_id) return toast.error("Select a project");
+    if (!trimmedName) return toast.error("Enter an asset name");
+    if (!selectedAssetType) return toast.error("Select an asset type");
+    if ((longitude == null) !== (latitude == null)) return toast.error("Longitude and latitude must both be set or both blank");
+    if (longitude == null || latitude == null) return toast.error("Longitude and latitude are required for mapped assets");
+
+    setSavingAdminAction(true);
+    try {
+      const { error: updateError } = await supabase
+        .from("assets")
+        .update({
+          project_id: form.project_id,
+          name: trimmedName,
+          asset_type_id: selectedAssetType.id,
+          asset_type: selectedAssetType.name,
+          location_id: form.location_id || null,
+          status: form.status || "Active",
+          longitude,
+          latitude,
+          coordinate_source: toTextOrNull(form.coordinate_source),
+        })
+        .eq("id", editingAsset.id)
+        .eq("organization_id", orgId);
+
+      if (updateError) throw updateError;
+
+      const { assets: freshAssets } = await loadData();
+      const refreshedAsset = freshAssets.find((asset) => asset.id === editingAsset.id) || null;
+      if (refreshedAsset) focusAsset(refreshedAsset, { flyTo: false });
+      setEditingAsset(null);
+      toast.success("Asset updated");
+    } catch (error) {
+      toast.error(error?.message || "Failed to update asset");
+    } finally {
+      setSavingAdminAction(false);
+    }
+  };
+
+  const deleteSelectedHole = async () => {
+    if (!selectedHole || !canManageSelections) return;
+    if (typeof window !== "undefined" && !window.confirm(`Delete hole ${selectedHole.hole_id || ""}? This action cannot be undone.`)) return;
+
+    setDeletingAdminAction(true);
+    try {
+      const { error: deleteError } = await supabase
+        .from("holes")
+        .delete()
+        .eq("id", selectedHole.id)
+        .eq("organization_id", orgId);
+
+      if (deleteError) throw deleteError;
+
+      if (popupRef.current) {
+        popupRef.current.remove();
+        popupRef.current = null;
+      }
+      setSelectedHoleId("");
+      await loadData();
+      toast.success("Hole deleted");
+    } catch (error) {
+      toast.error(error?.message || "Failed to delete hole");
+    } finally {
+      setDeletingAdminAction(false);
+    }
+  };
+
+  const deleteSelectedAsset = async () => {
+    if (!selectedAsset || !canManageSelections) return;
+    if (typeof window !== "undefined" && !window.confirm(`Delete asset ${selectedAsset.name || ""}? This action cannot be undone.`)) return;
+
+    setDeletingAdminAction(true);
+    try {
+      const { error: deleteError } = await supabase
+        .from("assets")
+        .delete()
+        .eq("id", selectedAsset.id)
+        .eq("organization_id", orgId);
+
+      if (deleteError) throw deleteError;
+
+      if (popupRef.current) {
+        popupRef.current.remove();
+        popupRef.current = null;
+      }
+      setSelectedAssetId("");
+      await loadData();
+      toast.success("Asset deleted");
+    } catch (error) {
+      toast.error(error?.message || "Failed to delete asset");
+    } finally {
+      setDeletingAdminAction(false);
+    }
+  };
+
+  useEffect(() => {
+    const defaultProjectId = projectScope === "own" && projectFilter && ownProjects.some((project) => project.id === projectFilter)
+      ? projectFilter
+      : ownProjects[0]?.id || "";
+
+    setHoleDraft((current) => (current.project_id && ownProjects.some((project) => project.id === current.project_id) ? current : createMapHoleDraft(defaultProjectId)));
+    setAssetDraft((current) => (current.project_id && ownProjects.some((project) => project.id === current.project_id) ? current : createMapAssetDraft(defaultProjectId)));
+  }, [ownProjects, projectFilter, projectScope]);
+
+  const activeCreateDraft = createEntityType === "hole" ? holeDraft : assetDraft;
+  const createPointCollection = useMemo(() => makeCreatePointCollection(activeCreateDraft), [activeCreateDraft]);
 
   const selectedHoleMapId = selectedHole?.id || "";
   const selectedAssetMapId = selectedAsset?.id || "";
@@ -1599,6 +2302,12 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
       map.addSource(ASSETS_SOURCE_ID, { type: "geojson", data: assetCollection });
     }
 
+    if (map.getSource(CREATE_POINT_SOURCE_ID)) {
+      map.getSource(CREATE_POINT_SOURCE_ID).setData(createPointCollection);
+    } else {
+      map.addSource(CREATE_POINT_SOURCE_ID, { type: "geojson", data: createPointCollection });
+    }
+
     if (!map.getLayer(HOLES_GLOW_LAYER_ID)) {
       map.addLayer({
         id: HOLES_GLOW_LAYER_ID,
@@ -1716,6 +2425,33 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
       });
     }
 
+    if (!map.getLayer(CREATE_POINT_FILL_LAYER_ID)) {
+      map.addLayer({
+        id: CREATE_POINT_FILL_LAYER_ID,
+        type: "circle",
+        source: CREATE_POINT_SOURCE_ID,
+        paint: {
+          "circle-radius": 8,
+          "circle-color": "#f97316",
+          "circle-opacity": 0.96,
+        },
+      });
+    }
+
+    if (!map.getLayer(CREATE_POINT_RING_LAYER_ID)) {
+      map.addLayer({
+        id: CREATE_POINT_RING_LAYER_ID,
+        type: "circle",
+        source: CREATE_POINT_SOURCE_ID,
+        paint: {
+          "circle-radius": 15,
+          "circle-color": "rgba(249,115,22,0.12)",
+          "circle-stroke-color": "#fdba74",
+          "circle-stroke-width": 2,
+        },
+      });
+    }
+
     map.setFilter(HOLES_SELECTED_LAYER_ID, ["==", ["get", "id"], selectedHoleMapId]);
     map.setFilter(ASSETS_SELECTED_LAYER_ID, ["==", ["get", "id"], selectedAssetMapId]);
 
@@ -1724,7 +2460,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         map.getCanvas().style.cursor = "pointer";
       };
       const clearPointerCursor = () => {
-        map.getCanvas().style.cursor = "";
+        map.getCanvas().style.cursor = createPlacementActiveRef.current ? "crosshair" : "";
       };
       const handleHoleLayerClick = (event) => {
         const feature = event.features?.[0];
@@ -1740,6 +2476,42 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         if (!asset) return;
         focusAsset(asset);
       };
+      const handleMapCreateClick = (event) => {
+        if (!createPlacementActiveRef.current) return;
+
+        const overlappingFeatures = map.queryRenderedFeatures(event.point, {
+          layers: [HOLES_CIRCLE_LAYER_ID, HOLES_SELECTED_LAYER_ID, ASSETS_CIRCLE_LAYER_ID, ASSETS_SELECTED_LAYER_ID],
+        });
+
+        if (overlappingFeatures.length) return;
+
+        const nextLongitude = roundCoordinate(event.lngLat.lng);
+        const nextLatitude = roundCoordinate(event.lngLat.lat);
+
+        if (createEntityTypeRef.current === "hole") {
+          setHoleDraft((current) => ({
+            ...current,
+            longitude: nextLongitude,
+            latitude: nextLatitude,
+            collar_source: "map_picked",
+          }));
+        } else {
+          setAssetDraft((current) => ({
+            ...current,
+            longitude: nextLongitude,
+            latitude: nextLatitude,
+            coordinate_source: "manual",
+          }));
+        }
+
+        map.easeTo({
+          center: [Number(nextLongitude), Number(nextLatitude)],
+          zoom: Math.max(map.getZoom(), 11.2),
+          duration: 450,
+        });
+
+        setShowCreatePanel(true);
+      };
 
       map.on("mouseenter", HOLES_CIRCLE_LAYER_ID, setPointerCursor);
       map.on("mouseenter", HOLES_SELECTED_LAYER_ID, setPointerCursor);
@@ -1753,6 +2525,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
       map.on("click", HOLES_SELECTED_LAYER_ID, handleHoleLayerClick);
       map.on("click", ASSETS_CIRCLE_LAYER_ID, handleAssetLayerClick);
       map.on("click", ASSETS_SELECTED_LAYER_ID, handleAssetLayerClick);
+      map.on("click", handleMapCreateClick);
       handlersBoundRef.current = true;
     }
 
@@ -1763,7 +2536,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
       if (popupRef.current) popupRef.current.remove();
       return;
     }
-  }, [assetCollection, holeCollection, mapStatus, selectedAssetMapId, selectedHoleMapId, visibleAssets.length, visibleHoles.length]);
+  }, [assetCollection, createPointCollection, holeCollection, mapStatus, selectedAssetMapId, selectedHoleMapId, visibleAssets.length, visibleHoles.length]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1784,7 +2557,16 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     setLayerVisibility(ASSETS_GLOW_LAYER_ID, showAssetLayers);
     setLayerVisibility(ASSETS_CIRCLE_LAYER_ID, showAssetLayers);
     setLayerVisibility(ASSETS_SELECTED_LAYER_ID, showAssetLayers);
-  }, [isMobileViewport, mapStatus, mobilePanelTab]);
+    setLayerVisibility(CREATE_POINT_FILL_LAYER_ID, createPlacementActive);
+    setLayerVisibility(CREATE_POINT_RING_LAYER_ID, createPlacementActive);
+  }, [createPlacementActive, isMobileViewport, mapStatus, mobilePanelTab]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReadyRef.current) return;
+
+    map.getCanvas().style.cursor = createPlacementActive ? "crosshair" : "";
+  }, [createPlacementActive]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1884,6 +2666,173 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
       duration: 3000,
       singleZoom: 14.1,
     });
+  };
+
+  const openCreatePanel = (entityType = "hole") => {
+    if (projectScope !== "own") {
+      toast.error("Create on map is available in My Projects only");
+      return;
+    }
+
+    const defaultProjectId = projectFilter && ownProjects.some((project) => project.id === projectFilter)
+      ? projectFilter
+      : ownProjects[0]?.id || "";
+
+    setCreateEntityType(entityType);
+    setHoleDraft((current) => ({ ...createMapHoleDraft(defaultProjectId), longitude: current.longitude, latitude: current.latitude }));
+    setAssetDraft((current) => ({ ...createMapAssetDraft(defaultProjectId), longitude: current.longitude, latitude: current.latitude }));
+    setCreatePlacementActive(true);
+    setShowCreatePanel(false);
+    toast("Click a free point on the map to place your new item.");
+  };
+
+  const closeCreatePanel = () => {
+    setShowCreatePanel(false);
+    setCreatePlacementActive(false);
+    setSavingCreateEntity(false);
+  };
+
+  const saveCreatedHole = async () => {
+    const holeId = String(holeDraft.hole_id || "").trim();
+    const longitude = Number(holeDraft.longitude);
+    const latitude = Number(holeDraft.latitude);
+    const selectedProject = ownProjects.find((project) => project.id === holeDraft.project_id) || null;
+
+    if (!selectedProject) {
+      toast.error("Select a project first");
+      return;
+    }
+
+    if (!holeId) {
+      toast.error("Enter a hole ID");
+      return;
+    }
+
+    if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
+      toast.error("Click a point on the map first");
+      return;
+    }
+
+    setSavingCreateEntity(true);
+
+    const { data, error: insertError } = await supabase
+      .from("holes")
+      .insert({
+        organization_id: orgId,
+        project_id: selectedProject.id,
+        hole_id: holeId,
+        state: holeDraft.state || "proposed",
+        collar_longitude: longitude,
+        collar_latitude: latitude,
+        collar_source: holeDraft.collar_source || "map_picked",
+      })
+      .select("id,organization_id,hole_id,project_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_easting,collar_northing,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state")
+      .single();
+
+    if (insertError) {
+      setSavingCreateEntity(false);
+      toast.error(insertError.message || "Failed to create hole");
+      return;
+    }
+
+    const createdHole = {
+      ...data,
+      project_name: selectedProject.name,
+      descriptors: [],
+      descriptor_ids: [],
+    };
+
+    await loadData();
+    closeCreatePanel();
+    setNavigatorTab("holes");
+    setMobilePanelTab("holes");
+    focusHole(createdHole);
+    toast.success("Hole created from map");
+  };
+
+  const saveCreatedAsset = async () => {
+    const assetName = String(assetDraft.name || "").trim();
+    const longitude = Number(assetDraft.longitude);
+    const latitude = Number(assetDraft.latitude);
+    const selectedProject = ownProjects.find((project) => project.id === assetDraft.project_id) || null;
+    const selectedAssetType = assetTypes.find((type) => type.id === assetDraft.asset_type_id) || null;
+    const selectedLocation = assetLocations.find((location) => location.id === assetDraft.location_id) || null;
+
+    if (!selectedProject) {
+      toast.error("Select a project first");
+      return;
+    }
+
+    if (!assetName) {
+      toast.error("Enter an asset name");
+      return;
+    }
+
+    if (!selectedAssetType) {
+      toast.error("Select an asset type");
+      return;
+    }
+
+    if (!selectedLocation) {
+      toast.error("Select a location");
+      return;
+    }
+
+    if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
+      toast.error("Click a point on the map first");
+      return;
+    }
+
+    setSavingCreateEntity(true);
+
+    const { data, error: insertError } = await supabase
+      .from("assets")
+      .insert({
+        organization_id: orgId,
+        name: assetName,
+        asset_type: selectedAssetType.name,
+        asset_type_id: selectedAssetType.id,
+        location_id: selectedLocation.id,
+        project_id: selectedProject.id,
+        longitude,
+        latitude,
+        coordinate_source: assetDraft.coordinate_source || "manual",
+        status: assetDraft.status || "Active",
+      })
+      .select("id,organization_id,name,project_id,status,easting,northing,longitude,latitude,coordinate_source")
+      .single();
+
+    if (insertError) {
+      setSavingCreateEntity(false);
+      toast.error(insertError.message || "Failed to create asset");
+      return;
+    }
+
+    const createdAsset = {
+      ...data,
+      project_name: selectedProject.name,
+      project_crs_code: selectedProject.coordinate_crs_code || null,
+      project_crs_name: selectedProject.coordinate_crs_name || null,
+      asset_type_name: selectedAssetType.name,
+      location_name: selectedLocation.name,
+    };
+
+    await loadData();
+    closeCreatePanel();
+    setNavigatorTab("assets");
+    setMobilePanelTab("assets");
+    focusAsset(createdAsset);
+    toast.success("Asset created from map");
+  };
+
+  const saveCreateEntity = async () => {
+    if (savingCreateEntity) return;
+    if (createEntityType === "hole") {
+      await saveCreatedHole();
+      return;
+    }
+
+    await saveCreatedAsset();
   };
 
   return (
@@ -2090,6 +3039,41 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   </div>
                 </div>
               ) : null}
+              {!showCreateProjectPrompt && projectScope === "own" ? (
+                <button
+                  type="button"
+                  aria-label="Add hole or asset on map"
+                  className="absolute right-3 top-3 z-20 inline-flex h-12 w-12 items-center justify-center rounded-full bg-[linear-gradient(135deg,#22d3ee,#0ea5e9)] text-3xl font-light leading-none text-slate-950 shadow-[0_18px_42px_rgba(34,211,238,0.32)] transition hover:brightness-105 md:right-4 md:top-4"
+                  onClick={() => openCreatePanel(createEntityType)}
+                >
+                  +
+                </button>
+              ) : null}
+              {createPlacementActive && !showCreatePanel ? (
+                <div className="pointer-events-none absolute inset-x-3 top-20 z-20 flex justify-center md:inset-x-4 md:top-24">
+                  <div className="rounded-full border border-cyan-300/20 bg-slate-950/82 px-4 py-2 text-xs font-medium tracking-[0.16em] text-cyan-100 shadow-[0_18px_48px_rgba(2,6,23,0.42)] backdrop-blur-xl">
+                    Click a free point on the map to place your new item
+                  </div>
+                </div>
+              ) : null}
+              {showCreatePanel ? (
+                <MapCreateEntityPanel
+                  entityType={createEntityType}
+                  onEntityTypeChange={setCreateEntityType}
+                  holeDraft={holeDraft}
+                  assetDraft={assetDraft}
+                  onHoleDraftChange={setHoleDraft}
+                  onAssetDraftChange={setAssetDraft}
+                  projects={ownProjects}
+                  assetTypes={assetTypes}
+                  assetLocations={assetLocations}
+                  saving={savingCreateEntity}
+                  onClose={closeCreatePanel}
+                  onSave={() => {
+                    void saveCreateEntity();
+                  }}
+                />
+              ) : null}
               <div ref={mapContainerRef} className="h-[58svh] min-h-[400px] w-full md:h-[58vh] md:min-h-[480px]" />
             </div>
 
@@ -2163,7 +3147,14 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
               </div>
 
               {mobilePanelTab === "holes" ? (
-                <HoleAttributesPanel selectedHole={selectedHole} mobile />
+                <HoleAttributesPanel
+                  selectedHole={selectedHole}
+                  canManage={canManageSelections}
+                  onEdit={openHoleEditor}
+                  onDelete={deleteSelectedHole}
+                  deleting={deletingAdminAction && navigatorTab === "holes"}
+                  mobile
+                />
               ) : mobilePanelTab === "assets" ? (
                 <AssetAccordionList
                   loading={loading}
@@ -2196,11 +3187,45 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                 </div>
               </div>
 
-              {navigatorTab === "holes" ? <HoleAttributesPanel selectedHole={selectedHole} /> : <AssetAttributesPanel selectedAsset={selectedAsset} />}
+              {navigatorTab === "holes" ? (
+                <HoleAttributesPanel
+                  selectedHole={selectedHole}
+                  canManage={canManageSelections}
+                  onEdit={openHoleEditor}
+                  onDelete={deleteSelectedHole}
+                  deleting={deletingAdminAction && navigatorTab === "holes"}
+                />
+              ) : (
+                <AssetAttributesPanel
+                  selectedAsset={selectedAsset}
+                  canManage={canManageSelections}
+                  onEdit={openAssetEditor}
+                  onDelete={deleteSelectedAsset}
+                  deleting={deletingAdminAction && navigatorTab === "assets"}
+                />
+              )}
             </div>
           </div>
         </section>
       </div>
+
+      <HoleEditorModal
+        hole={editingHole}
+        projects={ownProjects}
+        saving={savingAdminAction}
+        onClose={closeHoleEditor}
+        onSave={saveHoleEdits}
+      />
+
+      <AssetEditorModal
+        asset={editingAsset}
+        projects={ownProjects}
+        assetTypes={assetTypes}
+        assetLocations={assetLocations}
+        saving={savingAdminAction}
+        onClose={closeAssetEditor}
+        onSave={saveAssetEdits}
+      />
 
       <HoleSchematicModal
         hole={schematicHole}
