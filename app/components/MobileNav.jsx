@@ -3,21 +3,20 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
-import { IconCore, IconAdmin, IconTeam, IconUser, IconReport, IconClipboard, IconCoreTasks, IconMap, AssetIcon, IconPlods, IconWorkflow } from "./icons";
+import { IconCore, IconAdmin, IconTeam, IconUser, IconReport, IconClipboard, IconCoreTasks, IconMap, AssetIcon, IconPlods } from "./icons";
 
 const tabs = [
   { href: "/map", label: "Map", icon: IconMap },
   { href: "/dashboard", label: "Reports", icon: IconReport },
   { href: "/activity", label: "Activity", icon: IconClipboard },
-  { href: "/how-to", label: "How To", icon: IconClipboard },
   { href: "/plods", label: "Plods", icon: IconPlods },
   { href: "/coretasks", label: "Drilling", icon: IconCoreTasks },
   { href: "/drillhole-viz", label: "Drillhole Viz", icon: IconCore },
   { href: "/consumables", label: "Consumables", icon: IconCore },
-  { href: "/workflows", label: "Workflows", icon: IconWorkflow },
   { href: "/projects", label: "Projects", icon: IconClipboard },
   { href: "/assets", label: "Assets", icon: AssetIcon },
   { href: "/team", label: "Team", icon: IconTeam },
+  { href: "/how-to", label: "How To", icon: IconClipboard },
 ];
 
 export default function MobileNav() {

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseClient";
@@ -64,7 +63,9 @@ export default function ProjectsView() {
     coordinate_crs_code: "",
     coordinate_crs_name: "",
     current_workflow_id: "",
-    current_workflow_stage_id: "",
+    current_workflow_phase_id: "",
+    current_workflow_substage_id: "",
+    current_workflow_status_key: "not_started",
   };
   const [form, setForm] = useState(emptyForm);
   const [projectWorkflows, setProjectWorkflows] = useState([]);
@@ -148,8 +149,11 @@ export default function ProjectsView() {
           coordinate_crs_name,
           created_at,
           current_workflow_id,
-          current_workflow_stage_id,
-          current_workflow_stage:workflow_stages!projects_current_workflow_stage_id_fkey(id,name,color)
+          current_workflow_phase_id,
+          current_workflow_substage_id,
+          current_workflow_status_key,
+          current_workflow_phase:workflow_phase_definitions!projects_current_workflow_phase_id_fkey(id,name,phase_index),
+          current_workflow_substage:workflow_substage_definitions!projects_current_workflow_substage_id_fkey(id,name,substage_index)
         `)
         .eq("organization_id", orgId)
         .order("created_at", { ascending: false });
@@ -174,15 +178,18 @@ export default function ProjectsView() {
       return;
     }
 
-    const [workflowRes, stageRes] = await Promise.all([
+    const [workflowRes, phaseRes, substageRes] = await Promise.all([
       supabase
         .from("workflow_definitions")
         .select("id, organization_id, entity_type, key, name, description, color, sort_order, is_active, created_at")
         .eq("organization_id", orgId)
         .eq("entity_type", "project"),
       supabase
-        .from("workflow_stages")
-        .select("id, workflow_id, key, name, description, color, sort_order, is_terminal, is_active, created_at"),
+        .from("workflow_phase_definitions")
+        .select("id, workflow_id, phase_index, name, description, created_at"),
+      supabase
+        .from("workflow_substage_definitions")
+        .select("id, workflow_phase_id, substage_index, name, description, created_at"),
     ]);
 
     if (workflowRes.error) {
@@ -191,13 +198,19 @@ export default function ProjectsView() {
       return;
     }
 
-    if (stageRes.error) {
-      console.error("Failed to load project workflow stages:", stageRes.error);
+    if (phaseRes.error) {
+      console.error("Failed to load project workflow phases:", phaseRes.error);
       setProjectWorkflows([]);
       return;
     }
 
-    setProjectWorkflows(normalizeWorkflows(workflowRes.data || [], stageRes.data || []));
+    if (substageRes.error) {
+      console.error("Failed to load project workflow substages:", substageRes.error);
+      setProjectWorkflows([]);
+      return;
+    }
+
+    setProjectWorkflows(normalizeWorkflows(workflowRes.data || [], phaseRes.data || [], substageRes.data || []));
   };
 
   // Load tenements when tab becomes active
@@ -308,7 +321,9 @@ export default function ProjectsView() {
       coordinate_crs_code: p.coordinate_crs_code || "",
       coordinate_crs_name: selectedCrs?.name || p.coordinate_crs_name || "",
       current_workflow_id: p.current_workflow_id || "",
-      current_workflow_stage_id: p.current_workflow_stage_id || "",
+      current_workflow_phase_id: p.current_workflow_phase_id || "",
+      current_workflow_substage_id: p.current_workflow_substage_id || "",
+      current_workflow_status_key: p.current_workflow_status_key || "not_started",
     });
     setShowModal(true);
   };
@@ -330,7 +345,9 @@ export default function ProjectsView() {
         coordinate_crs_code: selectedCrs?.code || null,
         coordinate_crs_name: selectedCrs?.name || null,
         current_workflow_id: form.current_workflow_id || null,
-        current_workflow_stage_id: form.current_workflow_stage_id || null,
+        current_workflow_phase_id: form.current_workflow_phase_id || null,
+        current_workflow_substage_id: form.current_workflow_substage_id || null,
+        current_workflow_status_key: form.current_workflow_id ? form.current_workflow_status_key || "not_started" : null,
         organization_id: orgId,
       };
 
@@ -356,8 +373,11 @@ export default function ProjectsView() {
           coordinate_crs_name,
           created_at,
           current_workflow_id,
-          current_workflow_stage_id,
-          current_workflow_stage:workflow_stages!projects_current_workflow_stage_id_fkey(id,name,color)
+          current_workflow_phase_id,
+          current_workflow_substage_id,
+          current_workflow_status_key,
+          current_workflow_phase:workflow_phase_definitions!projects_current_workflow_phase_id_fkey(id,name,phase_index),
+          current_workflow_substage:workflow_substage_definitions!projects_current_workflow_substage_id_fkey(id,name,substage_index)
         `)
         .eq("organization_id", orgId)
         .order("created_at", { ascending: false });
@@ -734,15 +754,6 @@ export default function ProjectsView() {
 
       {activeTab === "workflows" && (
         <div className="space-y-4">
-          <div className="card flex flex-col gap-3 border-cyan-300/15 bg-[linear-gradient(135deg,rgba(34,211,238,0.1),rgba(15,23,42,0.92))] p-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="text-sm font-semibold text-slate-100">Dedicated workflow builder</div>
-              <div className="mt-1 text-sm text-slate-300/80">Use the full-screen studio for a more visual workflow editing experience.</div>
-            </div>
-            <Link href="/workflows" className="btn btn-primary">
-              Open Workflow Studio
-            </Link>
-          </div>
           <WorkflowStudioPanel orgId={orgId} onChange={loadProjectWorkflows} />
         </div>
       )}

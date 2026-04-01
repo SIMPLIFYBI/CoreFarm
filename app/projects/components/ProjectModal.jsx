@@ -1,12 +1,20 @@
 "use client";
 
 import { AUSTRALIAN_PROJECT_CRS, getAustralianProjectCrsByCode } from "@/lib/coordinateSystems";
-import { formatWorkflowStageLabel, getWorkflowStageOptions } from "@/lib/workflows";
+import {
+  WORKFLOW_STATUS_OPTIONS,
+  formatWorkflowPhaseLabel,
+  formatWorkflowSubstageLabel,
+  getWorkflowPhaseOptions,
+  getWorkflowSubstageOptions,
+  resolveHierarchicalWorkflowSelection,
+} from "@/lib/workflows";
 
 export default function ProjectModal({ editingId, form, setForm, saving, onClose, onSave, onNew, workflows = [] }) {
   const selectedCrs = getAustralianProjectCrsByCode(form.coordinate_crs_code);
   const selectedWorkflow = workflows.find((workflow) => workflow.id === form.current_workflow_id) || null;
-  const stageOptions = getWorkflowStageOptions(selectedWorkflow);
+  const phaseOptions = getWorkflowPhaseOptions(selectedWorkflow);
+  const substageOptions = getWorkflowSubstageOptions(selectedWorkflow, form.current_workflow_phase_id);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -74,7 +82,7 @@ export default function ProjectModal({ editingId, form, setForm, saving, onClose
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
             <div className="text-sm font-medium text-slate-100">Workflow</div>
             <div className="mt-1 text-xs text-slate-300/70">
-              Track the current business workflow stage for this project.
+              Track the current workflow phase, optional substage, and current status for this project.
             </div>
 
             <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -83,13 +91,14 @@ export default function ProjectModal({ editingId, form, setForm, saving, onClose
                 <select
                   value={form.current_workflow_id || ""}
                   onChange={(e) => {
-                    const workflow = workflows.find((item) => item.id === e.target.value) || null;
-                    const nextStage = getWorkflowStageOptions(workflow)[0] || null;
+                    const nextSelection = resolveHierarchicalWorkflowSelection(workflows, e.target.value);
 
                     setForm((prev) => ({
                       ...prev,
-                      current_workflow_id: workflow?.id || "",
-                      current_workflow_stage_id: nextStage?.id || "",
+                      current_workflow_id: nextSelection.workflowId,
+                      current_workflow_phase_id: nextSelection.phaseId,
+                      current_workflow_substage_id: nextSelection.substageId,
+                      current_workflow_status_key: nextSelection.workflowId ? prev.current_workflow_status_key || "not_started" : "not_started",
                     }));
                   }}
                   className="input"
@@ -104,17 +113,58 @@ export default function ProjectModal({ editingId, form, setForm, saving, onClose
               </label>
 
               <label className="flex flex-col gap-1.5 text-sm">
-                Current stage
+                Phase
                 <select
-                  value={form.current_workflow_stage_id || ""}
-                  onChange={(e) => setForm((prev) => ({ ...prev, current_workflow_stage_id: e.target.value }))}
+                  value={form.current_workflow_phase_id || ""}
+                  onChange={(e) => {
+                    const nextPhaseId = e.target.value;
+                    const nextSubstageId = getWorkflowSubstageOptions(selectedWorkflow, nextPhaseId)[0]?.id || "";
+                    setForm((prev) => ({
+                      ...prev,
+                      current_workflow_phase_id: nextPhaseId,
+                      current_workflow_substage_id: nextSubstageId,
+                    }));
+                  }}
                   className="input"
                   disabled={!selectedWorkflow}
                 >
-                  <option value="">{selectedWorkflow ? "Select a stage" : "Choose a workflow first"}</option>
-                  {stageOptions.map((stage) => (
-                    <option key={stage.id} value={stage.id} disabled={stage.is_active === false}>
-                      {formatWorkflowStageLabel(stage)}
+                  <option value="">{selectedWorkflow ? "Select a phase" : "Choose a workflow first"}</option>
+                  {phaseOptions.map((phase) => (
+                    <option key={phase.id} value={phase.id}>
+                      {formatWorkflowPhaseLabel(phase)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1.5 text-sm">
+                Substage
+                <select
+                  value={form.current_workflow_substage_id || ""}
+                  onChange={(e) => setForm((prev) => ({ ...prev, current_workflow_substage_id: e.target.value }))}
+                  className="input"
+                  disabled={!selectedWorkflow || !form.current_workflow_phase_id}
+                >
+                  <option value="">{form.current_workflow_phase_id ? "No substage" : "Choose a phase first"}</option>
+                  {substageOptions.map((substage) => (
+                    <option key={substage.id} value={substage.id}>
+                      {formatWorkflowSubstageLabel(substage)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1.5 text-sm">
+                Status
+                <select
+                  value={form.current_workflow_status_key || "not_started"}
+                  onChange={(e) => setForm((prev) => ({ ...prev, current_workflow_status_key: e.target.value }))}
+                  className="input"
+                  disabled={!selectedWorkflow || !form.current_workflow_phase_id}
+                >
+                  {WORKFLOW_STATUS_OPTIONS.map((status) => (
+                    <option key={status.value} value={status.value}>
+                      {status.label}
                     </option>
                   ))}
                 </select>

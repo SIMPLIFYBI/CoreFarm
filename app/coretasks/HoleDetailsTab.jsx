@@ -17,7 +17,18 @@ import {
 } from "@/lib/holeDescriptors";
 import { EditIconButton, DeleteIconButton } from "@/app/components/ActionIconButton";
 import { DEFAULT_TASK_TYPE_DEFS, fetchOrgTaskTypes } from "@/lib/taskTypes";
-import { formatWorkflowStageLabel, getWorkflowBadgeStyle, getWorkflowStageOptions, normalizeWorkflows } from "@/lib/workflows";
+import {
+  WORKFLOW_STATUS_OPTIONS,
+  formatWorkflowPhaseLabel,
+  formatWorkflowSubstageLabel,
+  getWorkflowAssignmentLabel,
+  getWorkflowBadgeStyle,
+  getWorkflowPhaseOptions,
+  getWorkflowStatusMeta,
+  getWorkflowSubstageOptions,
+  normalizeWorkflows,
+  resolveHierarchicalWorkflowSelection,
+} from "@/lib/workflows";
 import CoreTaskPanelHeader from "./CoreTaskPanelHeader";
 import HoleLocationPickerModal from "./HoleLocationPickerModal";
 
@@ -127,7 +138,9 @@ function createEmptyForm(projectId = "") {
     completion_notes: "",
     state: "proposed",
     current_workflow_id: "",
-    current_workflow_stage_id: "",
+    current_workflow_phase_id: "",
+    current_workflow_substage_id: "",
+    current_workflow_status_key: "not_started",
     drilling_diameter: "",
     drilling_contractor: "",
     descriptor_ids: [],
@@ -315,15 +328,18 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
     let active = true;
 
     (async () => {
-      const [workflowRes, stageRes] = await Promise.all([
+      const [workflowRes, phaseRes, substageRes] = await Promise.all([
         supabase
           .from("workflow_definitions")
           .select("id, organization_id, entity_type, key, name, description, color, sort_order, is_active, created_at")
           .eq("organization_id", orgId)
           .eq("entity_type", "hole"),
         supabase
-          .from("workflow_stages")
-          .select("id, workflow_id, key, name, description, color, sort_order, is_terminal, is_active, created_at"),
+          .from("workflow_phase_definitions")
+          .select("id, workflow_id, phase_index, name, description, created_at"),
+        supabase
+          .from("workflow_substage_definitions")
+          .select("id, workflow_phase_id, substage_index, name, description, created_at"),
       ]);
 
       if (!active) return;
@@ -334,13 +350,19 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
         return;
       }
 
-      if (stageRes.error) {
-        toast.error(stageRes.error.message || "Failed to load workflow stages");
+      if (phaseRes.error) {
+        toast.error(phaseRes.error.message || "Failed to load workflow phases");
         setHoleWorkflows([]);
         return;
       }
 
-      setHoleWorkflows(normalizeWorkflows(workflowRes.data || [], stageRes.data || []));
+      if (substageRes.error) {
+        toast.error(substageRes.error.message || "Failed to load workflow substages");
+        setHoleWorkflows([]);
+        return;
+      }
+
+      setHoleWorkflows(normalizeWorkflows(workflowRes.data || [], phaseRes.data || [], substageRes.data || []));
     })();
 
     return () => {
@@ -475,7 +497,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
         const { data: sharedHoles, error: holesErr } = await supabase
           .from("holes")
           .select(
-            "id,hole_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_easting,collar_northing,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state,current_workflow_id,current_workflow_stage_id,drilling_diameter,drilling_contractor,project_id,created_at,organization_id,projects(name,coordinate_crs_code,coordinate_crs_name),current_workflow_stage:workflow_stages!holes_current_workflow_stage_id_fkey(id,name,color)"
+              "id,hole_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_easting,collar_northing,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state,current_workflow_id,current_workflow_phase_id,current_workflow_substage_id,current_workflow_status_key,drilling_diameter,drilling_contractor,project_id,created_at,organization_id,projects(name,coordinate_crs_code,coordinate_crs_name),current_workflow_phase:workflow_phase_definitions!holes_current_workflow_phase_id_fkey(id,name,phase_index),current_workflow_substage:workflow_substage_definitions!holes_current_workflow_substage_id_fkey(id,name,substage_index)"
           )
           .in("project_id", sharedProjectIds)
           .neq("organization_id", orgId)
@@ -509,7 +531,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
           supabase
             .from("holes")
             .select(
-              "id,hole_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_easting,collar_northing,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state,current_workflow_id,current_workflow_stage_id,drilling_diameter,drilling_contractor,project_id,created_at,projects(name,coordinate_crs_code,coordinate_crs_name),current_workflow_stage:workflow_stages!holes_current_workflow_stage_id_fkey(id,name,color)"
+              "id,hole_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_easting,collar_northing,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state,current_workflow_id,current_workflow_phase_id,current_workflow_substage_id,current_workflow_status_key,drilling_diameter,drilling_contractor,project_id,created_at,projects(name,coordinate_crs_code,coordinate_crs_name),current_workflow_phase:workflow_phase_definitions!holes_current_workflow_phase_id_fkey(id,name,phase_index),current_workflow_substage:workflow_substage_definitions!holes_current_workflow_substage_id_fkey(id,name,substage_index)"
             )
             .eq("organization_id", orgId)
             .order("created_at", { ascending: false }),
@@ -960,7 +982,9 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
       completion_notes: hole.completion_notes || "",
       state: hole.state || "proposed",
       current_workflow_id: hole.current_workflow_id || "",
-      current_workflow_stage_id: hole.current_workflow_stage_id || "",
+      current_workflow_phase_id: hole.current_workflow_phase_id || "",
+      current_workflow_substage_id: hole.current_workflow_substage_id || "",
+      current_workflow_status_key: hole.current_workflow_status_key || "not_started",
       drilling_diameter: hole.drilling_diameter || "",
       drilling_contractor: hole.drilling_contractor || "",
       descriptor_ids: hole.descriptor_ids || [],
@@ -1119,7 +1143,9 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
         completion_notes: toTextOrNull(form.completion_notes),
         state: form.state || "proposed",
         current_workflow_id: form.current_workflow_id || null,
-        current_workflow_stage_id: form.current_workflow_stage_id || null,
+        current_workflow_phase_id: form.current_workflow_phase_id || null,
+        current_workflow_substage_id: form.current_workflow_substage_id || null,
+        current_workflow_status_key: form.current_workflow_id ? form.current_workflow_status_key || "not_started" : null,
         drilling_diameter: form.drilling_diameter || null,
         drilling_contractor: toTextOrNull(form.drilling_contractor),
         project_id: form.project_id,
@@ -1513,12 +1539,12 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
                       {getWorkflowMeta(classifyHole(selectedHole)).label}
                     </span>
                   ) : null}
-                  {!isCreateMode && selectedHole?.current_workflow_stage?.name ? (
+                  {!isCreateMode && selectedHole?.current_workflow_id ? (
                     <span
                       className="rounded-full border px-3 py-1.5 text-xs font-medium"
-                      style={getWorkflowBadgeStyle(selectedHole.current_workflow_stage.color)}
+                      style={getWorkflowBadgeStyle(getWorkflowStatusMeta(selectedHole.current_workflow_status_key).color)}
                     >
-                      {selectedHole.current_workflow_stage.name}
+                      {getWorkflowAssignmentLabel(selectedHole)}
                     </span>
                   ) : null}
                   <span className={`rounded-full border px-3 py-1.5 text-xs font-medium ${getStateMeta(form.state).className}`}>
@@ -1568,12 +1594,13 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
                           className="select-gradient-sm mt-1"
                           value={form.current_workflow_id}
                           onChange={(event) => {
-                            const workflow = holeWorkflows.find((item) => item.id === event.target.value) || null;
-                            const nextStage = getWorkflowStageOptions(workflow)[0] || null;
+                            const nextSelection = resolveHierarchicalWorkflowSelection(holeWorkflows, event.target.value);
                             setForm((current) => ({
                               ...current,
-                              current_workflow_id: workflow?.id || "",
-                              current_workflow_stage_id: nextStage?.id || "",
+                              current_workflow_id: nextSelection.workflowId,
+                              current_workflow_phase_id: nextSelection.phaseId,
+                              current_workflow_substage_id: nextSelection.substageId,
+                              current_workflow_status_key: nextSelection.workflowId ? current.current_workflow_status_key || "not_started" : "not_started",
                             }));
                           }}
                         >
@@ -1587,17 +1614,61 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
                       </label>
 
                       <label className="text-sm text-slate-200">
-                        Workflow Stage
+                        Workflow Phase
                         <select
                           className="select-gradient-sm mt-1"
-                          value={form.current_workflow_stage_id}
-                          onChange={(event) => setForm((current) => ({ ...current, current_workflow_stage_id: event.target.value }))}
+                          value={form.current_workflow_phase_id}
+                          onChange={(event) => {
+                            const nextPhaseId = event.target.value;
+                            const nextSubstageId = getWorkflowSubstageOptions(holeWorkflows.find((workflow) => workflow.id === form.current_workflow_id) || null, nextPhaseId)[0]?.id || "";
+                            setForm((current) => ({
+                              ...current,
+                              current_workflow_phase_id: nextPhaseId,
+                              current_workflow_substage_id: nextSubstageId,
+                            }));
+                          }}
                           disabled={!form.current_workflow_id}
                         >
-                          <option value="">{form.current_workflow_id ? "Select a stage" : "Choose a workflow first"}</option>
-                          {getWorkflowStageOptions(holeWorkflows.find((workflow) => workflow.id === form.current_workflow_id) || null).map((stage) => (
-                            <option key={stage.id} value={stage.id}>
-                              {formatWorkflowStageLabel(stage)}
+                          <option value="">{form.current_workflow_id ? "Select a phase" : "Choose a workflow first"}</option>
+                          {getWorkflowPhaseOptions(holeWorkflows.find((workflow) => workflow.id === form.current_workflow_id) || null).map((phase) => (
+                            <option key={phase.id} value={phase.id}>
+                              {formatWorkflowPhaseLabel(phase)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="text-sm text-slate-200">
+                        Workflow Substage
+                        <select
+                          className="select-gradient-sm mt-1"
+                          value={form.current_workflow_substage_id}
+                          onChange={(event) => setForm((current) => ({ ...current, current_workflow_substage_id: event.target.value }))}
+                          disabled={!form.current_workflow_phase_id}
+                        >
+                          <option value="">{form.current_workflow_phase_id ? "No substage" : "Choose a phase first"}</option>
+                          {getWorkflowSubstageOptions(
+                            holeWorkflows.find((workflow) => workflow.id === form.current_workflow_id) || null,
+                            form.current_workflow_phase_id
+                          ).map((substage) => (
+                            <option key={substage.id} value={substage.id}>
+                              {formatWorkflowSubstageLabel(substage)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="text-sm text-slate-200">
+                        Workflow Status
+                        <select
+                          className="select-gradient-sm mt-1"
+                          value={form.current_workflow_status_key}
+                          onChange={(event) => setForm((current) => ({ ...current, current_workflow_status_key: event.target.value }))}
+                          disabled={!form.current_workflow_phase_id}
+                        >
+                          {WORKFLOW_STATUS_OPTIONS.map((status) => (
+                            <option key={status.value} value={status.value}>
+                              {status.label}
                             </option>
                           ))}
                         </select>

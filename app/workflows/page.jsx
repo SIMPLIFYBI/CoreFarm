@@ -35,13 +35,13 @@ export default function WorkflowsPage() {
               <div>
                 <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-white md:text-5xl">Design project and hole workflows as a visual operating system.</h1>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-200/80 md:text-base">
-                  Create reusable stage-gate templates, shape the sequence visually, and keep current workflow status separate from drilling state.
+                  Create reusable five-phase templates, define optional substages inside each phase, and keep workflow progress separate from drilling state.
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-3 text-xs text-slate-200/75 md:text-sm">
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">Reusable templates</span>
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">Five fixed phases</span>
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">Optional substages</span>
                 <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">Project and hole workflows</span>
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">Current stage only</span>
               </div>
             </div>
 
@@ -67,7 +67,7 @@ export default function WorkflowsPage() {
 
         {!orgId ? (
           <section className="card rounded-[28px] p-6 text-sm text-slate-300">
-            Select an organisation to start creating workflows. The studio uses your current organisation context for both definitions and stage assignments.
+            Select an organisation to start creating workflows. The studio uses your current organisation context for both definitions and phase or substage assignments.
           </section>
         ) : (
           <WorkflowStudioPanel orgId={orgId} />
