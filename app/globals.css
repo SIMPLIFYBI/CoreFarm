@@ -79,6 +79,29 @@ body {
   -webkit-backdrop-filter: blur(14px);
 }
 
+.frosted-header {
+  background: rgba(2, 6, 23, 0.55);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+}
+
+.frosted-bottom-nav {
+  background: linear-gradient(180deg, rgba(2, 6, 23, 0.9), rgba(3, 15, 28, 0.96));
+  backdrop-filter: blur(24px) saturate(155%);
+  -webkit-backdrop-filter: blur(24px) saturate(155%);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .frosted-header {
+    background: rgba(2, 6, 23, 0.92);
+  }
+
+  .frosted-bottom-nav {
+    background: rgba(2, 6, 23, 0.96);
+  }
+}
+
 /* Subtle glow helpers */
 .glow-primary { box-shadow: var(--glow-primary); }
 .glow-accent { box-shadow: var(--glow-accent); }

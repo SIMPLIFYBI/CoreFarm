@@ -172,7 +172,7 @@ export default function Header() {
   }, [pathname, searchParams]);
 
   return (
-    <header className="sticky top-0 z-40 pt-[env(safe-area-inset-top)] border-b border-white/10 bg-slate-950/55 backdrop-blur-xl supports-[backdrop-filter]:bg-slate-950/45">
+    <header className="frosted-header sticky top-0 z-40 pt-[env(safe-area-inset-top)]">
       <div className="mx-auto max-w-6xl flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3">
           {/* Burger */}

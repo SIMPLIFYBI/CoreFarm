@@ -593,32 +593,32 @@ export default function DrillholesPage() {
       )}
 
       {showHoleModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="card w-full max-w-lg p-5 relative">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">{editingId ? "Edit Core" : "Add New Core"}</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.12),transparent_32%),rgba(2,6,23,0.78)] p-4 backdrop-blur-md">
+          <div className="glass relative w-full max-w-lg border border-white/15 bg-slate-950/90 p-5 shadow-[0_30px_90px_rgba(2,6,23,0.65)]">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-white">{editingId ? "Edit Core" : "Add New Core"}</h2>
               <button className="btn" onClick={() => { setShowHoleModal(false); setEditingId(null); }}>
                 Close
               </button>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 mb-4">
-              <label className="flex flex-col gap-1.5 text-sm">
+            <div className="mb-4 grid grid-cols-1 gap-4">
+              <label className="flex flex-col gap-1.5 text-sm text-slate-200">
                 Hole ID
                 <input type="text" name="hole_id" value={single.hole_id} onChange={onChangeSingle} className="input" placeholder="HOLE-001" />
               </label>
 
-              <label className="flex flex-col gap-1.5 text-sm">
+              <label className="flex flex-col gap-1.5 text-sm text-slate-200">
                 Depth (m)
                 <input type="number" step="any" name="depth" value={single.depth} onChange={onChangeSingle} className="input" placeholder="e.g. 220" />
               </label>
 
-              <label className="flex flex-col gap-1.5 text-sm">
+              <label className="flex flex-col gap-1.5 text-sm text-slate-200">
                 Planned Depth (m)
                 <input type="number" step="0.1" name="planned_depth" value={single.planned_depth} onChange={onChangeSingle} className="input" placeholder="e.g. 250.0" />
               </label>
 
-              <label className="flex flex-col gap-1.5 text-sm">
+              <label className="flex flex-col gap-1.5 text-sm text-slate-200">
                 Drilling Diameter
                 <select name="drilling_diameter" value={single.drilling_diameter} onChange={onChangeSingle} className="select-gradient-sm">
                   <option value="">Select…</option>
@@ -629,7 +629,7 @@ export default function DrillholesPage() {
                 </select>
               </label>
 
-              <label className="flex flex-col gap-1.5 text-sm">
+              <label className="flex flex-col gap-1.5 text-sm text-slate-200">
                 Project
                 <ProjectSelect
                   supabase={supabase}
@@ -639,7 +639,7 @@ export default function DrillholesPage() {
                 />
               </label>
 
-              <label className="flex flex-col gap-1.5 text-sm">
+              <label className="flex flex-col gap-1.5 text-sm text-slate-200">
                 Drilling Contractor
                 <input type="text" name="drilling_contractor" value={single.drilling_contractor} onChange={onChangeSingle} className="input" />
               </label>
@@ -676,7 +676,7 @@ export default function DrillholesPage() {
               )}
             </div>
 
-            <div className="mt-3 text-xs text-gray-500">
+            <div className="mt-3 text-xs text-slate-400">
               After saving you can manage task intervals below the table.
             </div>
           </div>

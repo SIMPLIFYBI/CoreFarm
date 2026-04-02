@@ -51,7 +51,7 @@ export default function MobileNav() {
   return (
     <nav className="md:hidden fixed inset-x-0 bottom-0 z-40 px-2 pb-2" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.5rem)" }}>
       <div className="mx-auto max-w-6xl">
-        <div className="overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(2,6,23,0.94),rgba(3,15,28,0.98))] shadow-[0_24px_80px_rgba(2,6,23,0.55)] backdrop-blur-2xl">
+        <div className="frosted-bottom-nav overflow-hidden rounded-[30px] border border-white/10 shadow-[0_24px_80px_rgba(2,6,23,0.55)]">
           <div className="pointer-events-none absolute inset-x-8 bottom-0 h-24 bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.18),transparent_65%)]" />
           <ul className="relative flex gap-1 overflow-x-auto no-scrollbar px-2 py-2" style={{ WebkitOverflowScrolling: "touch" }}>
         {visibleTabs.map((t) => {
