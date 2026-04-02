@@ -2954,6 +2954,10 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     await saveCreatedAsset();
   };
 
+  const mobileSelectionTitle = mobilePanelTab === "holes"
+    ? selectedHole?.hole_id || "Hole attributes"
+    : selectedAsset?.name || "Mapped assets";
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-transparent px-3 pb-24 pt-0 md:px-5 md:pb-8 md:pt-0">
       <div className="mx-auto max-w-[1600px] space-y-4 overflow-x-hidden">
@@ -3059,7 +3063,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
           </div>
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[350px_minmax(0,1fr)]">
+        <section className="grid min-w-0 gap-4 xl:grid-cols-[350px_minmax(0,1fr)]">
           <aside className="hidden overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/55 shadow-[0_24px_80px_rgba(2,6,23,0.32)] backdrop-blur-xl xl:block">
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-4 md:px-5">
               <div className="w-full">
@@ -3105,17 +3109,14 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
             </div>
           </aside>
 
-          <div className="space-y-4">
-            <div className="relative overflow-hidden rounded-[32px] border border-white/10 bg-slate-950/60 shadow-[0_30px_100px_rgba(2,6,23,0.42)] backdrop-blur-xl">
+          <div className="min-w-0 space-y-4">
+            <div className="relative min-w-0 overflow-hidden rounded-[32px] border border-white/10 bg-slate-950/60 shadow-[0_30px_100px_rgba(2,6,23,0.42)] backdrop-blur-xl">
               <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(180deg,rgba(8,47,73,0.28),transparent)]" />
               <div className="relative border-b border-white/10 px-4 py-4 md:hidden">
                 <div className="flex flex-col items-start gap-3 min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
                   <div>
                     <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Mobile Map View</div>
-                    <div className="mt-1 text-lg font-semibold text-white">{mobilePanelTab === "holes" ? "Hole attributes" : "Mapped assets"}</div>
-                  </div>
-                  <div className="self-start rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-300 min-[360px]:self-auto">
-                    {mobilePanelTab === "holes" ? selectedHole?.hole_id || "No selection" : `${totalVisibleAssets} assets`}
+                    <div className="mt-1 text-lg font-semibold text-white">{mobileSelectionTitle}</div>
                   </div>
                 </div>
                 <div className="mt-4 grid w-full grid-cols-2 gap-2 rounded-2xl bg-white/[0.04] p-1.5">
@@ -3218,18 +3219,15 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   }}
                 />
               ) : null}
-              <div ref={mapContainerRef} className="h-[58svh] min-h-[400px] w-full md:h-[58vh] md:min-h-[480px]" />
+              <div ref={mapContainerRef} className="h-[58svh] min-h-[400px] w-full max-w-full md:h-[58vh] md:min-h-[480px]" />
             </div>
 
-            <div className="xl:hidden overflow-hidden rounded-[32px] border border-white/10 bg-slate-950/60 shadow-[0_24px_80px_rgba(2,6,23,0.32)] backdrop-blur-xl">
+            <div className="xl:hidden min-w-0 overflow-hidden rounded-[32px] border border-white/10 bg-slate-950/60 shadow-[0_24px_80px_rgba(2,6,23,0.32)] backdrop-blur-xl">
               <div className="border-b border-white/10 px-4 py-4">
                 <div className="flex flex-col items-start gap-3 min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
                   <div>
                     <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Mobile Navigator</div>
-                    <div className="mt-1 text-lg font-semibold text-white">{mobilePanelTab === "holes" ? "Hole attributes" : "Mapped assets"}</div>
-                  </div>
-                  <div className="self-start rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-300 min-[360px]:self-auto">
-                    {mobilePanelTab === "holes" ? selectedHole?.hole_id || "No selection" : `${totalVisibleAssets} assets`}
+                    <div className="mt-1 text-lg font-semibold text-white">{mobileSelectionTitle}</div>
                   </div>
                 </div>
                 <div className="mt-4 flex flex-col gap-3">
