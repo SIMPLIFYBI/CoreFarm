@@ -167,6 +167,61 @@ function formatDescriptorSummary(descriptors) {
   return descriptors.map((descriptor) => descriptor.name).join(", ");
 }
 
+function createEmptyMapAdvancedFilters() {
+  return {
+    descriptorId: "",
+    holeState: "",
+    holeCompletionStatus: "",
+    assetStatus: "",
+    assetTypeId: "",
+    assetLocationId: "",
+  };
+}
+
+function normalizeMapAdvancedFilters(value) {
+  const empty = createEmptyMapAdvancedFilters();
+  if (!value || typeof value !== "object") return empty;
+
+  return {
+    descriptorId: typeof value.descriptorId === "string" ? value.descriptorId : "",
+    holeState: typeof value.holeState === "string" ? value.holeState : "",
+    holeCompletionStatus: typeof value.holeCompletionStatus === "string" ? value.holeCompletionStatus : "",
+    assetStatus: typeof value.assetStatus === "string" ? value.assetStatus : "",
+    assetTypeId: typeof value.assetTypeId === "string" ? value.assetTypeId : "",
+    assetLocationId: typeof value.assetLocationId === "string" ? value.assetLocationId : "",
+  };
+}
+
+function countActiveMapAdvancedFilters(filters) {
+  return Object.values(filters || {}).filter(Boolean).length;
+}
+
+function formatFilterOptionLabel(value) {
+  return String(value || "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function FilterSelect({ label, value, onChange, emptyLabel, options, optionValueKey = "value", optionLabelKey = "label" }) {
+  return (
+    <label className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+      {label}
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm font-medium normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40"
+      >
+        <option value="">{emptyLabel}</option>
+        {options.map((option) => (
+          <option key={option[optionValueKey]} value={option[optionValueKey]}>
+            {option[optionLabelKey]}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function HoleStateLegend() {
   return (
     <div className="rounded-2xl border border-white/10 bg-slate-950/72 px-2.5 py-2 shadow-[0_14px_40px_rgba(2,6,23,0.35)] backdrop-blur-xl">
@@ -1350,6 +1405,159 @@ function DockSchematicIcon(props) {
   );
 }
 
+function FullscreenEnterIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path d="M8 4H4v4M16 4h4v4M20 16v4h-4M8 20H4v-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function FullscreenExitIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path d="M9 4H4v5M15 4h5v5M20 15v5h-5M4 15v5h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9 9 4 4M15 9l5-5M15 15l5 5M9 15l-5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function LegendIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path d="M6 7.5h12M6 12h12M6 16.5h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="4.5" cy="7.5" r="1" fill="currentColor" />
+      <circle cx="4.5" cy="12" r="1" fill="currentColor" />
+      <circle cx="4.5" cy="16.5" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
+function FilterIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path d="M4 7h16M7 12h10M10 17h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function AdvancedFilterPanel({
+  filters,
+  activeFilterCount,
+  descriptorOptions,
+  holeStateOptions,
+  holeCompletionStatusOptions,
+  assetStatusOptions,
+  assetTypeOptions,
+  assetLocationOptions,
+  onChange,
+  onClear,
+  onClose,
+}) {
+  return (
+    <div className="mt-3 rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(2,6,23,0.94))] p-4 shadow-[0_24px_80px_rgba(2,6,23,0.36)] backdrop-blur-xl md:p-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-100/75">Detailed Filters</div>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+            Narrow the map by drilling type, hole progress, asset status, and mapped locations without leaving the workspace.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 self-start">
+          <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-medium text-slate-200">
+            {activeFilterCount} active filter{activeFilterCount === 1 ? "" : "s"}
+          </span>
+          <button
+            type="button"
+            className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-medium text-slate-100 transition hover:bg-white/[0.1]"
+            onClick={onClear}
+          >
+            Clear all
+          </button>
+          <button
+            type="button"
+            className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-medium text-slate-100 transition hover:bg-white/[0.1]"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-2">
+        <div className="rounded-[24px] border border-cyan-300/14 bg-cyan-400/[0.04] p-4">
+          <div className="text-[11px] uppercase tracking-[0.2em] text-cyan-100/80">Drillholes</div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <FilterSelect
+              label="Drilling Type"
+              value={filters.descriptorId}
+              onChange={(value) => onChange("descriptorId", value)}
+              emptyLabel="All drilling types"
+              options={descriptorOptions.map((descriptor) => ({ value: descriptor.id, label: descriptor.name }))}
+            />
+            <FilterSelect
+              label="Hole Status"
+              value={filters.holeState}
+              onChange={(value) => onChange("holeState", value)}
+              emptyLabel="All hole states"
+              options={holeStateOptions}
+            />
+            <div className="md:col-span-2">
+              <FilterSelect
+                label="Completion Status"
+                value={filters.holeCompletionStatus}
+                onChange={(value) => onChange("holeCompletionStatus", value)}
+                emptyLabel="All completion statuses"
+                options={holeCompletionStatusOptions}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-[24px] border border-rose-300/14 bg-rose-400/[0.04] p-4">
+          <div className="text-[11px] uppercase tracking-[0.2em] text-rose-100/80">Assets</div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <FilterSelect
+              label="Asset Status"
+              value={filters.assetStatus}
+              onChange={(value) => onChange("assetStatus", value)}
+              emptyLabel="All asset statuses"
+              options={assetStatusOptions}
+            />
+            <FilterSelect
+              label="Asset Type"
+              value={filters.assetTypeId}
+              onChange={(value) => onChange("assetTypeId", value)}
+              emptyLabel="All asset types"
+              options={assetTypeOptions}
+            />
+            <div className="md:col-span-2">
+              <FilterSelect
+                label="Location"
+                value={filters.assetLocationId}
+                onChange={(value) => onChange("assetLocationId", value)}
+                emptyLabel="All locations"
+                options={assetLocationOptions}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function clearMapSelectionState({ setSelectedHoleId, setSelectedAssetId, popupRef, allowAutoSelectRef }) {
+  allowAutoSelectRef.current = false;
+  setSelectedHoleId("");
+  setSelectedAssetId("");
+
+  if (popupRef.current) {
+    popupRef.current.remove();
+    popupRef.current = null;
+  }
+}
+
 function DockIconButton({ label, onClick, tone = "default", active = false, children }) {
   const toneClassName = {
     default: "border-white/10 bg-white/[0.05] text-slate-100 hover:bg-white/[0.11]",
@@ -1705,6 +1913,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const requestedHoleId = searchParams.get("holeId") || "";
   const requestedProjectScope = searchParams.get("scope") || "";
 
+  const mapCardRef = useRef(null);
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const mapboxRef = useRef(null);
@@ -1714,6 +1923,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const fallbackStyleActiveRef = useRef(false);
   const visibleHolesRef = useRef([]);
   const visibleAssetsRef = useRef([]);
+  const allowAutoSelectRef = useRef(true);
   const createPlacementActiveRef = useRef(false);
   const moveSelectionRef = useRef(null);
   const proposalPlacementSelectionRef = useRef(null);
@@ -1735,7 +1945,8 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const [assetTypes, setAssetTypes] = useState([]);
   const [assetLocations, setAssetLocations] = useState([]);
   const [projectFilter, setProjectFilter] = useState("");
-  const [descriptorFilter, setDescriptorFilter] = useState("");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [advancedFilters, setAdvancedFilters] = useState(createEmptyMapAdvancedFilters);
   const [navigatorTab, setNavigatorTab] = useState("holes");
   const [expandedProjects, setExpandedProjects] = useState({});
   const [expandedAssetProjects, setExpandedAssetProjects] = useState({});
@@ -1743,6 +1954,8 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const [selectedAssetId, setSelectedAssetId] = useState("");
   const [mobilePanelTab, setMobilePanelTab] = useState("holes");
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [isMapFullscreen, setIsMapFullscreen] = useState(false);
+  const [showLegend, setShowLegend] = useState(false);
   const [createPlacementActive, setCreatePlacementActive] = useState(false);
   const [showCreatePanel, setShowCreatePanel] = useState(false);
   const [createEntityType, setCreateEntityType] = useState("hole");
@@ -1792,8 +2005,38 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   }, [proposalPlacementSelection]);
 
   useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+
+    const handleFullscreenChange = () => {
+      const nextIsFullscreen = document.fullscreenElement === mapCardRef.current;
+      setIsMapFullscreen(nextIsFullscreen);
+      requestAnimationFrame(() => {
+        mapRef.current?.resize();
+      });
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, []);
+
+  useEffect(() => {
     createEntityTypeRef.current = createEntityType;
   }, [createEntityType]);
+
+  const toggleMapFullscreen = useCallback(async () => {
+    if (typeof document === "undefined") return;
+
+    try {
+      if (document.fullscreenElement === mapCardRef.current) {
+        await document.exitFullscreen();
+        return;
+      }
+
+      await mapCardRef.current?.requestFullscreen?.();
+    } catch (error) {
+      toast.error(error?.message || "Fullscreen mode is unavailable");
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1823,8 +2066,8 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
       if (typeof snapshot.projectFilter === "string") {
         setProjectFilter(snapshot.projectFilter);
       }
-      if (typeof snapshot.descriptorFilter === "string") {
-        setDescriptorFilter(snapshot.descriptorFilter);
+      if (snapshot.advancedFilters) {
+        setAdvancedFilters(normalizeMapAdvancedFilters(snapshot.advancedFilters));
       }
       if (snapshot.navigatorTab === "holes" || snapshot.navigatorTab === "assets") {
         setNavigatorTab(snapshot.navigatorTab);
@@ -1854,7 +2097,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     setMobilePanelTab("holes");
     setSelectedAssetId("");
     setProjectFilter("");
-    setDescriptorFilter("");
+    setAdvancedFilters(createEmptyMapAdvancedFilters());
     setSelectedHoleId(requestedHoleId);
 
     if (requestedProjectScope === "own" || requestedProjectScope === "shared") {
@@ -2277,17 +2520,76 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     return Array.from(descriptorMap.values()).sort((left, right) => left.name.localeCompare(right.name));
   }, [allHoles]);
 
+  const holeStateOptions = useMemo(() => {
+    const preferredOrder = new Map(HOLE_STATE_STYLES.map((item, index) => [item.value, index]));
+    const values = Array.from(new Set((allHoles || []).map((hole) => String(hole.state || "").trim()).filter(Boolean)));
+    return values
+      .map((value) => ({ value, label: formatFilterOptionLabel(value) }))
+      .sort((left, right) => {
+        const leftOrder = preferredOrder.has(left.value) ? preferredOrder.get(left.value) : Number.MAX_SAFE_INTEGER;
+        const rightOrder = preferredOrder.has(right.value) ? preferredOrder.get(right.value) : Number.MAX_SAFE_INTEGER;
+        if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+        return left.label.localeCompare(right.label);
+      });
+  }, [allHoles]);
+
+  const holeCompletionStatusOptions = useMemo(() => {
+    return Array.from(new Set((allHoles || []).map((hole) => String(hole.completion_status || "").trim()).filter(Boolean)))
+      .map((value) => ({ value, label: value }))
+      .sort((left, right) => left.label.localeCompare(right.label));
+  }, [allHoles]);
+
+  const assetStatusOptions = useMemo(() => {
+    return Array.from(new Set((allAssets || []).map((asset) => String(asset.status || "").trim()).filter(Boolean)))
+      .map((value) => ({ value, label: value }))
+      .sort((left, right) => left.label.localeCompare(right.label));
+  }, [allAssets]);
+
+  const assetTypeOptions = useMemo(() => {
+    const optionMap = new Map();
+    (allAssets || []).forEach((asset) => {
+      if (!asset.asset_type_id || !asset.asset_type_name) return;
+      if (!optionMap.has(asset.asset_type_id)) {
+        optionMap.set(asset.asset_type_id, { value: asset.asset_type_id, label: asset.asset_type_name });
+      }
+    });
+    return Array.from(optionMap.values()).sort((left, right) => left.label.localeCompare(right.label));
+  }, [allAssets]);
+
+  const assetLocationOptions = useMemo(() => {
+    const optionMap = new Map();
+    (allAssets || []).forEach((asset) => {
+      if (!asset.location_id || !asset.location_name) return;
+      if (!optionMap.has(asset.location_id)) {
+        optionMap.set(asset.location_id, { value: asset.location_id, label: asset.location_name });
+      }
+    });
+    return Array.from(optionMap.values()).sort((left, right) => left.label.localeCompare(right.label));
+  }, [allAssets]);
+
+  const matchesHoleAdvancedFilters = useCallback((hole) => {
+    if (advancedFilters.descriptorId && !(hole.descriptor_ids || []).includes(advancedFilters.descriptorId)) return false;
+    if (advancedFilters.holeState && String(hole.state || "") !== advancedFilters.holeState) return false;
+    if (advancedFilters.holeCompletionStatus && String(hole.completion_status || "") !== advancedFilters.holeCompletionStatus) return false;
+    return true;
+  }, [advancedFilters]);
+
+  const matchesAssetAdvancedFilters = useCallback((asset) => {
+    if (advancedFilters.assetStatus && String(asset.status || "") !== advancedFilters.assetStatus) return false;
+    if (advancedFilters.assetTypeId && String(asset.asset_type_id || "") !== advancedFilters.assetTypeId) return false;
+    if (advancedFilters.assetLocationId && String(asset.location_id || "") !== advancedFilters.assetLocationId) return false;
+    return true;
+  }, [advancedFilters]);
+
   const filteredProjects = useMemo(() => {
     return projects
       .filter((project) => !projectFilter || project.id === projectFilter)
       .map((project) => ({
         ...project,
-        holes: descriptorFilter
-          ? project.holes.filter((hole) => (hole.descriptor_ids || []).includes(descriptorFilter))
-          : project.holes,
+        holes: project.holes.filter(matchesHoleAdvancedFilters),
       }))
       .filter((project) => project.holes.length > 0);
-  }, [descriptorFilter, projectFilter, projects]);
+  }, [matchesHoleAdvancedFilters, projectFilter, projects]);
 
   const assetProjects = useMemo(() => {
     const projectMap = new Map();
@@ -2340,9 +2642,16 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   }, [assetProjects, projects]);
 
   const filteredAssetProjects = useMemo(() => {
-    if (!projectFilter) return assetProjects;
-    return assetProjects.filter((project) => project.id === projectFilter);
-  }, [assetProjects, projectFilter]);
+    const scopedProjects = projectFilter ? assetProjects.filter((project) => project.id === projectFilter) : assetProjects;
+    return scopedProjects
+      .map((project) => ({
+        ...project,
+        assets: project.assets.filter(matchesAssetAdvancedFilters),
+      }))
+      .filter((project) => project.assets.length > 0);
+  }, [assetProjects, matchesAssetAdvancedFilters, projectFilter]);
+
+  const activeAdvancedFilterCount = useMemo(() => countActiveMapAdvancedFilters(advancedFilters), [advancedFilters]);
 
   const visibleHoles = useMemo(() => {
     return filteredProjects.flatMap((project) => project.holes);
@@ -2361,11 +2670,11 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   }, [visibleAssets]);
 
   const selectedHole = useMemo(() => {
-    return visibleHoles.find((hole) => hole.id === selectedHoleId) || visibleHoles[0] || null;
+    return visibleHoles.find((hole) => hole.id === selectedHoleId) || (allowAutoSelectRef.current ? visibleHoles[0] || null : null);
   }, [selectedHoleId, visibleHoles]);
 
   const selectedAsset = useMemo(() => {
-    return visibleAssets.find((asset) => asset.id === selectedAssetId) || visibleAssets[0] || null;
+    return visibleAssets.find((asset) => asset.id === selectedAssetId) || (allowAutoSelectRef.current ? visibleAssets[0] || null : null);
   }, [selectedAssetId, visibleAssets]);
 
   const pendingProposalByEntity = useMemo(() => {
@@ -2928,6 +3237,9 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
       setSelectedHoleId("");
       return;
     }
+    if (!allowAutoSelectRef.current && !selectedHoleId) {
+      return;
+    }
     if (!visibleHoles.some((hole) => hole.id === selectedHoleId)) {
       setSelectedHoleId(visibleHoles[0].id);
     }
@@ -2936,6 +3248,9 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   useEffect(() => {
     if (!visibleAssets.length) {
       setSelectedAssetId("");
+      return;
+    }
+    if (!allowAutoSelectRef.current && !selectedAssetId) {
       return;
     }
     if (!visibleAssets.some((asset) => asset.id === selectedAssetId)) {
@@ -2998,7 +3313,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     const snapshot = {
       projectScope,
       projectFilter,
-      descriptorFilter,
+      advancedFilters,
       navigatorTab,
       mobilePanelTab,
       selectedHoleId: nextSelectedHoleId || "",
@@ -3011,6 +3326,17 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     };
 
     window.sessionStorage.setItem(MAP_RETURN_STATE_STORAGE_KEY, JSON.stringify(snapshot));
+  };
+
+  const updateAdvancedFilter = (key, value) => {
+    setAdvancedFilters((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  };
+
+  const clearAdvancedFilters = () => {
+    setAdvancedFilters(createEmptyMapAdvancedFilters());
   };
 
   const openSchematicModal = async (hole) => {
@@ -3096,6 +3422,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
 
   const focusHole = (hole, options = {}) => {
     if (!hole) return;
+    allowAutoSelectRef.current = true;
     setNavigatorTab("holes");
     setSelectedHoleId(hole.id);
     setMobilePanelTab("holes");
@@ -3122,6 +3449,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
 
   const focusAsset = (asset, options = {}) => {
     if (!asset) return;
+    allowAutoSelectRef.current = true;
     setNavigatorTab("assets");
     setSelectedAssetId(asset.id);
     setMobilePanelTab("assets");
@@ -3422,11 +3750,28 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         focusAsset(asset);
       };
       const handleMapCreateClick = (event) => {
-        if (!createPlacementActiveRef.current && !moveSelectionRef.current && !proposalPlacementSelectionRef.current) return;
-
         const overlappingFeatures = map.queryRenderedFeatures(event.point, {
-          layers: [HOLES_CIRCLE_LAYER_ID, HOLES_SELECTED_LAYER_ID, ASSETS_CIRCLE_LAYER_ID, ASSETS_SELECTED_LAYER_ID],
+          layers: [
+            HOLES_CIRCLE_LAYER_ID,
+            HOLES_SELECTED_LAYER_ID,
+            ASSETS_CIRCLE_LAYER_ID,
+            ASSETS_SELECTED_LAYER_ID,
+            LOCATION_PROPOSALS_POINT_LAYER_ID,
+            LOCATION_PROPOSALS_POINT_RING_LAYER_ID,
+            LOCATION_PROPOSALS_LINE_LAYER_ID,
+          ],
         });
+
+        if (!createPlacementActiveRef.current && !moveSelectionRef.current && !proposalPlacementSelectionRef.current) {
+          if (overlappingFeatures.length) return;
+          clearMapSelectionState({
+            setSelectedHoleId,
+            setSelectedAssetId,
+            popupRef,
+            allowAutoSelectRef,
+          });
+          return;
+        }
 
         if (overlappingFeatures.length) return;
 
@@ -3667,7 +4012,9 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   }, [loading, visibleHoles]);
 
   const totalProjects = projectOptions.length;
-  const totalVisibleProjects = filteredProjects.length;
+  const totalVisibleProjects = useMemo(() => {
+    return new Set([...filteredProjects.map((project) => project.id), ...filteredAssetProjects.map((project) => project.id)]).size;
+  }, [filteredAssetProjects, filteredProjects]);
   const totalVisibleHoles = visibleHoles.length;
   const totalVisibleAssets = visibleAssets.length;
   const totalShared = allHoles.filter((hole) => hole.organization_id !== orgId).length;
@@ -3949,23 +4296,38 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
               </div>
 
               <div>
-                <label className="flex min-w-[220px] flex-col gap-2 text-xs uppercase tracking-[0.18em] text-slate-400">
-                  Descriptor Filter
-                  <select
-                    value={descriptorFilter}
-                    onChange={(event) => setDescriptorFilter(event.target.value)}
-                    className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm font-medium text-slate-100 outline-none transition focus:border-cyan-300/40"
-                  >
-                    <option value="">All descriptors</option>
-                    {descriptorOptions.map((descriptor) => (
-                      <option key={descriptor.id} value={descriptor.id}>
-                        {descriptor.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <button
+                  type="button"
+                  className="inline-flex h-12 min-w-[220px] items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm font-medium text-slate-100 transition hover:bg-slate-900/70"
+                  onClick={() => setShowAdvancedFilters((current) => !current)}
+                >
+                  <span className="flex items-center gap-2">
+                    <FilterIcon className="h-[18px] w-[18px] text-cyan-200" />
+                    <span>{showAdvancedFilters ? "Hide Filters" : "Open Filters"}</span>
+                  </span>
+                  {activeAdvancedFilterCount ? (
+                    <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2.5 py-1 text-xs font-semibold text-cyan-100">
+                      {activeAdvancedFilterCount}
+                    </span>
+                  ) : null}
+                </button>
               </div>
             </div>
+            {showAdvancedFilters ? (
+              <AdvancedFilterPanel
+                filters={advancedFilters}
+                activeFilterCount={activeAdvancedFilterCount}
+                descriptorOptions={descriptorOptions}
+                holeStateOptions={holeStateOptions}
+                holeCompletionStatusOptions={holeCompletionStatusOptions}
+                assetStatusOptions={assetStatusOptions}
+                assetTypeOptions={assetTypeOptions}
+                assetLocationOptions={assetLocationOptions}
+                onChange={updateAdvancedFilter}
+                onClear={clearAdvancedFilters}
+                onClose={() => setShowAdvancedFilters(false)}
+              />
+            ) : null}
             {mapNotice ? <div className="mt-3 text-sm text-amber-300">{mapNotice}</div> : null}
             {error ? <div className="mt-3 text-sm text-rose-300">{error}</div> : null}
           </div>
@@ -4018,7 +4380,13 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
           </aside>
 
           <div className="min-w-0 space-y-4">
-            <div className="relative min-w-0 overflow-hidden rounded-[32px] border border-white/10 bg-slate-950/60 shadow-[0_30px_100px_rgba(2,6,23,0.42)] backdrop-blur-xl">
+            <div
+              ref={mapCardRef}
+              className={[
+                "relative min-w-0 overflow-hidden border border-white/10 bg-slate-950/60 shadow-[0_30px_100px_rgba(2,6,23,0.42)] backdrop-blur-xl",
+                isMapFullscreen ? "h-full rounded-none" : "rounded-[32px]",
+              ].join(" ")}
+            >
               <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(180deg,rgba(8,47,73,0.28),transparent)]" />
               <div className="relative border-b border-white/10 px-4 py-4 md:hidden">
                 <div className="flex flex-col items-start gap-3 min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
@@ -4050,9 +4418,25 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   <div className="mt-1 text-lg font-semibold text-white">Hole collars and mapped assets</div>
                 </div>
                 <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-slate-300">
+                  <button
+                    type="button"
+                    aria-label={isMapFullscreen ? "Exit full screen map" : "Open full screen map"}
+                    title={isMapFullscreen ? "Exit full screen map" : "Open full screen map"}
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-slate-100 shadow-[0_12px_28px_rgba(2,6,23,0.22)] transition hover:bg-white/[0.1]"
+                    onClick={() => {
+                      void toggleMapFullscreen();
+                    }}
+                  >
+                    {isMapFullscreen ? <FullscreenExitIcon className="h-[18px] w-[18px]" /> : <FullscreenEnterIcon className="h-[18px] w-[18px]" />}
+                  </button>
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{totalVisibleHoles} visible holes</span>
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{totalVisibleAssets} visible assets</span>
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{projectFilter ? "Filtered project" : "Portfolio view"}</span>
+                  {activeAdvancedFilterCount ? (
+                    <span className="rounded-full border border-cyan-300/18 bg-cyan-400/10 px-3 py-1.5 text-cyan-100">
+                      {activeAdvancedFilterCount} filter{activeAdvancedFilterCount === 1 ? "" : "s"} active
+                    </span>
+                  ) : null}
                   {!showCreateProjectPrompt && projectScope === "own" ? (
                     <button
                       type="button"
@@ -4065,9 +4449,18 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   ) : null}
                 </div>
               </div>
-              <div className="pointer-events-none absolute bottom-3 left-3 z-10 md:bottom-4 md:left-4">
-                <div className="pointer-events-auto">
-                  <HoleStateLegend />
+              <div className="pointer-events-none absolute bottom-3 left-3 z-20 md:bottom-4 md:left-4">
+                <div className="pointer-events-auto flex flex-col items-start gap-2">
+                  {showLegend ? <HoleStateLegend /> : null}
+                  <button
+                    type="button"
+                    aria-label={showLegend ? "Hide map legend" : "Show map legend"}
+                    title={showLegend ? "Hide map legend" : "Show map legend"}
+                    onClick={() => setShowLegend((current) => !current)}
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-slate-950/82 text-slate-100 shadow-[0_18px_42px_rgba(2,6,23,0.3)] transition hover:bg-slate-900/92"
+                  >
+                    <LegendIcon className="h-[18px] w-[18px]" />
+                  </button>
                 </div>
               </div>
               {showCreateProjectPrompt ? (
@@ -4087,6 +4480,17 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   +
                 </button>
               ) : null}
+              <button
+                type="button"
+                aria-label={isMapFullscreen ? "Exit full screen map" : "Open full screen map"}
+                title={isMapFullscreen ? "Exit full screen map" : "Open full screen map"}
+                className={`absolute z-20 inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-slate-950/82 text-slate-100 shadow-[0_18px_42px_rgba(2,6,23,0.3)] transition hover:bg-slate-900/92 md:hidden ${projectScope === "own" && !showCreateProjectPrompt ? "right-[4.5rem] top-3" : "right-3 top-3"}`}
+                onClick={() => {
+                  void toggleMapFullscreen();
+                }}
+              >
+                {isMapFullscreen ? <FullscreenExitIcon className="h-[18px] w-[18px]" /> : <FullscreenEnterIcon className="h-[18px] w-[18px]" />}
+              </button>
               {createPlacementActive && !showCreatePanel ? (
                 <div className="pointer-events-none absolute inset-x-3 top-20 z-20 flex justify-center md:inset-x-4 md:top-24">
                   <div className="rounded-full border border-cyan-300/20 bg-slate-950/82 px-4 py-2 text-xs font-medium tracking-[0.16em] text-cyan-100 shadow-[0_18px_48px_rgba(2,6,23,0.42)] backdrop-blur-xl">
@@ -4158,7 +4562,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   }}
                 />
               ) : null}
-              <div ref={mapContainerRef} className="h-[58svh] min-h-[400px] w-full max-w-full md:h-[58vh] md:min-h-[480px]" />
+              <div ref={mapContainerRef} className={isMapFullscreen ? "h-[100svh] min-h-[100svh] w-full max-w-full" : "h-[58svh] min-h-[400px] w-full max-w-full md:h-[58vh] md:min-h-[480px]"} />
             </div>
 
             <div className="xl:hidden min-w-0 overflow-hidden rounded-[32px] border border-white/10 bg-slate-950/60 shadow-[0_24px_80px_rgba(2,6,23,0.32)] backdrop-blur-xl">
@@ -4209,22 +4613,37 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                     </select>
                   </label>
 
-                  <label className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
-                    Descriptor Filter
-                    <select
-                      value={descriptorFilter}
-                      onChange={(event) => setDescriptorFilter(event.target.value)}
-                      className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm font-medium text-slate-100 outline-none transition focus:border-cyan-300/40"
-                    >
-                      <option value="">All descriptors</option>
-                      {descriptorOptions.map((descriptor) => (
-                        <option key={descriptor.id} value={descriptor.id}>
-                          {descriptor.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <button
+                    type="button"
+                    className="inline-flex h-12 items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm font-medium text-slate-100 transition hover:bg-slate-900/70"
+                    onClick={() => setShowAdvancedFilters((current) => !current)}
+                  >
+                    <span className="flex items-center gap-2">
+                      <FilterIcon className="h-[18px] w-[18px] text-cyan-200" />
+                      <span>{showAdvancedFilters ? "Hide Filters" : "Open Filters"}</span>
+                    </span>
+                    {activeAdvancedFilterCount ? (
+                      <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2.5 py-1 text-xs font-semibold text-cyan-100">
+                        {activeAdvancedFilterCount}
+                      </span>
+                    ) : null}
+                  </button>
                 </div>
+                {showAdvancedFilters ? (
+                  <AdvancedFilterPanel
+                    filters={advancedFilters}
+                    activeFilterCount={activeAdvancedFilterCount}
+                    descriptorOptions={descriptorOptions}
+                    holeStateOptions={holeStateOptions}
+                    holeCompletionStatusOptions={holeCompletionStatusOptions}
+                    assetStatusOptions={assetStatusOptions}
+                    assetTypeOptions={assetTypeOptions}
+                    assetLocationOptions={assetLocationOptions}
+                    onChange={updateAdvancedFilter}
+                    onClear={clearAdvancedFilters}
+                    onClose={() => setShowAdvancedFilters(false)}
+                  />
+                ) : null}
               </div>
 
               {mobilePanelTab === "holes" ? (
