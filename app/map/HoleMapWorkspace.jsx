@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
-import { attachHoleDescriptors, fetchHoleDescriptorAssignments } from "@/lib/holeDescriptors";
+import { attachHoleDescriptors, fetchHoleDescriptorAssignments, replaceHoleDescriptorAssignments } from "@/lib/holeDescriptors";
 import DepthAxisBar from "@/app/drillhole-viz/components/DepthAxisBar";
 import BoreholeSchematicPreview from "@/app/drillhole-viz/components/BoreholeSchematicPreview";
 import { convertProjectedToWgs84 } from "@/lib/coordinateTransforms";
@@ -27,8 +27,15 @@ const ASSETS_SELECTED_LAYER_ID = "prod-asset-map-selected";
 const CREATE_POINT_SOURCE_ID = "prod-map-create-point-source";
 const CREATE_POINT_FILL_LAYER_ID = "prod-map-create-point-fill";
 const CREATE_POINT_RING_LAYER_ID = "prod-map-create-point-ring";
-const DEFAULT_CENTER = [133.7751, -25.2744];
-const DEFAULT_ZOOM = 3;
+const LOCATION_PROPOSALS_SOURCE_ID = "prod-map-location-proposals-source";
+const LOCATION_PROPOSALS_LINE_LAYER_ID = "prod-map-location-proposals-line";
+const LOCATION_PROPOSALS_ARROW_LAYER_ID = "prod-map-location-proposals-arrow";
+const LOCATION_PROPOSALS_POINT_LAYER_ID = "prod-map-location-proposals-point";
+const LOCATION_PROPOSALS_POINT_RING_LAYER_ID = "prod-map-location-proposals-point-ring";
+const DEFAULT_CENTER = [134.2, -25.7];
+const DEFAULT_ZOOM = 2.85;
+const DEFAULT_PITCH = 0;
+const DEFAULT_BEARING = 0;
 const MAPBOX_STYLE_URL = "mapbox://styles/jamesblue/cmmhkajfi000w01shgzr5c1op";
 const MAPBOX_FALLBACK_STYLE_URL = "mapbox://styles/mapbox/satellite-streets-v12";
 const MAP_REFOCUS_SPEED = 0.52;
@@ -44,11 +51,19 @@ const HOLE_STATE_STYLES = [
 
 const ASSET_COLOR = "#f472b6";
 const ASSET_STATUS_STYLES = [{ value: "assets", label: "Assets", color: ASSET_COLOR }];
+const VALID_HOLE_COLLAR_SOURCES = new Set(["gps", "survey", "estimated", "imported"]);
+const DEFAULT_HOLE_COLLAR_SOURCE = "estimated";
 
 function roundCoordinate(value, decimals = 6) {
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue)) return "";
   return String(Number(numericValue.toFixed(decimals)));
+}
+
+function normalizeHoleCollarSource(value, fallback = DEFAULT_HOLE_COLLAR_SOURCE) {
+  const normalizedValue = String(value || "").trim().toLowerCase();
+  if (VALID_HOLE_COLLAR_SOURCES.has(normalizedValue)) return normalizedValue;
+  return fallback;
 }
 
 function createMapHoleDraft(projectId = "") {
@@ -58,7 +73,7 @@ function createMapHoleDraft(projectId = "") {
     state: "proposed",
     longitude: "",
     latitude: "",
-    collar_source: "map_picked",
+    collar_source: DEFAULT_HOLE_COLLAR_SOURCE,
   };
 }
 
@@ -228,6 +243,25 @@ function toTextOrNull(value) {
   return trimmedValue || null;
 }
 
+function getMapEntityLabel(entityType, entity) {
+  if (entityType === "hole") return entity?.hole_id || "Unnamed hole";
+  return entity?.name || "Unnamed asset";
+}
+
+function getMapProposalEntityKey(entityType, entityId) {
+  return `${entityType}:${entityId || ""}`;
+}
+
+function formatCoordinatePreview(value) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return "-";
+  return numericValue.toFixed(6);
+}
+
+function markViewportForPreserve(ref) {
+  ref.current = true;
+}
+
 function makeHoleFeatureCollection(rows) {
   return {
     type: "FeatureCollection",
@@ -273,6 +307,70 @@ function makeAssetFeatureCollection(rows) {
         coordinate_source: asset.coordinate_source || "",
       },
     })),
+  };
+}
+
+function makeMapLocationProposalFeatureCollection(proposals, holes, assets) {
+  const holeById = new Map((holes || []).map((hole) => [hole.id, hole]));
+  const assetById = new Map((assets || []).map((asset) => [asset.id, asset]));
+  const features = [];
+
+  (proposals || []).forEach((proposal) => {
+    const entity = proposal.entity_type === "hole"
+      ? holeById.get(proposal.entity_id)
+      : assetById.get(proposal.entity_id);
+
+    if (!entity) return;
+
+    const currentLongitude = Number(proposal.entity_type === "hole" ? entity.collar_longitude : entity.longitude);
+    const currentLatitude = Number(proposal.entity_type === "hole" ? entity.collar_latitude : entity.latitude);
+    const proposedLongitude = Number(proposal.proposed_longitude);
+    const proposedLatitude = Number(proposal.proposed_latitude);
+
+    if (![currentLongitude, currentLatitude, proposedLongitude, proposedLatitude].every(Number.isFinite)) return;
+
+    const color = proposal.entity_type === "hole" ? "#f59e0b" : "#f472b6";
+    const label = getMapEntityLabel(proposal.entity_type, entity);
+
+    features.push({
+      type: "Feature",
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          [currentLongitude, currentLatitude],
+          [proposedLongitude, proposedLatitude],
+        ],
+      },
+      properties: {
+        proposal_id: proposal.id,
+        entity_type: proposal.entity_type,
+        entity_id: proposal.entity_id,
+        color,
+        label,
+        feature_kind: "connector",
+      },
+    });
+
+    features.push({
+      type: "Feature",
+      geometry: {
+        type: "Point",
+        coordinates: [proposedLongitude, proposedLatitude],
+      },
+      properties: {
+        proposal_id: proposal.id,
+        entity_type: proposal.entity_type,
+        entity_id: proposal.entity_id,
+        color,
+        label,
+        feature_kind: "proposal_point",
+      },
+    });
+  });
+
+  return {
+    type: "FeatureCollection",
+    features,
   };
 }
 
@@ -1196,6 +1294,409 @@ function HoleSchematicModal({
   );
 }
 
+function DockGripIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <circle cx="8" cy="7" r="1.5" fill="currentColor" />
+      <circle cx="8" cy="12" r="1.5" fill="currentColor" />
+      <circle cx="8" cy="17" r="1.5" fill="currentColor" />
+      <circle cx="16" cy="7" r="1.5" fill="currentColor" />
+      <circle cx="16" cy="12" r="1.5" fill="currentColor" />
+      <circle cx="16" cy="17" r="1.5" fill="currentColor" />
+    </svg>
+  );
+}
+
+function DockMoveIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path d="M12 4v16M4 12h16M12 4l-2.5 2.5M12 4l2.5 2.5M12 20l-2.5-2.5M12 20l2.5-2.5M4 12l2.5-2.5M4 12l2.5 2.5M20 12l-2.5-2.5M20 12l-2.5 2.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function DockDuplicateIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <rect x="8" y="8" width="10" height="10" rx="2.4" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M6 14H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function DockProposalIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path d="M12 21s6-5.2 6-10a6 6 0 1 0-12 0c0 4.8 6 10 6 10Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+      <path d="M12 8.2v5.6M9.2 11h5.6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function DockReviewIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path d="M4 12.5 9 17l11-11" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function DockSchematicIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <rect x="8" y="3.5" width="8" height="17" rx="2" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M10.5 8h3M10.5 12h3M10.5 16h3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function DockIconButton({ label, onClick, tone = "default", active = false, children }) {
+  const toneClassName = {
+    default: "border-white/10 bg-white/[0.05] text-slate-100 hover:bg-white/[0.11]",
+    cyan: "border-cyan-300/18 bg-cyan-400/8 text-cyan-100 hover:bg-cyan-400/14",
+    orange: "border-orange-300/22 bg-orange-400/10 text-orange-100 hover:bg-orange-400/16",
+    emerald: "border-emerald-300/24 bg-emerald-400/10 text-emerald-100 hover:bg-emerald-400/16",
+  }[tone] || "border-white/10 bg-white/[0.05] text-slate-100 hover:bg-white/[0.11]";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className={[
+        "relative inline-flex h-10 w-10 items-center justify-center rounded-2xl border transition focus:outline-none focus:ring-2 focus:ring-cyan-300/35",
+        toneClassName,
+        active ? "shadow-[0_0_0_1px_rgba(250,204,21,0.22),0_10px_24px_rgba(2,6,23,0.26)]" : "shadow-[0_10px_24px_rgba(2,6,23,0.2)]",
+      ].join(" ")}
+    >
+      {active ? <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-amber-300" /> : null}
+      <span className="h-[18px] w-[18px]">{children}</span>
+    </button>
+  );
+}
+
+function MapSelectionActionDock({
+  entityType,
+  entity,
+  pendingProposal,
+  mobile = false,
+  onMove,
+  onDuplicate,
+  onPropose,
+  onReview,
+  onOpenSchematic,
+}) {
+  const dockRef = useRef(null);
+  const dragStateRef = useRef(null);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [positionReady, setPositionReady] = useState(false);
+  const [dragging, setDragging] = useState(false);
+
+  const clampPosition = useCallback((nextPosition) => {
+    const dockElement = dockRef.current;
+    const parentElement = dockElement?.parentElement;
+    if (!dockElement || !parentElement) return nextPosition;
+
+    const margin = 12;
+    const maxX = Math.max(margin, parentElement.clientWidth - dockElement.offsetWidth - margin);
+    const maxY = Math.max(margin, parentElement.clientHeight - dockElement.offsetHeight - margin);
+
+    return {
+      x: Math.min(Math.max(nextPosition.x, margin), maxX),
+      y: Math.min(Math.max(nextPosition.y, margin), maxY),
+    };
+  }, []);
+
+  const resetPosition = useCallback(() => {
+    if (!entity?.id) return;
+
+    requestAnimationFrame(() => {
+      const dockElement = dockRef.current;
+      const parentElement = dockElement?.parentElement;
+      if (!dockElement || !parentElement) return;
+
+      const margin = 12;
+      const nextPosition = {
+        x: (parentElement.clientWidth - dockElement.offsetWidth) / 2,
+        y: mobile ? parentElement.clientHeight - dockElement.offsetHeight - margin : margin,
+      };
+
+      setPosition(clampPosition(nextPosition));
+      setPositionReady(true);
+    });
+  }, [clampPosition, entity?.id, mobile]);
+
+  useEffect(() => {
+    setPositionReady(false);
+    setDragging(false);
+    dragStateRef.current = null;
+    resetPosition();
+  }, [entity?.id, mobile, resetPosition]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handleResize = () => {
+      if (!positionReady) {
+        resetPosition();
+        return;
+      }
+      setPosition((current) => clampPosition(current));
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [clampPosition, positionReady, resetPosition]);
+
+  if (!entity) return null;
+
+  const entityLabel = getMapEntityLabel(entityType, entity);
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-20">
+      <div
+        ref={dockRef}
+        className={[
+          "pointer-events-auto absolute overflow-hidden rounded-[24px] border border-white/12 bg-[linear-gradient(180deg,rgba(15,23,42,0.94),rgba(2,6,23,0.9))] p-1.5 text-slate-100 shadow-[0_28px_60px_rgba(2,6,23,0.45)] backdrop-blur-xl transition-shadow",
+          dragging ? "shadow-[0_34px_70px_rgba(2,6,23,0.54)]" : "",
+        ].join(" ")}
+        style={{
+          left: position.x,
+          top: position.y,
+          opacity: positionReady ? 1 : 0,
+        }}
+        aria-label={`${entityLabel} tools`}
+      >
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            aria-label={`Drag tools for ${entityLabel}`}
+            title={`Drag tools for ${entityLabel}`}
+            onPointerDown={(event) => {
+              if (event.pointerType === "mouse" && event.button !== 0) return;
+              event.preventDefault();
+              event.stopPropagation();
+              dragStateRef.current = {
+                pointerId: event.pointerId,
+                startX: event.clientX,
+                startY: event.clientY,
+                origin: position,
+              };
+              setDragging(true);
+              event.currentTarget.setPointerCapture?.(event.pointerId);
+            }}
+            onPointerMove={(event) => {
+              if (!dragStateRef.current || dragStateRef.current.pointerId !== event.pointerId) return;
+              event.preventDefault();
+              const deltaX = event.clientX - dragStateRef.current.startX;
+              const deltaY = event.clientY - dragStateRef.current.startY;
+              setPosition(clampPosition({
+                x: dragStateRef.current.origin.x + deltaX,
+                y: dragStateRef.current.origin.y + deltaY,
+              }));
+            }}
+            onPointerUp={(event) => {
+              if (dragStateRef.current?.pointerId !== event.pointerId) return;
+              dragStateRef.current = null;
+              setDragging(false);
+              event.currentTarget.releasePointerCapture?.(event.pointerId);
+            }}
+            onPointerCancel={(event) => {
+              if (dragStateRef.current?.pointerId !== event.pointerId) return;
+              dragStateRef.current = null;
+              setDragging(false);
+              event.currentTarget.releasePointerCapture?.(event.pointerId);
+            }}
+            className="inline-flex h-10 w-10 cursor-grab items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-slate-300 transition hover:bg-white/[0.1] active:cursor-grabbing"
+          >
+            <DockGripIcon className="h-[17px] w-[17px]" />
+          </button>
+
+          <div className="h-8 w-px bg-white/10" />
+
+          {entityType === "hole" ? (
+            <DockIconButton label="Open schematic" onClick={onOpenSchematic} tone="cyan">
+              <DockSchematicIcon className="h-[18px] w-[18px]" />
+            </DockIconButton>
+          ) : null}
+
+          <DockIconButton label="Move selected item" onClick={onMove} tone="orange">
+            <DockMoveIcon className="h-[18px] w-[18px]" />
+          </DockIconButton>
+
+          <DockIconButton label="Duplicate selected item" onClick={onDuplicate} tone="cyan">
+            <DockDuplicateIcon className="h-[18px] w-[18px]" />
+          </DockIconButton>
+
+          <DockIconButton label={pendingProposal ? "Replace location proposal" : "Propose location"} onClick={onPropose} tone="default" active={Boolean(pendingProposal)}>
+            <DockProposalIcon className="h-[18px] w-[18px]" />
+          </DockIconButton>
+
+          {pendingProposal ? (
+            <DockIconButton label="Review pending proposal" onClick={onReview} tone="emerald" active>
+              <DockReviewIcon className="h-[18px] w-[18px]" />
+            </DockIconButton>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MapEntityDuplicateModal({ selection, saving, onClose, onChangeName, onSubmit }) {
+  useEffect(() => {
+    if (!selection) return undefined;
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape" && !saving) onClose();
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [onClose, saving, selection]);
+
+  if (!selection) return null;
+
+  return (
+    <div className="fixed inset-0 z-[96] bg-slate-950/78 backdrop-blur-md" onClick={() => (!saving ? onClose() : null)}>
+      <div className="flex h-full w-full items-end justify-center p-3 md:items-center md:p-6">
+        <div className="glass w-full max-w-md rounded-[30px] border border-white/15 bg-slate-950/90 p-5 shadow-[0_30px_90px_rgba(2,6,23,0.65)]" onClick={(event) => event.stopPropagation()}>
+          <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-100/75">Duplicate {selection.entityType === "hole" ? "Hole" : "Asset"}</div>
+          <div className="mt-2 text-xl font-semibold text-white">Create a copy of {selection.sourceLabel}</div>
+          <div className="mt-1 text-sm text-slate-300">Enter the new {selection.entityType === "hole" ? "hole ID" : "asset name"}. The duplicate will start at the same map location.</div>
+
+          <label className="mt-5 flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+            {selection.entityType === "hole" ? "New Hole ID" : "New Asset Name"}
+            <input
+              value={selection.newName}
+              onChange={(event) => onChangeName(event.target.value)}
+              className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40"
+              placeholder={selection.entityType === "hole" ? "DDH-002" : "Pump 02"}
+            />
+          </label>
+
+          <div className="mt-5 flex items-center justify-end gap-2">
+            <button type="button" onClick={onClose} disabled={saving} className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-60">Cancel</button>
+            <button type="button" onClick={onSubmit} disabled={saving} className="rounded-2xl bg-[linear-gradient(135deg,#22d3ee,#0ea5e9)] px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-[0_14px_36px_rgba(34,211,238,0.24)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60">{saving ? "Duplicating..." : "Create Duplicate"}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MapLocationProposalModal({ draft, saving, onClose, onChangeNote, onSubmit }) {
+  useEffect(() => {
+    if (!draft) return undefined;
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape" && !saving) onClose();
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [draft, onClose, saving]);
+
+  if (!draft) return null;
+
+  return (
+    <div className="fixed inset-0 z-[96] bg-slate-950/78 backdrop-blur-md" onClick={() => (!saving ? onClose() : null)}>
+      <div className="flex h-full w-full items-end justify-center p-3 md:items-center md:p-6">
+        <div className="glass w-full max-w-lg rounded-[30px] border border-white/15 bg-slate-950/90 p-5 shadow-[0_30px_90px_rgba(2,6,23,0.65)]" onClick={(event) => event.stopPropagation()}>
+          <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-100/75">Propose New Location</div>
+          <div className="mt-2 text-xl font-semibold text-white">{draft.label}</div>
+          <div className="mt-1 text-sm text-slate-300">Submit a proposed location for review. This will not move the live point until it is approved.</div>
+
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Current</div>
+              <div className="mt-2 text-sm font-semibold text-white">{formatCoordinatePreview(draft.currentLongitude)}, {formatCoordinatePreview(draft.currentLatitude)}</div>
+            </div>
+            <div className="rounded-[24px] border border-cyan-300/20 bg-cyan-400/8 p-4">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-100/75">Proposed</div>
+              <div className="mt-2 text-sm font-semibold text-white">{formatCoordinatePreview(draft.proposedLongitude)}, {formatCoordinatePreview(draft.proposedLatitude)}</div>
+            </div>
+          </div>
+
+          <label className="mt-5 flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+            Note
+            <textarea
+              value={draft.note}
+              onChange={(event) => onChangeNote(event.target.value)}
+              className="min-h-28 rounded-3xl border border-white/10 bg-slate-950/55 px-4 py-3 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40"
+              placeholder="Why is this location being proposed?"
+            />
+          </label>
+
+          <div className="mt-5 flex items-center justify-end gap-2">
+            <button type="button" onClick={onClose} disabled={saving} className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-60">Cancel</button>
+            <button type="button" onClick={onSubmit} disabled={saving} className="rounded-2xl bg-[linear-gradient(135deg,#22d3ee,#0ea5e9)] px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-[0_14px_36px_rgba(34,211,238,0.24)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60">{saving ? "Saving..." : draft.proposalId ? "Update Proposal" : "Submit Proposal"}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MapLocationProposalReviewModal({ review, saving, onClose, onChangeReviewNote, onApprove, onReject }) {
+  useEffect(() => {
+    if (!review) return undefined;
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape" && !saving) onClose();
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [onClose, review, saving]);
+
+  if (!review) return null;
+
+  const proposal = review.proposal;
+
+  return (
+    <div className="fixed inset-0 z-[96] bg-slate-950/78 backdrop-blur-md" onClick={() => (!saving ? onClose() : null)}>
+      <div className="flex h-full w-full items-end justify-center p-3 md:items-center md:p-6">
+        <div className="glass w-full max-w-lg rounded-[30px] border border-white/15 bg-slate-950/90 p-5 shadow-[0_30px_90px_rgba(2,6,23,0.65)]" onClick={(event) => event.stopPropagation()}>
+          <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-100/75">Review Location Proposal</div>
+          <div className="mt-2 text-xl font-semibold text-white">{review.label}</div>
+          <div className="mt-1 text-sm text-slate-300">Approve to update the live map point, or reject to keep the existing coordinates.</div>
+
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Current</div>
+              <div className="mt-2 text-sm font-semibold text-white">{formatCoordinatePreview(review.currentLongitude)}, {formatCoordinatePreview(review.currentLatitude)}</div>
+            </div>
+            <div className="rounded-[24px] border border-cyan-300/20 bg-cyan-400/8 p-4">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-100/75">Proposed</div>
+              <div className="mt-2 text-sm font-semibold text-white">{formatCoordinatePreview(proposal.proposed_longitude)}, {formatCoordinatePreview(proposal.proposed_latitude)}</div>
+            </div>
+          </div>
+
+          {proposal.note ? <div className="mt-4 rounded-[24px] border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-200">{proposal.note}</div> : null}
+
+          <label className="mt-5 flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+            Review Note
+            <textarea
+              value={review.reviewNote}
+              onChange={(event) => onChangeReviewNote(event.target.value)}
+              className="min-h-24 rounded-3xl border border-white/10 bg-slate-950/55 px-4 py-3 text-sm normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40"
+              placeholder="Optional note for the decision"
+            />
+          </label>
+
+          <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
+            <button type="button" onClick={onClose} disabled={saving} className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-60">Cancel</button>
+            <button type="button" onClick={onReject} disabled={saving} className="rounded-2xl border border-rose-300/25 bg-rose-400/10 px-4 py-2.5 text-sm font-semibold text-rose-100 transition hover:bg-rose-400/14 disabled:cursor-not-allowed disabled:opacity-60">{saving ? "Saving..." : "Reject"}</button>
+            <button type="button" onClick={onApprove} disabled={saving} className="rounded-2xl bg-[linear-gradient(135deg,#34d399,#0f766e)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_14px_36px_rgba(16,185,129,0.24)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60">{saving ? "Saving..." : "Approve"}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function HoleMapWorkspace({ publicToken = "" }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -1215,10 +1716,12 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const visibleAssetsRef = useRef([]);
   const createPlacementActiveRef = useRef(false);
   const moveSelectionRef = useRef(null);
+  const proposalPlacementSelectionRef = useRef(null);
   const createEntityTypeRef = useRef("hole");
   const pendingMapRestoreRef = useRef(null);
   const pendingHoleFocusRef = useRef("");
   const applyingMapRestoreRef = useRef(false);
+  const preserveViewportAfterRefreshRef = useRef(false);
 
   const [projectScope, setProjectScope] = useState("own");
   const [loading, setLoading] = useState(true);
@@ -1227,6 +1730,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const [mapNotice, setMapNotice] = useState("");
   const [allHoles, setAllHoles] = useState([]);
   const [allAssets, setAllAssets] = useState([]);
+  const [locationProposals, setLocationProposals] = useState([]);
   const [ownProjects, setOwnProjects] = useState([]);
   const [assetTypes, setAssetTypes] = useState([]);
   const [assetLocations, setAssetLocations] = useState([]);
@@ -1245,6 +1749,13 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const [savingCreateEntity, setSavingCreateEntity] = useState(false);
   const [moveSelection, setMoveSelection] = useState(null);
   const [savingMoveSelection, setSavingMoveSelection] = useState(false);
+  const [duplicateSelection, setDuplicateSelection] = useState(null);
+  const [duplicatingEntity, setDuplicatingEntity] = useState(false);
+  const [proposalPlacementSelection, setProposalPlacementSelection] = useState(null);
+  const [proposalDraft, setProposalDraft] = useState(null);
+  const [savingProposalDraft, setSavingProposalDraft] = useState(false);
+  const [proposalReview, setProposalReview] = useState(null);
+  const [savingProposalReview, setSavingProposalReview] = useState(false);
   const [savingAdminAction, setSavingAdminAction] = useState(false);
   const [deletingAdminAction, setDeletingAdminAction] = useState(false);
   const [holeDraft, setHoleDraft] = useState(createMapHoleDraft());
@@ -1275,6 +1786,10 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   useEffect(() => {
     moveSelectionRef.current = moveSelection;
   }, [moveSelection]);
+
+  useEffect(() => {
+    proposalPlacementSelectionRef.current = proposalPlacementSelection;
+  }, [proposalPlacementSelection]);
 
   useEffect(() => {
     createEntityTypeRef.current = createEntityType;
@@ -1351,6 +1866,10 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     if (projectScope !== "own") {
       setShowCreatePanel(false);
       setMoveSelection(null);
+      setDuplicateSelection(null);
+      setProposalPlacementSelection(null);
+      setProposalDraft(null);
+      setProposalReview(null);
     }
   }, [projectScope]);
 
@@ -1448,8 +1967,8 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
             style: styleUrl,
             center: DEFAULT_CENTER,
             zoom: DEFAULT_ZOOM,
-            pitch: 28,
-            bearing: -12,
+            pitch: DEFAULT_PITCH,
+            bearing: DEFAULT_BEARING,
             cooperativeGestures: true,
           });
 
@@ -1529,6 +2048,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     if (!orgId) {
       setAllHoles([]);
       setAllAssets([]);
+      setLocationProposals([]);
       setLoading(false);
       return { holes: [], assets: [] };
     }
@@ -1539,6 +2059,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     try {
       let holeRows = [];
       let assetRows = [];
+      let proposalRows = [];
 
       if (projectScope === "shared") {
         const { data: sharedRows, error: sharedErr } = await supabase
@@ -1691,16 +2212,30 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         })
         .filter((asset) => asset.longitude != null && asset.latitude != null);
 
+      if (projectScope === "own") {
+        const { data: proposalsRes, error: proposalsError } = await supabase
+          .from("map_location_proposals")
+          .select("id,organization_id,project_id,entity_type,entity_id,proposed_longitude,proposed_latitude,note,status,created_by,created_at,updated_at,reviewed_by,reviewed_at,review_note")
+          .eq("organization_id", orgId)
+          .eq("status", "pending")
+          .order("created_at", { ascending: false });
+
+        if (proposalsError) throw proposalsError;
+        proposalRows = proposalsRes || [];
+      }
+
       setAllHoles(nextHoles);
       setAllAssets(nextAssets);
-      return { holes: nextHoles, assets: nextAssets };
+      setLocationProposals(proposalRows);
+      return { holes: nextHoles, assets: nextAssets, proposals: proposalRows };
     } catch (evt) {
       const message = evt?.message || "Failed to load map holes";
       setAllHoles([]);
       setAllAssets([]);
+      setLocationProposals([]);
       setError(message);
       toast.error(message);
-      return { holes: [], assets: [] };
+      return { holes: [], assets: [], proposals: [] };
     } finally {
       setLoading(false);
     }
@@ -1833,6 +2368,33 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     return visibleAssets.find((asset) => asset.id === selectedAssetId) || visibleAssets[0] || null;
   }, [selectedAssetId, visibleAssets]);
 
+  const pendingProposalByEntity = useMemo(() => {
+    const next = new Map();
+    (locationProposals || []).forEach((proposal) => {
+      if (proposal.status !== "pending") return;
+      next.set(getMapProposalEntityKey(proposal.entity_type, proposal.entity_id), proposal);
+    });
+    return next;
+  }, [locationProposals]);
+
+  const activeMapSelection = useMemo(() => {
+    if (navigatorTab === "assets" && selectedAssetId && selectedAsset) {
+      return { entityType: "asset", entity: selectedAsset };
+    }
+    if (selectedHoleId && selectedHole) {
+      return { entityType: "hole", entity: selectedHole };
+    }
+    if (selectedAssetId && selectedAsset) {
+      return { entityType: "asset", entity: selectedAsset };
+    }
+    return null;
+  }, [navigatorTab, selectedAsset, selectedAssetId, selectedHole, selectedHoleId]);
+
+  const activeMapSelectionPendingProposal = useMemo(() => {
+    if (!activeMapSelection?.entity?.id) return null;
+    return pendingProposalByEntity.get(getMapProposalEntityKey(activeMapSelection.entityType, activeMapSelection.entity.id)) || null;
+  }, [activeMapSelection, pendingProposalByEntity]);
+
   const openHoleEditor = () => {
     if (!selectedHole || !canManageSelections) return;
     setEditingHole(selectedHole);
@@ -1858,11 +2420,18 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     setMoveSelection(null);
   }, [savingMoveSelection]);
 
+  const cancelProposalPlacementSelection = useCallback(() => {
+    if (savingProposalDraft) return;
+    setProposalPlacementSelection(null);
+  }, [savingProposalDraft]);
+
   const requestMoveSelection = useCallback((entityType, entity) => {
     if (!canManageSelections || !entity?.id) return;
-    const label = entityType === "hole" ? entity.hole_id || "this hole" : entity.name || "this asset";
+    const label = getMapEntityLabel(entityType, entity);
     if (typeof window !== "undefined" && !window.confirm(`Are you sure you want to move the point for ${label}?`)) return;
 
+    setDuplicateSelection(null);
+    setProposalDraft(null);
     setShowCreatePanel(false);
     setCreatePlacementActive(false);
     setMoveSelection({
@@ -1879,6 +2448,67 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     toast(`Click a free point on the map to move ${label}.`);
   }, [canManageSelections]);
 
+  const requestProposalLocation = useCallback((entityType, entity) => {
+    if (!canManageSelections || !entity?.id) return;
+
+    const label = getMapEntityLabel(entityType, entity);
+    const pendingProposal = pendingProposalByEntity.get(getMapProposalEntityKey(entityType, entity.id)) || null;
+
+    setMoveSelection(null);
+    setShowCreatePanel(false);
+    setCreatePlacementActive(false);
+    setProposalDraft(null);
+    setProposalPlacementSelection({
+      entityType,
+      entityId: entity.id,
+      label,
+      entity,
+      proposalId: pendingProposal?.id || null,
+      note: pendingProposal?.note || "",
+    });
+
+    if (popupRef.current) {
+      popupRef.current.remove();
+      popupRef.current = null;
+    }
+
+    toast(`Click a free point on the map to propose a new location for ${label}.`);
+  }, [canManageSelections, pendingProposalByEntity]);
+
+  const openDuplicateSelection = useCallback((entityType, entity) => {
+    if (!canManageSelections || !entity?.id) return;
+
+    setDuplicateSelection({
+      entityType,
+      entity,
+      sourceLabel: getMapEntityLabel(entityType, entity),
+      newName: "",
+    });
+  }, [canManageSelections]);
+
+  const openProposalReview = useCallback((entityType, entity) => {
+    if (!canManageSelections || !entity?.id) return;
+
+    const proposal = pendingProposalByEntity.get(getMapProposalEntityKey(entityType, entity.id)) || null;
+    if (!proposal) {
+      toast.error("No pending proposal found");
+      return;
+    }
+
+    const currentLongitude = entityType === "hole" ? entity.collar_longitude : entity.longitude;
+    const currentLatitude = entityType === "hole" ? entity.collar_latitude : entity.latitude;
+
+    setProposalReview({
+      proposal,
+      entityType,
+      entityId: entity.id,
+      label: getMapEntityLabel(entityType, entity),
+      currentLongitude,
+      currentLatitude,
+      reviewNote: proposal.review_note || "",
+    });
+  }, [canManageSelections, pendingProposalByEntity]);
+
   useEffect(() => {
     if (!moveSelection) return undefined;
 
@@ -1891,6 +2521,190 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
   }, [cancelMoveSelection, moveSelection]);
+
+  useEffect(() => {
+    if (!proposalPlacementSelection) return undefined;
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        cancelProposalPlacementSelection();
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [cancelProposalPlacementSelection, proposalPlacementSelection]);
+
+  const submitDuplicateSelection = async () => {
+    if (!duplicateSelection?.entity || duplicatingEntity) return;
+
+    const nextName = String(duplicateSelection.newName || "").trim();
+    if (!nextName) {
+      toast.error(`Enter a new ${duplicateSelection.entityType === "hole" ? "hole ID" : "asset name"}`);
+      return;
+    }
+
+    setDuplicatingEntity(true);
+    try {
+      if (duplicateSelection.entityType === "hole") {
+        const sourceHole = duplicateSelection.entity;
+        const { data: insertedHole, error: insertError } = await supabase
+          .from("holes")
+          .insert({
+            organization_id: orgId,
+            project_id: sourceHole.project_id,
+            hole_id: nextName,
+            state: "proposed",
+            planned_depth: sourceHole.planned_depth,
+            water_level_m: sourceHole.water_level_m,
+            azimuth: sourceHole.azimuth,
+            dip: sourceHole.dip,
+            collar_longitude: sourceHole.collar_longitude,
+            collar_latitude: sourceHole.collar_latitude,
+            collar_source: normalizeHoleCollarSource(sourceHole.collar_source),
+          })
+          .select("id,organization_id,hole_id,project_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_easting,collar_northing,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state")
+          .single();
+
+        if (insertError) throw insertError;
+
+        if (sourceHole.descriptor_ids?.length) {
+          await replaceHoleDescriptorAssignments(supabase, {
+            orgId,
+            holeId: insertedHole.id,
+            descriptorIds: sourceHole.descriptor_ids,
+          });
+        }
+
+        markViewportForPreserve(preserveViewportAfterRefreshRef);
+        const { holes: freshHoles } = await loadData();
+        const duplicatedHole = freshHoles.find((hole) => hole.id === insertedHole.id) || null;
+        setDuplicateSelection(null);
+        if (duplicatedHole) focusHole(duplicatedHole);
+        toast.success("Hole duplicated");
+        return;
+      }
+
+      const sourceAsset = duplicateSelection.entity;
+      const selectedAssetType = assetTypes.find((type) => type.id === sourceAsset.asset_type_id) || null;
+      if (!selectedAssetType) throw new Error("Asset type is missing for this asset");
+
+      const { data: insertedAsset, error: insertError } = await supabase
+        .from("assets")
+        .insert({
+          organization_id: orgId,
+          name: nextName,
+          asset_type: selectedAssetType.name,
+          asset_type_id: selectedAssetType.id,
+          location_id: sourceAsset.location_id || null,
+          project_id: sourceAsset.project_id,
+          longitude: sourceAsset.longitude,
+          latitude: sourceAsset.latitude,
+          coordinate_source: "duplicated_from_map",
+          status: sourceAsset.status || "Active",
+        })
+        .select("id,organization_id,name,project_id,status,easting,northing,longitude,latitude,coordinate_source")
+        .single();
+
+      if (insertError) throw insertError;
+
+      markViewportForPreserve(preserveViewportAfterRefreshRef);
+      const { assets: freshAssets } = await loadData();
+      const duplicatedAsset = freshAssets.find((asset) => asset.id === insertedAsset.id) || null;
+      setDuplicateSelection(null);
+      if (duplicatedAsset) focusAsset(duplicatedAsset);
+      toast.success("Asset duplicated");
+    } catch (error) {
+      toast.error(error?.message || "Failed to duplicate entity");
+    } finally {
+      setDuplicatingEntity(false);
+    }
+  };
+
+  const submitProposalDraft = async () => {
+    if (!proposalDraft || savingProposalDraft) return;
+
+    setSavingProposalDraft(true);
+    try {
+      const payload = {
+        organization_id: orgId,
+        entity_type: proposalDraft.entityType,
+        entity_id: proposalDraft.entityId,
+        proposed_longitude: Number(proposalDraft.proposedLongitude),
+        proposed_latitude: Number(proposalDraft.proposedLatitude),
+        note: toTextOrNull(proposalDraft.note),
+        status: "pending",
+      };
+
+      if (proposalDraft.proposalId) {
+        const { error: updateError } = await supabase
+          .from("map_location_proposals")
+          .update(payload)
+          .eq("id", proposalDraft.proposalId)
+          .eq("organization_id", orgId);
+
+        if (updateError) throw updateError;
+      } else {
+        const { error: insertError } = await supabase.from("map_location_proposals").insert(payload);
+        if (insertError) throw insertError;
+      }
+
+      const entityType = proposalDraft.entityType;
+      const entityId = proposalDraft.entityId;
+      markViewportForPreserve(preserveViewportAfterRefreshRef);
+      const { holes: freshHoles, assets: freshAssets } = await loadData();
+      setProposalDraft(null);
+
+      if (entityType === "hole") {
+        const refreshedHole = freshHoles.find((hole) => hole.id === entityId) || null;
+        if (refreshedHole) focusHole(refreshedHole, { flyTo: false });
+      } else {
+        const refreshedAsset = freshAssets.find((asset) => asset.id === entityId) || null;
+        if (refreshedAsset) focusAsset(refreshedAsset, { flyTo: false });
+      }
+
+      toast.success(proposalDraft.proposalId ? "Location proposal updated" : "Location proposal submitted");
+    } catch (error) {
+      toast.error(error?.message || "Failed to save location proposal");
+    } finally {
+      setSavingProposalDraft(false);
+    }
+  };
+
+  const submitProposalReview = async (decision) => {
+    if (!proposalReview?.proposal?.id || savingProposalReview) return;
+
+    setSavingProposalReview(true);
+    try {
+      const { error: reviewError } = await supabase.rpc("review_map_location_proposal", {
+        p_proposal_id: proposalReview.proposal.id,
+        p_decision: decision,
+        p_review_note: toTextOrNull(proposalReview.reviewNote),
+      });
+
+      if (reviewError) throw reviewError;
+
+      const entityType = proposalReview.entityType;
+      const entityId = proposalReview.entityId;
+      markViewportForPreserve(preserveViewportAfterRefreshRef);
+      const { holes: freshHoles, assets: freshAssets } = await loadData();
+      setProposalReview(null);
+
+      if (entityType === "hole") {
+        const refreshedHole = freshHoles.find((hole) => hole.id === entityId) || null;
+        if (refreshedHole) focusHole(refreshedHole, { flyTo: false });
+      } else {
+        const refreshedAsset = freshAssets.find((asset) => asset.id === entityId) || null;
+        if (refreshedAsset) focusAsset(refreshedAsset, { flyTo: false });
+      }
+
+      toast.success(decision === "approved" ? "Location proposal approved" : "Location proposal rejected");
+    } catch (error) {
+      toast.error(error?.message || "Failed to review location proposal");
+    } finally {
+      setSavingProposalReview(false);
+    }
+  };
 
   const saveHoleEdits = async (form) => {
     if (!editingHole || !canManageSelections) return;
@@ -1932,6 +2746,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
 
       if (updateError) throw updateError;
 
+      markViewportForPreserve(preserveViewportAfterRefreshRef);
       const { holes: freshHoles } = await loadData();
       const refreshedHole = freshHoles.find((hole) => hole.id === editingHole.id) || null;
       if (refreshedHole) focusHole(refreshedHole, { flyTo: false });
@@ -1978,6 +2793,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
 
       if (updateError) throw updateError;
 
+      markViewportForPreserve(preserveViewportAfterRefreshRef);
       const { assets: freshAssets } = await loadData();
       const refreshedAsset = freshAssets.find((asset) => asset.id === editingAsset.id) || null;
       if (refreshedAsset) focusAsset(refreshedAsset, { flyTo: false });
@@ -2009,6 +2825,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         popupRef.current = null;
       }
       setSelectedHoleId("");
+      markViewportForPreserve(preserveViewportAfterRefreshRef);
       await loadData();
       toast.success("Hole deleted");
     } catch (error) {
@@ -2037,6 +2854,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         popupRef.current = null;
       }
       setSelectedAssetId("");
+      markViewportForPreserve(preserveViewportAfterRefreshRef);
       await loadData();
       toast.success("Asset deleted");
     } catch (error) {
@@ -2062,6 +2880,10 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const selectedAssetMapId = selectedAsset?.id || "";
   const holeCollection = useMemo(() => makeHoleFeatureCollection(visibleHoles), [visibleHoles]);
   const assetCollection = useMemo(() => makeAssetFeatureCollection(visibleAssets), [visibleAssets]);
+  const locationProposalCollection = useMemo(
+    () => makeMapLocationProposalFeatureCollection(locationProposals, visibleHoles, visibleAssets),
+    [locationProposals, visibleAssets, visibleHoles]
+  );
 
   const schematicLithById = useMemo(() => {
     const map = new Map();
@@ -2205,6 +3027,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const renderPopupHtml = (hole) => {
     if (!hole) return "";
     const stateTone = getHoleStateTone(hole.state);
+    const pendingProposal = pendingProposalByEntity.get(getMapProposalEntityKey("hole", hole.id)) || null;
     const descriptorMarkup = (hole.descriptors || [])
       .slice(0, 3)
       .map(
@@ -2222,6 +3045,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
           <div style="display:inline-flex;align-self:flex-start;max-width:100%;border:1px solid ${stateTone.border};background:${stateTone.background};color:${stateTone.text};border-radius:999px;padding:4px 7px;font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;line-height:1.05;">
             ${stateTone.label}
           </div>
+          ${pendingProposal ? `<div style="display:inline-flex;align-self:flex-start;max-width:100%;border:1px solid rgba(250,204,21,0.28);background:rgba(250,204,21,0.12);color:#fde68a;border-radius:999px;padding:4px 7px;font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;line-height:1.05;">Pending location review</div>` : ""}
           ${descriptorMarkup ? `<div style="display:flex;flex-wrap:wrap;gap:6px;">${descriptorMarkup}</div>` : ""}
         </div>
         <div style="margin-top:9px;display:grid;grid-template-columns:minmax(0,1fr);gap:6px;">
@@ -2233,13 +3057,13 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         <button type="button" data-popup-action="open-schematic" style="display:block;margin-top:8px;width:calc(100% - 6px);margin-right:auto;box-sizing:border-box;border:none;border-radius:10px;background:linear-gradient(135deg,#22d3ee,#0ea5e9);padding:8px 10px;color:#082f49;font-size:9px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;cursor:pointer;box-shadow:0 10px 24px rgba(14,165,233,0.2);line-height:1.05;">
           View Schematic
         </button>
-        ${canManageSelections ? `<button type="button" data-popup-action="move-hole" style="display:block;margin-top:6px;width:calc(100% - 6px);margin-right:auto;box-sizing:border-box;border:1px solid rgba(249,115,22,0.3);border-radius:10px;background:rgba(249,115,22,0.14);padding:8px 10px;color:#fed7aa;font-size:9px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;cursor:pointer;line-height:1.05;">Move</button>` : ""}
       </div>
     `;
   };
 
   const renderAssetPopupHtml = (asset) => {
     if (!asset) return "";
+    const pendingProposal = pendingProposalByEntity.get(getMapProposalEntityKey("asset", asset.id)) || null;
 
     return `
       <div style="width:232px;padding:14px 14px 14px 8px;color:#e2e8f0;font-family:Arial,Helvetica,sans-serif;box-sizing:border-box;">
@@ -2250,6 +3074,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
           <div style="display:inline-flex;align-self:flex-start;max-width:100%;border:1px solid rgba(34,211,238,0.28);background:rgba(34,211,238,0.12);color:#a5f3fc;border-radius:999px;padding:5px 9px;font-size:10px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;line-height:1.1;">
             ${asset.status || "Unknown"}
           </div>
+          ${pendingProposal ? `<div style="display:inline-flex;align-self:flex-start;max-width:100%;border:1px solid rgba(250,204,21,0.28);background:rgba(250,204,21,0.12);color:#fde68a;border-radius:999px;padding:5px 9px;font-size:10px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;line-height:1.1;">Pending location review</div>` : ""}
         </div>
         <div style="margin-top:12px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px;">
           <div style="width:calc(100% - 8px);margin-right:auto;border:1px solid rgba(148,163,184,0.18);background:rgba(15,23,42,0.5);border-radius:14px;padding:9px 11px;box-sizing:border-box;">
@@ -2257,7 +3082,6 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
             <div style="margin-top:5px;font-size:14px;font-weight:700;color:#f8fafc;">${asset.asset_type_name || "-"}</div>
           </div>
         </div>
-        ${canManageSelections ? `<button type="button" data-popup-action="move-asset" style="display:block;margin-top:10px;width:calc(100% - 8px);margin-right:auto;box-sizing:border-box;border:1px solid rgba(249,115,22,0.3);border-radius:10px;background:rgba(249,115,22,0.14);padding:8px 10px;color:#fed7aa;font-size:10px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;cursor:pointer;line-height:1.05;">Move</button>` : ""}
       </div>
     `;
   };
@@ -2302,15 +3126,6 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         void openSchematicModal(hole);
       }, { once: true });
     }
-
-    const moveButton = popupRef.current.getElement()?.querySelector('[data-popup-action="move-hole"]');
-    if (moveButton) {
-      moveButton.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        requestMoveSelection("hole", hole);
-      }, { once: true });
-    }
   };
 
   const focusAsset = (asset, options = {}) => {
@@ -2337,15 +3152,6 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
 
     popupRef.current.setLngLat([lng, lat]).setHTML(renderAssetPopupHtml(asset)).addTo(map);
     applyPopupViewportLayout(popupRef.current);
-
-    const moveButton = popupRef.current.getElement()?.querySelector('[data-popup-action="move-asset"]');
-    if (moveButton) {
-      moveButton.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        requestMoveSelection("asset", asset);
-      }, { once: true });
-    }
   };
 
   useEffect(() => {
@@ -2373,6 +3179,12 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
       map.getSource(CREATE_POINT_SOURCE_ID).setData(createPointCollection);
     } else {
       map.addSource(CREATE_POINT_SOURCE_ID, { type: "geojson", data: createPointCollection });
+    }
+
+    if (map.getSource(LOCATION_PROPOSALS_SOURCE_ID)) {
+      map.getSource(LOCATION_PROPOSALS_SOURCE_ID).setData(locationProposalCollection);
+    } else {
+      map.addSource(LOCATION_PROPOSALS_SOURCE_ID, { type: "geojson", data: locationProposalCollection });
     }
 
     if (!map.getLayer(HOLES_GLOW_LAYER_ID)) {
@@ -2519,6 +3331,80 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
       });
     }
 
+    if (!map.getLayer(LOCATION_PROPOSALS_LINE_LAYER_ID)) {
+      map.addLayer({
+        id: LOCATION_PROPOSALS_LINE_LAYER_ID,
+        type: "line",
+        source: LOCATION_PROPOSALS_SOURCE_ID,
+        filter: ["==", ["geometry-type"], "LineString"],
+        layout: {
+          "line-cap": "round",
+          "line-join": "round",
+        },
+        paint: {
+          "line-color": ["get", "color"],
+          "line-width": 2.5,
+          "line-opacity": 0.88,
+          "line-dasharray": [2, 2],
+        },
+      });
+    }
+
+    if (!map.getLayer(LOCATION_PROPOSALS_ARROW_LAYER_ID)) {
+      map.addLayer({
+        id: LOCATION_PROPOSALS_ARROW_LAYER_ID,
+        type: "symbol",
+        source: LOCATION_PROPOSALS_SOURCE_ID,
+        filter: ["==", ["geometry-type"], "LineString"],
+        layout: {
+          "symbol-placement": "line",
+          "symbol-spacing": 80,
+          "text-field": ">",
+          "text-size": 13,
+          "text-keep-upright": false,
+          "text-rotation-alignment": "map",
+          "text-allow-overlap": true,
+        },
+        paint: {
+          "text-color": ["get", "color"],
+          "text-halo-color": "rgba(2,6,23,0.95)",
+          "text-halo-width": 1,
+        },
+      });
+    }
+
+    if (!map.getLayer(LOCATION_PROPOSALS_POINT_RING_LAYER_ID)) {
+      map.addLayer({
+        id: LOCATION_PROPOSALS_POINT_RING_LAYER_ID,
+        type: "circle",
+        source: LOCATION_PROPOSALS_SOURCE_ID,
+        filter: ["==", ["geometry-type"], "Point"],
+        paint: {
+          "circle-radius": 13,
+          "circle-color": ["get", "color"],
+          "circle-opacity": 0.16,
+          "circle-stroke-color": ["get", "color"],
+          "circle-stroke-width": 1.6,
+        },
+      });
+    }
+
+    if (!map.getLayer(LOCATION_PROPOSALS_POINT_LAYER_ID)) {
+      map.addLayer({
+        id: LOCATION_PROPOSALS_POINT_LAYER_ID,
+        type: "circle",
+        source: LOCATION_PROPOSALS_SOURCE_ID,
+        filter: ["==", ["geometry-type"], "Point"],
+        paint: {
+          "circle-radius": 6,
+          "circle-color": ["get", "color"],
+          "circle-stroke-color": "#f8fafc",
+          "circle-stroke-width": 2,
+          "circle-opacity": 0.98,
+        },
+      });
+    }
+
     map.setFilter(HOLES_SELECTED_LAYER_ID, ["==", ["get", "id"], selectedHoleMapId]);
     map.setFilter(ASSETS_SELECTED_LAYER_ID, ["==", ["get", "id"], selectedAssetMapId]);
 
@@ -2527,7 +3413,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         map.getCanvas().style.cursor = "pointer";
       };
       const clearPointerCursor = () => {
-        map.getCanvas().style.cursor = createPlacementActiveRef.current || !!moveSelectionRef.current ? "crosshair" : "";
+        map.getCanvas().style.cursor = createPlacementActiveRef.current || !!moveSelectionRef.current || !!proposalPlacementSelectionRef.current ? "crosshair" : "";
       };
       const handleHoleLayerClick = (event) => {
         const feature = event.features?.[0];
@@ -2544,7 +3430,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         focusAsset(asset);
       };
       const handleMapCreateClick = (event) => {
-        if (!createPlacementActiveRef.current && !moveSelectionRef.current) return;
+        if (!createPlacementActiveRef.current && !moveSelectionRef.current && !proposalPlacementSelectionRef.current) return;
 
         const overlappingFeatures = map.queryRenderedFeatures(event.point, {
           layers: [HOLES_CIRCLE_LAYER_ID, HOLES_SELECTED_LAYER_ID, ASSETS_CIRCLE_LAYER_ID, ASSETS_SELECTED_LAYER_ID],
@@ -2567,13 +3453,14 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   .update({
                     collar_longitude: Number(nextLongitude),
                     collar_latitude: Number(nextLatitude),
-                    collar_source: "map_picked",
+                    collar_source: DEFAULT_HOLE_COLLAR_SOURCE,
                   })
                   .eq("id", moveSelectionRef.current.entityId)
                   .eq("organization_id", orgId);
 
                 if (updateError) throw updateError;
 
+                markViewportForPreserve(preserveViewportAfterRefreshRef);
                 const { holes: freshHoles } = await loadData();
                 const movedHole = freshHoles.find((hole) => hole.id === moveSelectionRef.current.entityId) || null;
                 setMoveSelection(null);
@@ -2592,6 +3479,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
 
                 if (updateError) throw updateError;
 
+                markViewportForPreserve(preserveViewportAfterRefreshRef);
                 const { assets: freshAssets } = await loadData();
                 const movedAsset = freshAssets.find((asset) => asset.id === moveSelectionRef.current.entityId) || null;
                 setMoveSelection(null);
@@ -2607,12 +3495,33 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
           return;
         }
 
+        if (proposalPlacementSelectionRef.current) {
+          const selection = proposalPlacementSelectionRef.current;
+          const entity = selection.entity;
+          const currentLongitude = selection.entityType === "hole" ? entity?.collar_longitude : entity?.longitude;
+          const currentLatitude = selection.entityType === "hole" ? entity?.collar_latitude : entity?.latitude;
+
+          setProposalPlacementSelection(null);
+          setProposalDraft({
+            proposalId: selection.proposalId || null,
+            entityType: selection.entityType,
+            entityId: selection.entityId,
+            label: selection.label,
+            currentLongitude,
+            currentLatitude,
+            proposedLongitude: nextLongitude,
+            proposedLatitude: nextLatitude,
+            note: selection.note || "",
+          });
+          return;
+        }
+
         if (createEntityTypeRef.current === "hole") {
           setHoleDraft((current) => ({
             ...current,
             longitude: nextLongitude,
             latitude: nextLatitude,
-            collar_source: "map_picked",
+            collar_source: normalizeHoleCollarSource(current.collar_source),
           }));
         } else {
           setAssetDraft((current) => ({
@@ -2655,7 +3564,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
       if (popupRef.current) popupRef.current.remove();
       return;
     }
-  }, [assetCollection, createPointCollection, holeCollection, mapStatus, selectedAssetMapId, selectedHoleMapId, visibleAssets.length, visibleHoles.length]);
+  }, [assetCollection, createPointCollection, holeCollection, locationProposalCollection, mapStatus, selectedAssetMapId, selectedHoleMapId, visibleAssets.length, visibleHoles.length]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -2684,8 +3593,8 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     const map = mapRef.current;
     if (!map || !mapReadyRef.current) return;
 
-    map.getCanvas().style.cursor = createPlacementActive || !!moveSelection ? "crosshair" : "";
-  }, [createPlacementActive, moveSelection]);
+      map.getCanvas().style.cursor = createPlacementActive || !!moveSelection || !!proposalPlacementSelection ? "crosshair" : "";
+    }, [createPlacementActive, moveSelection, proposalPlacementSelection]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -2694,11 +3603,16 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
 
     if (pendingMapRestoreRef.current || applyingMapRestoreRef.current) return;
 
+    if (preserveViewportAfterRefreshRef.current) {
+      preserveViewportAfterRefreshRef.current = false;
+      return;
+    }
+
     const visibleMapRows = isMobileViewport ? (mobilePanelTab === "assets" ? visibleAssets : visibleHoles) : [...visibleHoles, ...visibleAssets];
 
     if (!visibleMapRows.length) {
       if (popupRef.current) popupRef.current.remove();
-      map.flyTo({ center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM });
+      map.flyTo({ center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM, pitch: DEFAULT_PITCH, bearing: DEFAULT_BEARING });
       return;
     }
 
@@ -2843,7 +3757,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         state: holeDraft.state || "proposed",
         collar_longitude: longitude,
         collar_latitude: latitude,
-        collar_source: holeDraft.collar_source || "map_picked",
+        collar_source: normalizeHoleCollarSource(holeDraft.collar_source),
       })
       .select("id,organization_id,hole_id,project_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_easting,collar_northing,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state")
       .single();
@@ -2861,6 +3775,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
       descriptor_ids: [],
     };
 
+    markViewportForPreserve(preserveViewportAfterRefreshRef);
     await loadData();
     closeCreatePanel();
     setNavigatorTab("holes");
@@ -2936,6 +3851,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
       location_name: selectedLocation.name,
     };
 
+    markViewportForPreserve(preserveViewportAfterRefreshRef);
     await loadData();
     closeCreatePanel();
     setNavigatorTab("assets");
@@ -3201,6 +4117,37 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   </div>
                 </div>
               ) : null}
+              {proposalPlacementSelection ? (
+                <div className="pointer-events-none absolute inset-x-3 top-20 z-20 flex justify-center md:inset-x-4 md:top-24">
+                  <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-cyan-300/25 bg-slate-950/88 px-4 py-2 text-xs font-medium tracking-[0.14em] text-cyan-100 shadow-[0_18px_48px_rgba(2,6,23,0.42)] backdrop-blur-xl">
+                    <span>Click a free point to propose a new location for {proposalPlacementSelection.label}</span>
+                    <button
+                      type="button"
+                      onClick={cancelProposalPlacementSelection}
+                      className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-[11px] font-semibold tracking-[0.1em] text-slate-100 transition hover:bg-white/[0.1]"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              {canManageSelections && activeMapSelection?.entity && !showCreatePanel && !createPlacementActive && !moveSelection && !proposalPlacementSelection ? (
+                <MapSelectionActionDock
+                  entityType={activeMapSelection.entityType}
+                  entity={activeMapSelection.entity}
+                  pendingProposal={activeMapSelectionPendingProposal}
+                  mobile={isMobileViewport}
+                  onMove={() => requestMoveSelection(activeMapSelection.entityType, activeMapSelection.entity)}
+                  onDuplicate={() => openDuplicateSelection(activeMapSelection.entityType, activeMapSelection.entity)}
+                  onPropose={() => requestProposalLocation(activeMapSelection.entityType, activeMapSelection.entity)}
+                  onReview={() => openProposalReview(activeMapSelection.entityType, activeMapSelection.entity)}
+                  onOpenSchematic={() => {
+                    if (activeMapSelection.entityType === "hole") {
+                      void openSchematicModal(activeMapSelection.entity);
+                    }
+                  }}
+                />
+              ) : null}
               {showCreatePanel ? (
                 <MapCreateEntityPanel
                   entityType={createEntityType}
@@ -3380,6 +4327,31 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         constructionById={schematicConstructionById}
         annulusById={schematicAnnulusById}
         onClose={closeSchematicModal}
+      />
+
+      <MapEntityDuplicateModal
+        selection={duplicateSelection}
+        saving={duplicatingEntity}
+        onClose={() => (!duplicatingEntity ? setDuplicateSelection(null) : null)}
+        onChangeName={(value) => setDuplicateSelection((current) => (current ? { ...current, newName: value } : current))}
+        onSubmit={submitDuplicateSelection}
+      />
+
+      <MapLocationProposalModal
+        draft={proposalDraft}
+        saving={savingProposalDraft}
+        onClose={() => (!savingProposalDraft ? setProposalDraft(null) : null)}
+        onChangeNote={(value) => setProposalDraft((current) => (current ? { ...current, note: value } : current))}
+        onSubmit={submitProposalDraft}
+      />
+
+      <MapLocationProposalReviewModal
+        review={proposalReview}
+        saving={savingProposalReview}
+        onClose={() => (!savingProposalReview ? setProposalReview(null) : null)}
+        onChangeReviewNote={(value) => setProposalReview((current) => (current ? { ...current, reviewNote: value } : current))}
+        onApprove={() => submitProposalReview("approved")}
+        onReject={() => submitProposalReview("rejected")}
       />
     </div>
   );
