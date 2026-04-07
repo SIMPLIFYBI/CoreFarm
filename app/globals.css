@@ -369,6 +369,133 @@ button, a {
   display: none !important;
 }
 
+.map-popup-shell {
+  width: 176px;
+  box-sizing: border-box;
+  padding: 11px 11px 10px;
+  color: rgb(var(--text));
+  font-family: inherit;
+}
+
+.map-popup-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.map-popup-copy {
+  min-width: 0;
+}
+
+.map-popup-kicker {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(186, 230, 253, 0.7);
+}
+
+.map-popup-title {
+  margin-top: 3px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: #f8fafc;
+  word-break: break-word;
+}
+
+.map-popup-subtitle {
+  margin-top: 3px;
+  font-size: 10px;
+  line-height: 1.25;
+  color: rgba(203, 213, 225, 0.76);
+  word-break: break-word;
+}
+
+.map-popup-badges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.map-popup-badge {
+  display: inline-flex;
+  max-width: 100%;
+  border-radius: 999px;
+  padding: 3px 7px;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.map-popup-badge-state {
+  border: 1px solid var(--popup-badge-border);
+  background: var(--popup-badge-bg);
+  color: var(--popup-badge-color);
+}
+
+.map-popup-badge-status {
+  border: 1px solid rgba(34, 211, 238, 0.24);
+  background: rgba(34, 211, 238, 0.1);
+  color: #a5f3fc;
+}
+
+.map-popup-badge-pending {
+  border: 1px solid rgba(250, 204, 21, 0.26);
+  background: rgba(250, 204, 21, 0.1);
+  color: #fde68a;
+}
+
+.map-popup-detail-row {
+  margin-top: 8px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.map-popup-detail-label {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.82);
+}
+
+.map-popup-detail-value {
+  font-size: 12px;
+  font-weight: 700;
+  color: #f8fafc;
+  text-align: right;
+}
+
+.map-popup-chip-row {
+  margin-top: 7px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.map-popup-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 999px;
+  padding: 3px 7px;
+  font-size: 9px;
+  font-weight: 600;
+  color: #e2e8f0;
+  line-height: 1;
+}
+
 /* Success (green) and Warning (orange) button variants for PO item states */
 .btn-success {
   background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);

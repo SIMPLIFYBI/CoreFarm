@@ -3029,34 +3029,33 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     const stateTone = getHoleStateTone(hole.state);
     const pendingProposal = pendingProposalByEntity.get(getMapProposalEntityKey("hole", hole.id)) || null;
     const descriptorMarkup = (hole.descriptors || [])
-      .slice(0, 3)
+      .slice(0, 2)
       .map(
         (descriptor) =>
-          `<span style="display:inline-flex;align-items:center;border:1px solid rgba(34,211,238,0.18);background:rgba(34,211,238,0.1);border-radius:999px;padding:4px 7px;font-size:9px;font-weight:700;color:#cffafe;line-height:1.05;">${descriptor.name}</span>`
+          `<span class="map-popup-chip">${descriptor.name}</span>`
       )
       .join("");
 
     return `
-      <div style="width:188px;padding:10px 10px 10px 6px;color:#e2e8f0;font-family:Arial,Helvetica,sans-serif;box-sizing:border-box;">
-        <div style="display:flex;flex-direction:column;gap:6px;min-width:0;">
-          <div style="font-size:9px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:rgba(186,230,253,0.78);">Hole</div>
-          <div style="font-size:13px;font-weight:700;line-height:1.15;color:#f8fafc;word-break:break-word;">${hole.hole_id || "Unnamed hole"}</div>
-          <div style="font-size:10px;line-height:1.3;color:rgba(226,232,240,0.78);word-break:break-word;">${hole.project_name || "No project"}</div>
-          <div style="display:inline-flex;align-self:flex-start;max-width:100%;border:1px solid ${stateTone.border};background:${stateTone.background};color:${stateTone.text};border-radius:999px;padding:4px 7px;font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;line-height:1.05;">
-            ${stateTone.label}
+      <div class="map-popup-shell">
+        <div class="map-popup-header">
+          <div class="map-popup-copy">
+            <div class="map-popup-kicker">Hole</div>
+            <div class="map-popup-title">${hole.hole_id || "Unnamed hole"}</div>
+            <div class="map-popup-subtitle">${hole.project_name || "No project"}</div>
           </div>
-          ${pendingProposal ? `<div style="display:inline-flex;align-self:flex-start;max-width:100%;border:1px solid rgba(250,204,21,0.28);background:rgba(250,204,21,0.12);color:#fde68a;border-radius:999px;padding:4px 7px;font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;line-height:1.05;">Pending location review</div>` : ""}
-          ${descriptorMarkup ? `<div style="display:flex;flex-wrap:wrap;gap:6px;">${descriptorMarkup}</div>` : ""}
-        </div>
-        <div style="margin-top:9px;display:grid;grid-template-columns:minmax(0,1fr);gap:6px;">
-          <div style="width:calc(100% - 6px);margin-right:auto;border:1px solid rgba(148,163,184,0.18);background:rgba(15,23,42,0.5);border-radius:12px;padding:7px 9px;box-sizing:border-box;">
-            <div style="font-size:9px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:rgba(148,163,184,0.84);">Planned Depth</div>
-            <div style="margin-top:4px;font-size:12px;font-weight:700;color:#f8fafc;">${formatValue(hole.planned_depth, " m")}</div>
+          <div class="map-popup-badges">
+            <span class="map-popup-badge map-popup-badge-state" style="--popup-badge-border:${stateTone.border};--popup-badge-bg:${stateTone.background};--popup-badge-color:${stateTone.text};">
+              ${stateTone.label}
+            </span>
+            ${pendingProposal ? `<span class="map-popup-badge map-popup-badge-pending">Pending</span>` : ""}
           </div>
         </div>
-        <button type="button" data-popup-action="open-schematic" style="display:block;margin-top:8px;width:calc(100% - 6px);margin-right:auto;box-sizing:border-box;border:none;border-radius:10px;background:linear-gradient(135deg,#22d3ee,#0ea5e9);padding:8px 10px;color:#082f49;font-size:9px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;cursor:pointer;box-shadow:0 10px 24px rgba(14,165,233,0.2);line-height:1.05;">
-          View Schematic
-        </button>
+        <div class="map-popup-detail-row">
+          <span class="map-popup-detail-label">Planned Depth</span>
+          <span class="map-popup-detail-value">${formatValue(hole.planned_depth, " m")}</span>
+        </div>
+        ${descriptorMarkup ? `<div class="map-popup-chip-row">${descriptorMarkup}</div>` : ""}
       </div>
     `;
   };
@@ -3066,21 +3065,23 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     const pendingProposal = pendingProposalByEntity.get(getMapProposalEntityKey("asset", asset.id)) || null;
 
     return `
-      <div style="width:232px;padding:14px 14px 14px 8px;color:#e2e8f0;font-family:Arial,Helvetica,sans-serif;box-sizing:border-box;">
-        <div style="display:flex;flex-direction:column;gap:8px;min-width:0;">
-          <div style="font-size:10px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:rgba(186,230,253,0.78);">Asset</div>
-          <div style="font-size:15px;font-weight:700;line-height:1.2;color:#f8fafc;word-break:break-word;">${asset.name || "Unnamed asset"}</div>
-          <div style="font-size:11px;line-height:1.35;color:rgba(226,232,240,0.78);word-break:break-word;">${asset.project_name || "No project"}</div>
-          <div style="display:inline-flex;align-self:flex-start;max-width:100%;border:1px solid rgba(34,211,238,0.28);background:rgba(34,211,238,0.12);color:#a5f3fc;border-radius:999px;padding:5px 9px;font-size:10px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;line-height:1.1;">
-            ${asset.status || "Unknown"}
+      <div class="map-popup-shell">
+        <div class="map-popup-header">
+          <div class="map-popup-copy">
+            <div class="map-popup-kicker">Asset</div>
+            <div class="map-popup-title">${asset.name || "Unnamed asset"}</div>
+            <div class="map-popup-subtitle">${asset.project_name || "No project"}</div>
           </div>
-          ${pendingProposal ? `<div style="display:inline-flex;align-self:flex-start;max-width:100%;border:1px solid rgba(250,204,21,0.28);background:rgba(250,204,21,0.12);color:#fde68a;border-radius:999px;padding:5px 9px;font-size:10px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;line-height:1.1;">Pending location review</div>` : ""}
+          <div class="map-popup-badges">
+            <span class="map-popup-badge map-popup-badge-status">
+              ${asset.status || "Unknown"}
+            </span>
+            ${pendingProposal ? `<span class="map-popup-badge map-popup-badge-pending">Pending</span>` : ""}
+          </div>
         </div>
-        <div style="margin-top:12px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px;">
-          <div style="width:calc(100% - 8px);margin-right:auto;border:1px solid rgba(148,163,184,0.18);background:rgba(15,23,42,0.5);border-radius:14px;padding:9px 11px;box-sizing:border-box;">
-            <div style="font-size:10px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:rgba(148,163,184,0.84);">Type</div>
-            <div style="margin-top:5px;font-size:14px;font-weight:700;color:#f8fafc;">${asset.asset_type_name || "-"}</div>
-          </div>
+        <div class="map-popup-detail-row">
+          <span class="map-popup-detail-label">Type</span>
+          <span class="map-popup-detail-value">${asset.asset_type_name || "-"}</span>
         </div>
       </div>
     `;
@@ -3117,15 +3118,6 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
 
     popupRef.current.setLngLat([lng, lat]).setHTML(renderPopupHtml(hole)).addTo(map);
     applyPopupViewportLayout(popupRef.current);
-
-    const schematicButton = popupRef.current.getElement()?.querySelector('[data-popup-action="open-schematic"]');
-    if (schematicButton) {
-      schematicButton.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        void openSchematicModal(hole);
-      }, { once: true });
-    }
   };
 
   const focusAsset = (asset, options = {}) => {
