@@ -192,6 +192,50 @@ function DescriptorMultiSelect({ options, value, onChange, disabled = false, emp
   );
 }
 
+function MobileFiltersDrawer({ open, onClose, children }) {
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, open]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[88] flex items-end justify-center bg-slate-950/54 backdrop-blur-sm md:hidden" onClick={onClose}>
+      <div
+        className="max-h-[82vh] w-full overflow-hidden rounded-t-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))] shadow-[0_-28px_90px_rgba(2,6,23,0.48)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex justify-center pt-3">
+          <div className="h-1.5 w-16 rounded-full bg-white/12" />
+        </div>
+        <div className="border-b border-white/10 px-4 pb-4 pt-3">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Core Workbench</div>
+              <div className="mt-1 text-lg font-semibold text-white">Filters</div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1]"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+        <div className="overflow-y-auto p-4">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function HoleDetailsTab({ projectScope = "own" }) {
   const router = useRouter();
   const supabase = supabaseBrowser();
@@ -262,6 +306,15 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
       document.body.style.overflow = previousOverflow;
     };
   }, [portalMounted, selectedHole]);
+
+  useEffect(() => {
+    if (!portalMounted || !showMobileFilters) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [portalMounted, showMobileFilters]);
 
   useEffect(() => {
     let active = true;
@@ -1303,6 +1356,94 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
     router.push(`/drillhole-viz?${params.toString()}`);
   };
 
+  const filtersPanelContent = (
+    <>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_repeat(4,minmax(0,0.8fr))_auto] xl:items-end">
+        <label className="flex min-w-[220px] flex-col gap-1.5 text-sm text-slate-200">
+          Search holes
+          <input
+            className="input h-11"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Hole ID, project, contractor..."
+          />
+        </label>
+
+        <label className="flex flex-col gap-1.5 text-sm text-slate-200">
+          Project
+          <select className="select-gradient-sm h-11" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
+            <option value="">All projects</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1.5 text-sm text-slate-200">
+          State
+          <select className="select-gradient-sm h-11" value={stateFilter} onChange={(event) => setStateFilter(event.target.value)}>
+            <option value="">All states</option>
+            {STATE_OPTIONS.map((state) => (
+              <option key={state} value={state}>
+                {humanizeLabel(state)}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1.5 text-sm text-slate-200">
+          Diameter
+          <select className="select-gradient-sm h-11" value={diameterFilter} onChange={(event) => setDiameterFilter(event.target.value)}>
+            <option value="">All diameters</option>
+            {DIAMETER_OPTIONS.filter(Boolean).map((diameter) => (
+              <option key={diameter} value={diameter}>
+                {diameter}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1.5 text-sm text-slate-200">
+          Descriptor
+          <select className="select-gradient-sm h-11" value={descriptorFilter} onChange={(event) => setDescriptorFilter(event.target.value)}>
+            <option value="">All descriptors</option>
+            {descriptorFilterOptions.map((descriptor) => (
+              <option key={descriptor.id} value={descriptor.id}>
+                {descriptor.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <button
+          type="button"
+          className="btn btn-3d-glass h-11 px-5"
+          onClick={() => {
+            setSearch("");
+            setProjectFilter("");
+            setStateFilter("");
+            setDiameterFilter("");
+            setDescriptorFilter("");
+            setShowMobileFilters(false);
+          }}
+        >
+          Clear
+        </button>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+        <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
+          Showing {filteredHoles.length} of {holes.length} hole{holes.length === 1 ? "" : "s"}
+        </span>
+        <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
+          {groupedFilteredHoles.length} project group{groupedFilteredHoles.length === 1 ? "" : "s"} in accordion view
+        </span>
+      </div>
+    </>
+  );
+
   return (
     <div className="p-4 md:p-5 space-y-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
@@ -1341,98 +1482,22 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
         <button
           type="button"
           className={["btn w-full justify-between px-4", showMobileFilters || activeFilterCount > 0 ? "btn-3d-glass" : ""].join(" ")}
-          onClick={() => setShowMobileFilters((current) => !current)}
+          onClick={() => setShowMobileFilters(true)}
         >
           <span>Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}</span>
-          <span className="text-xs text-slate-300">{showMobileFilters ? "Hide" : "Show"}</span>
+          <span className="text-xs text-slate-300">Open</span>
         </button>
       </div>
 
-      <section className={["rounded-[30px] border border-white/10 bg-slate-950/50 p-4 shadow-[0_24px_80px_rgba(2,6,23,0.35)] md:p-5", showMobileFilters ? "block" : "hidden md:block"].join(" ")}>
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_repeat(4,minmax(0,0.8fr))_auto] xl:items-end">
-          <label className="flex min-w-[220px] flex-col gap-1.5 text-sm text-slate-200">
-            Search holes
-            <input
-              className="input h-11"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Hole ID, project, contractor..."
-            />
-          </label>
-
-          <label className="flex flex-col gap-1.5 text-sm text-slate-200">
-            Project
-            <select className="select-gradient-sm h-11" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
-              <option value="">All projects</option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex flex-col gap-1.5 text-sm text-slate-200">
-            State
-            <select className="select-gradient-sm h-11" value={stateFilter} onChange={(event) => setStateFilter(event.target.value)}>
-              <option value="">All states</option>
-              {STATE_OPTIONS.map((state) => (
-                <option key={state} value={state}>
-                  {humanizeLabel(state)}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex flex-col gap-1.5 text-sm text-slate-200">
-            Diameter
-            <select className="select-gradient-sm h-11" value={diameterFilter} onChange={(event) => setDiameterFilter(event.target.value)}>
-              <option value="">All diameters</option>
-              {DIAMETER_OPTIONS.filter(Boolean).map((diameter) => (
-                <option key={diameter} value={diameter}>
-                  {diameter}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex flex-col gap-1.5 text-sm text-slate-200">
-            Descriptor
-            <select className="select-gradient-sm h-11" value={descriptorFilter} onChange={(event) => setDescriptorFilter(event.target.value)}>
-              <option value="">All descriptors</option>
-              {descriptorFilterOptions.map((descriptor) => (
-                <option key={descriptor.id} value={descriptor.id}>
-                  {descriptor.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <button
-            type="button"
-            className="btn btn-3d-glass h-11 px-5"
-            onClick={() => {
-              setSearch("");
-              setProjectFilter("");
-              setStateFilter("");
-              setDiameterFilter("");
-              setDescriptorFilter("");
-              setShowMobileFilters(false);
-            }}
-          >
-            Clear
-          </button>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-          <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
-            Showing {filteredHoles.length} of {holes.length} hole{holes.length === 1 ? "" : "s"}
-          </span>
-          <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
-            {groupedFilteredHoles.length} project group{groupedFilteredHoles.length === 1 ? "" : "s"} in accordion view
-          </span>
-        </div>
+      <section className="hidden rounded-[30px] border border-white/10 bg-slate-950/50 p-4 shadow-[0_24px_80px_rgba(2,6,23,0.35)] md:block md:p-5">
+        {filtersPanelContent}
       </section>
+
+      {renderOverlay(
+        <MobileFiltersDrawer open={showMobileFilters} onClose={() => setShowMobileFilters(false)}>
+          {filtersPanelContent}
+        </MobileFiltersDrawer>
+      )}
 
       {loading ? (
         <div className="rounded-[30px] border border-white/10 bg-slate-950/40 px-4 py-8 text-center text-slate-300 shadow-[0_24px_80px_rgba(2,6,23,0.28)]">
