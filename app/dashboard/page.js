@@ -351,7 +351,7 @@ export default function UserDashboardPage() {
 						</div>
 					</div>
 
-					{loading && <div className="mt-4 text-sm text-slate-400">Loadingâ€¦</div>}
+					{loading && <div className="mt-4 text-sm text-slate-400">Loading...</div>}
 					{!loading && byType.length === 0 && <div className="mt-4 text-sm text-slate-400">No data in the selected range.</div>}
 				</>
 			)}
@@ -360,7 +360,7 @@ export default function UserDashboardPage() {
 				<div className="card p-4">
 					<div className="text-sm font-medium mb-2 text-slate-100">My Logging Activity</div>
 					{activityLoading ? (
-						<div className="text-sm text-slate-400">Loadingâ€¦</div>
+						<div className="text-sm text-slate-400">Loading...</div>
 					) : activityRows.length === 0 ? (
 						<div className="text-sm text-slate-400">No logging activity found.</div>
 					) : (
@@ -380,7 +380,7 @@ export default function UserDashboardPage() {
 										<tr key={row.id} className="border-t border-slate-800/80 hover:bg-slate-800/70">
 											<td className="p-1 border border-slate-800/80">{row.holes?.hole_id || row.hole_id}</td>
 											<td className="p-1 border border-slate-800/80">{taskLabelMap[row.task_type] || shortLabelForTask(row.task_type)}</td>
-											<td className="p-1 border border-slate-800/80">{row.from_m}â€“{row.to_m}</td>
+											<td className="p-1 border border-slate-800/80">{row.from_m} - {row.to_m}</td>
 											<td className="p-1 border border-slate-800/80">{row.logged_on}</td>
 											<td className="p-1 border border-slate-800/80 whitespace-nowrap">
 												{editRowId === row.id ? (
@@ -468,7 +468,7 @@ export default function UserDashboardPage() {
 						<div className="card p-4">
 							<div className="text-sm font-medium mb-2 text-slate-100">Low / Reorder Inventory</div>
 							{consumableLoading ? (
-								<div className="text-xs text-slate-400">Loadingâ€¦</div>
+								<div className="text-xs text-slate-400">Loading...</div>
 							) : consumableItems.length === 0 ? (
 								<div className="text-xs text-slate-400">No items currently Low or at Reorder threshold.</div>
 							) : (

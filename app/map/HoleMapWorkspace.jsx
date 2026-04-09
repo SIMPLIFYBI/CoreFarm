@@ -225,29 +225,19 @@ function FilterSelect({ label, value, onChange, emptyLabel, options, optionValue
 function HoleStateLegend() {
   return (
     <div className="rounded-2xl border border-white/10 bg-slate-950/72 px-2.5 py-2 shadow-[0_14px_40px_rgba(2,6,23,0.35)] backdrop-blur-xl">
-      <div className="space-y-2.5">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            {HOLE_STATE_STYLES.map((item) => (
-              <div key={item.value} className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-slate-200">
-                <span className="h-2 w-2 rounded-full ring-2 ring-slate-950/70" style={{ backgroundColor: item.color }} />
-                <span>{item.label}</span>
-              </div>
-            ))}
+      <div className="flex flex-col items-stretch gap-2 whitespace-nowrap">
+        {HOLE_STATE_STYLES.map((item) => (
+          <div key={item.value} className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-slate-200">
+            <span className="h-2 w-2 rounded-full ring-2 ring-slate-950/70" style={{ backgroundColor: item.color }} />
+            <span>{item.label}</span>
           </div>
-        </div>
-
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Assets</div>
-          <div className="mt-1.5 flex flex-wrap items-center gap-2">
-            {ASSET_STATUS_STYLES.map((item) => (
-              <div key={item.value} className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-slate-200">
-                <span className="h-2 w-2 rounded-full ring-2 ring-slate-950/70" style={{ backgroundColor: item.color }} />
-                <span>{item.label}</span>
-              </div>
-            ))}
+        ))}
+        {ASSET_STATUS_STYLES.map((item) => (
+          <div key={item.value} className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-slate-200">
+            <span className="h-2 w-2 rounded-full ring-2 ring-slate-950/70" style={{ backgroundColor: item.color }} />
+            <span>{item.label}</span>
           </div>
-        </div>
+        ))}
       </div>
     </div>
   );
@@ -1441,6 +1431,62 @@ function FilterIcon(props) {
   );
 }
 
+function AttributesIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path d="M7 6.5h10M7 12h10M7 17.5h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="4.5" cy="6.5" r="1" fill="currentColor" />
+      <circle cx="4.5" cy="12" r="1" fill="currentColor" />
+      <circle cx="4.5" cy="17.5" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
+function AttributesDrawer({ open, onClose, title, subtitle, children }) {
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, open]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[88] flex items-end justify-center bg-slate-950/54 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="max-h-[82vh] w-full max-w-[1180px] overflow-hidden rounded-t-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))] shadow-[0_-28px_90px_rgba(2,6,23,0.48)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex justify-center pt-3">
+          <div className="h-1.5 w-16 rounded-full bg-white/12" />
+        </div>
+        <div className="border-b border-white/10 px-4 pb-4 pt-3 md:px-5">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Attributes</div>
+              <div className="mt-1 text-lg font-semibold text-white">{title}</div>
+              <div className="mt-1 text-sm text-slate-300">{subtitle}</div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1]"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+        <div className="overflow-y-auto p-0">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 function AdvancedFilterPanel({
   filters,
   activeFilterCount,
@@ -1956,6 +2002,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [isMapFullscreen, setIsMapFullscreen] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
+  const [showAttributesDrawer, setShowAttributesDrawer] = useState(false);
   const [createPlacementActive, setCreatePlacementActive] = useState(false);
   const [showCreatePanel, setShowCreatePanel] = useState(false);
   const [createEntityType, setCreateEntityType] = useState("hole");
@@ -4213,6 +4260,18 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     ? selectedHole?.hole_id || "Hole attributes"
     : selectedAsset?.name || "Mapped assets";
 
+  const attributesTab = isMobileViewport ? mobilePanelTab : navigatorTab;
+  const attributesTitle = attributesTab === "holes"
+    ? selectedHole?.hole_id || "Hole attributes"
+    : selectedAsset?.name || "Asset attributes";
+  const attributesSubtitle = attributesTab === "holes"
+    ? selectedHole
+      ? `Inspecting ${selectedHole.hole_id}`
+      : "Click a hole on the map or in the project list."
+    : selectedAsset
+      ? `Inspecting ${selectedAsset.name}`
+      : "Click an asset on the map or in the assets list.";
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-transparent px-3 pb-24 pt-0 md:px-5 md:pb-8 md:pt-0">
       <div className="mx-auto max-w-[1600px] space-y-4 overflow-x-hidden">
@@ -4394,19 +4453,33 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                     <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Mobile Map View</div>
                     <div className="mt-1 text-lg font-semibold text-white">{mobileSelectionTitle}</div>
                   </div>
+                  <button
+                    type="button"
+                    className="inline-flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1]"
+                    onClick={() => setShowAttributesDrawer(true)}
+                  >
+                    <AttributesIcon className="h-[18px] w-[18px]" />
+                    <span>Attributes</span>
+                  </button>
                 </div>
                 <div className="mt-4 grid w-full grid-cols-2 gap-2 rounded-2xl bg-white/[0.04] p-1.5">
                   <button
                     type="button"
                     className={`min-w-0 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "holes" ? "bg-amber-300 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
-                    onClick={() => setMobilePanelTab("holes")}
+                    onClick={() => {
+                      setMobilePanelTab("holes");
+                      setNavigatorTab("holes");
+                    }}
                   >
                     Holes
                   </button>
                   <button
                     type="button"
                     className={`min-w-0 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "assets" ? "bg-rose-300 text-slate-950 shadow-[0_12px_28px_rgba(244,114,182,0.22)]" : "text-slate-200 hover:bg-white/8"}`}
-                    onClick={() => setMobilePanelTab("assets")}
+                    onClick={() => {
+                      setMobilePanelTab("assets");
+                      setNavigatorTab("assets");
+                    }}
                   >
                     Assets
                   </button>
@@ -4418,6 +4491,14 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   <div className="mt-1 text-lg font-semibold text-white">Hole collars and mapped assets</div>
                 </div>
                 <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-slate-300">
+                  <button
+                    type="button"
+                    className="inline-flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1]"
+                    onClick={() => setShowAttributesDrawer(true)}
+                  >
+                    <AttributesIcon className="h-[18px] w-[18px]" />
+                    <span>Attributes</span>
+                  </button>
                   <button
                     type="button"
                     aria-label={isMapFullscreen ? "Exit full screen map" : "Open full screen map"}
@@ -4449,8 +4530,8 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   ) : null}
                 </div>
               </div>
-              <div className="pointer-events-none absolute bottom-3 left-3 z-20 md:bottom-4 md:left-4">
-                <div className="pointer-events-auto flex flex-col items-start gap-2">
+              <div className="pointer-events-none absolute bottom-3 right-3 z-20 md:bottom-4 md:right-4">
+                <div className="pointer-events-auto flex flex-col items-end gap-2">
                   {showLegend ? <HoleStateLegend /> : null}
                   <button
                     type="button"
@@ -4647,13 +4728,14 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
               </div>
 
               {mobilePanelTab === "holes" ? (
-                <HoleAttributesPanel
-                  selectedHole={selectedHole}
-                  canManage={canManageSelections}
-                  onEdit={openHoleEditor}
-                  onDelete={deleteSelectedHole}
-                  deleting={deletingAdminAction && navigatorTab === "holes"}
-                  mobile
+                <ProjectAccordionList
+                  loading={loading}
+                  projects={filteredProjects}
+                  expandedProjects={expandedProjects}
+                  onToggleProject={toggleProjectExpanded}
+                  selectedHoleId={selectedHole?.id || ""}
+                  onSelectHole={focusHole}
+                  compact
                 />
               ) : mobilePanelTab === "assets" ? (
                 <AssetAccordionList
@@ -4668,46 +4750,36 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
               ) : null}
             </div>
 
-            <div className="hidden overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/55 shadow-[0_24px_80px_rgba(2,6,23,0.32)] backdrop-blur-xl xl:block">
-              <div className="border-b border-white/10 px-4 py-4 md:px-5">
-                <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-                  <div>
-                    <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">{navigatorTab === "holes" ? "Selected Hole" : "Selected Asset"}</div>
-                    <div className="mt-1 text-lg font-semibold text-white">Attributes</div>
-                  </div>
-                  <div className="text-sm text-slate-300">
-                    {navigatorTab === "holes"
-                      ? selectedHole
-                        ? `Inspecting ${selectedHole.hole_id}`
-                        : "Click a hole on the map or in the project list."
-                      : selectedAsset
-                        ? `Inspecting ${selectedAsset.name}`
-                        : "Click an asset on the map or in the assets list."}
-                  </div>
-                </div>
-              </div>
-
-              {navigatorTab === "holes" ? (
-                <HoleAttributesPanel
-                  selectedHole={selectedHole}
-                  canManage={canManageSelections}
-                  onEdit={openHoleEditor}
-                  onDelete={deleteSelectedHole}
-                  deleting={deletingAdminAction && navigatorTab === "holes"}
-                />
-              ) : (
-                <AssetAttributesPanel
-                  selectedAsset={selectedAsset}
-                  canManage={canManageSelections}
-                  onEdit={openAssetEditor}
-                  onDelete={deleteSelectedAsset}
-                  deleting={deletingAdminAction && navigatorTab === "assets"}
-                />
-              )}
-            </div>
           </div>
         </section>
       </div>
+
+      <AttributesDrawer
+        open={showAttributesDrawer}
+        onClose={() => setShowAttributesDrawer(false)}
+        title={attributesTitle}
+        subtitle={attributesSubtitle}
+      >
+        {attributesTab === "holes" ? (
+          <HoleAttributesPanel
+            selectedHole={selectedHole}
+            canManage={canManageSelections}
+            onEdit={openHoleEditor}
+            onDelete={deleteSelectedHole}
+            deleting={deletingAdminAction && navigatorTab === "holes"}
+            mobile={isMobileViewport}
+          />
+        ) : (
+          <AssetAttributesPanel
+            selectedAsset={selectedAsset}
+            canManage={canManageSelections}
+            onEdit={openAssetEditor}
+            onDelete={deleteSelectedAsset}
+            deleting={deletingAdminAction && navigatorTab === "assets"}
+            mobile={isMobileViewport}
+          />
+        )}
+      </AttributesDrawer>
 
       <HoleEditorModal
         hole={editingHole}

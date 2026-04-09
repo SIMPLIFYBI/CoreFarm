@@ -29,7 +29,6 @@ import {
   normalizeWorkflows,
   resolveHierarchicalWorkflowSelection,
 } from "@/lib/workflows";
-import CoreTaskPanelHeader from "./CoreTaskPanelHeader";
 import HoleLocationPickerModal from "./HoleLocationPickerModal";
 
 const STATE_OPTIONS = ["proposed", "in_progress", "drilled"];
@@ -682,23 +681,6 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
     [descriptorFilter, diameterFilter, projectFilter, search, stateFilter]
   );
 
-  const headerStats = useMemo(() => {
-    const counts = filteredHoles.reduce(
-      (accumulator, hole) => {
-        const status = classifyHole(hole);
-        accumulator[status] += 1;
-        return accumulator;
-      },
-      { complete: 0, in_progress: 0, not_started: 0 }
-    );
-
-    return [
-      { label: "visible holes", value: loading ? "..." : filteredHoles.length },
-      { label: "plan active", value: loading ? "..." : counts.in_progress },
-      { label: "plan complete", value: loading ? "..." : counts.complete },
-    ];
-  }, [filteredHoles, loading]);
-
   const filteredHoleIds = useMemo(() => filteredHoles.map((hole) => hole.id), [filteredHoles]);
 
   const allFilteredSelected = useMemo(
@@ -1323,25 +1305,14 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
 
   return (
     <div className="p-4 md:p-5 space-y-5">
-      <CoreTaskPanelHeader
-        eyebrow="Core Workbench"
-        title="Unified Core Workbench"
-        description="One planning surface for hole details, status, and task intervals. This is the experimental combined flow before replacing the older tabs."
-        stats={headerStats}
-        actions={
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-            <div className="rounded-full border border-cyan-300/15 bg-cyan-300/10 px-3 py-1.5 text-xs text-cyan-100">
-              Live search and interval autosave
-            </div>
-            <button type="button" className="btn btn-3d-glass hidden md:inline-flex" onClick={openBulkEditModal} disabled={projectScope === "shared" || !selectedHoleIds.length}>
-              Bulk editor
-            </button>
-            <button type="button" className="btn btn-3d-primary" onClick={openCreateHole} disabled={projectScope === "shared"}>
-              Add New Core
-            </button>
-          </div>
-        }
-      />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+        <button type="button" className="btn btn-3d-glass hidden md:inline-flex" onClick={openBulkEditModal} disabled={projectScope === "shared" || !selectedHoleIds.length}>
+          Bulk editor
+        </button>
+        <button type="button" className="btn btn-3d-primary" onClick={openCreateHole} disabled={projectScope === "shared"}>
+          Add New Core
+        </button>
+      </div>
 
       {projectScope !== "shared" && selectedHoleIds.length > 0 ? (
         <section className="rounded-[24px] border border-white/10 bg-slate-950/40 p-3 shadow-[0_18px_60px_rgba(2,6,23,0.22)] md:p-4">
