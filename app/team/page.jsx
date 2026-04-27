@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
-import { useOrg } from "@/lib/OrgContext";
+import { isDemoOrgName, useOrg } from "@/lib/OrgContext";
 import { redirectTo } from "@/lib/siteUrl";
 import toast from "react-hot-toast";
 import { DeleteIconButton } from "@/app/components/ActionIconButton";
@@ -39,6 +39,12 @@ export default function TeamPage() {
     const m = memberships.find((m) => m.organization_id === selectedOrgId);
     return m?.role || null;
   }, [memberships, selectedOrgId]);
+
+  const selectedOrgMembership = useMemo(() => {
+    return memberships.find((membership) => membership.organization_id === selectedOrgId) || null;
+  }, [memberships, selectedOrgId]);
+
+  const selectedOrgIsDemo = isDemoOrgName(selectedOrgMembership?.organizations?.name);
 
   useEffect(() => {
     (async () => {
@@ -307,25 +313,43 @@ export default function TeamPage() {
       {tab === 'org' && (
         <div className="space-y-6">
           {memberships.length > 0 && (
-            <div className="flex items-end gap-3">
-              <label className="flex min-w-[180px] flex-col gap-1.5 text-sm text-gray-700">
-                <span>Organization</span>
-                <select
-                  className="select-gradient-sm w-auto"
-                  value={selectedOrgId}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (val === '__create__') { setShowCreateOrgModal(true); return; }
-                    setSelectedOrgId(val);
-                  }}
-                >
-                  {memberships.map((m) => (
-                    <option key={m.organization_id} value={m.organization_id}>{m.organizations?.name || m.organization_id}</option>
-                  ))}
-                  {myRole === 'admin' && <option value="__create__">+ Create New...</option>}
-                </select>
-              </label>
-              <span className="ml-2 text-xs text-gray-600">Your role: {myRole || '—'}</span>
+            <div className="space-y-3">
+              <div className="flex items-end gap-3">
+                <label className="flex min-w-[180px] flex-col gap-1.5 text-sm text-gray-700">
+                  <span>Organization</span>
+                  <select
+                    className="select-gradient-sm w-auto"
+                    value={selectedOrgId}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '__create__') { setShowCreateOrgModal(true); return; }
+                      setSelectedOrgId(val);
+                    }}
+                  >
+                    {memberships.map((m) => {
+                      const isDemoMembership = isDemoOrgName(m.organizations?.name);
+                      const optionLabel = m.organizations?.name || m.organization_id;
+
+                      return (
+                        <option key={m.organization_id} value={m.organization_id}>
+                          {isDemoMembership ? `${optionLabel} - Demo` : optionLabel}
+                        </option>
+                      );
+                    })}
+                    {myRole === 'admin' && <option value="__create__">+ Create New...</option>}
+                  </select>
+                </label>
+                <span className="ml-2 text-xs text-gray-600">Your role: {myRole || '—'}</span>
+              </div>
+
+              {selectedOrgIsDemo ? (
+                <div className="rounded-2xl border border-amber-300/30 bg-amber-50/90 px-4 py-3 text-sm text-amber-900 shadow-sm">
+                  <div className="font-semibold uppercase tracking-[0.18em] text-[10px] text-amber-700">Demo Org Active</div>
+                  <p className="mt-1 leading-6">
+                    You are currently in the shared demo workspace. When you create or join a real organization, the app will switch you there automatically the first time.
+                  </p>
+                </div>
+              ) : null}
             </div>
           )}
 

@@ -5,6 +5,7 @@ import "./globals.css";
 import { Suspense } from "react";
 import Header from "./components/Header";
 import AuthGuard from "./components/AuthGuard";
+import DemoOrgRibbon from "./components/DemoOrgRibbon";
 import MobileNav from "./components/MobileNav";
 import { OrgProvider } from "@/lib/OrgContext";
 
@@ -47,6 +48,9 @@ export default function RootLayout({ children }) {
         <OrgProvider>
           <Suspense fallback={null}>
             <Header />
+          </Suspense>
+          <Suspense fallback={null}>
+            <DemoOrgRibbon />
           </Suspense>
           <AuthGuard>
             <main className="app-shell-gradient min-h-screen md:pt-[72px] md:pb-0 pb-[calc(env(safe-area-inset-bottom)+64px)] bg-transparent">

@@ -169,13 +169,26 @@ function formatDescriptorSummary(descriptors) {
 
 function createEmptyMapAdvancedFilters() {
   return {
-    descriptorId: "",
-    holeState: "",
-    holeCompletionStatus: "",
-    assetStatus: "",
-    assetTypeId: "",
-    assetLocationId: "",
+    descriptorId: [],
+    holeState: [],
+    holeCompletionStatus: [],
+    assetStatus: [],
+    assetTypeId: [],
+    assetLocationId: [],
   };
+}
+
+function normalizeMultiFilterValue(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || "").trim()).filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim();
+    return normalized ? [normalized] : [];
+  }
+
+  return [];
 }
 
 function normalizeMapAdvancedFilters(value) {
@@ -183,17 +196,17 @@ function normalizeMapAdvancedFilters(value) {
   if (!value || typeof value !== "object") return empty;
 
   return {
-    descriptorId: typeof value.descriptorId === "string" ? value.descriptorId : "",
-    holeState: typeof value.holeState === "string" ? value.holeState : "",
-    holeCompletionStatus: typeof value.holeCompletionStatus === "string" ? value.holeCompletionStatus : "",
-    assetStatus: typeof value.assetStatus === "string" ? value.assetStatus : "",
-    assetTypeId: typeof value.assetTypeId === "string" ? value.assetTypeId : "",
-    assetLocationId: typeof value.assetLocationId === "string" ? value.assetLocationId : "",
+    descriptorId: normalizeMultiFilterValue(value.descriptorId),
+    holeState: normalizeMultiFilterValue(value.holeState),
+    holeCompletionStatus: normalizeMultiFilterValue(value.holeCompletionStatus),
+    assetStatus: normalizeMultiFilterValue(value.assetStatus),
+    assetTypeId: normalizeMultiFilterValue(value.assetTypeId),
+    assetLocationId: normalizeMultiFilterValue(value.assetLocationId),
   };
 }
 
 function countActiveMapAdvancedFilters(filters) {
-  return Object.values(filters || {}).filter(Boolean).length;
+  return Object.values(filters || {}).filter((value) => Array.isArray(value) ? value.length > 0 : Boolean(value)).length;
 }
 
 function formatFilterOptionLabel(value) {
@@ -202,23 +215,126 @@ function formatFilterOptionLabel(value) {
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
-function FilterSelect({ label, value, onChange, emptyLabel, options, optionValueKey = "value", optionLabelKey = "label" }) {
+function FilterMultiSelect({ label, values, onChange, emptyLabel, options }) {
+  const [open, setOpen] = useState(false);
+
+  const selectedLabels = useMemo(() => {
+    const selected = new Set(values || []);
+    return (options || []).filter((option) => selected.has(option.value)).map((option) => option.label);
+  }, [options, values]);
+
+  const toggleValue = (nextValue) => {
+    const currentValues = Array.isArray(values) ? values : [];
+    const exists = currentValues.includes(nextValue);
+    onChange(exists ? currentValues.filter((value) => value !== nextValue) : [...currentValues, nextValue]);
+  };
+
   return (
-    <label className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
-      {label}
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm font-medium normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40"
-      >
-        <option value="">{emptyLabel}</option>
-        {options.map((option) => (
-          <option key={option[optionValueKey]} value={option[optionValueKey]}>
-            {option[optionLabelKey]}
-          </option>
-        ))}
-      </select>
-    </label>
+    <div className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+      <div>{label}</div>
+      <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-2">
+        <button
+          type="button"
+          onClick={() => setOpen((current) => !current)}
+          className="flex w-full items-center justify-between gap-3 rounded-xl px-2 py-1.5 text-left transition hover:bg-white/[0.04]"
+        >
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium normal-case tracking-normal text-slate-100">
+              {selectedLabels.length ? selectedLabels.join(", ") : emptyLabel}
+            </div>
+            <div className="mt-1 text-[11px] normal-case tracking-normal text-slate-400">
+              {selectedLabels.length ? `${selectedLabels.length} selected` : "No filters applied"}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {selectedLabels.length ? (
+              <span className="rounded-full border border-cyan-300/18 bg-cyan-400/10 px-2 py-1 text-[10px] font-semibold text-cyan-100">
+                {selectedLabels.length}
+              </span>
+            ) : null}
+            <OverviewToggleIcon collapsed={!open} className="h-4 w-4 text-slate-300" />
+          </div>
+        </button>
+
+        {open ? (
+          <div className="mt-2 rounded-xl border border-white/10 bg-white/[0.03] p-2">
+            <div className="max-h-48 space-y-1 overflow-y-auto pr-1">
+              {options.map((option) => {
+                const checked = (values || []).includes(option.value);
+                return (
+                  <label
+                    key={option.value}
+                    className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3 py-2 text-sm normal-case tracking-normal transition ${checked ? "border-cyan-300/28 bg-cyan-400/[0.08] text-slate-100" : "border-white/8 bg-white/[0.02] text-slate-300 hover:bg-white/[0.05]"}`}
+                  >
+                    <span className="truncate">{option.label}</span>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleValue(option.value)}
+                      className="h-4 w-4 rounded border-white/20 bg-slate-950/70 text-cyan-300"
+                    />
+                  </label>
+                );
+              })}
+            </div>
+            <div className="mt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => onChange([])}
+                className="rounded-xl border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-medium normal-case tracking-normal text-slate-200 transition hover:bg-white/[0.1]"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function AssetTypeNavigatorFilter({ value, onChange, options, resultCount, compact = false }) {
+  const hasActiveFilter = !!value;
+
+  return (
+    <div className={compact ? "px-4 pb-2 pt-3" : "px-4 pb-3 pt-4 md:px-5"}>
+      <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-2.5 shadow-[0_12px_28px_rgba(2,6,23,0.14)]">
+        <div className="flex items-center justify-between gap-3 px-1 pb-2">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Asset Type</div>
+            <div className="mt-1 text-xs text-slate-300">Filter the navigator without opening advanced filters.</div>
+          </div>
+          <div className="rounded-full border border-white/10 bg-slate-950/55 px-2.5 py-1 text-[11px] text-slate-300">
+            {resultCount} shown
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <select
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            className="h-11 min-w-0 flex-1 rounded-2xl border border-white/10 bg-slate-950/60 px-3.5 text-sm font-medium text-slate-100 outline-none transition focus:border-rose-300/40"
+          >
+            <option value="">All asset types</option>
+            {options.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+
+          {hasActiveFilter ? (
+            <button
+              type="button"
+              onClick={() => onChange("")}
+              className="inline-flex h-11 shrink-0 items-center rounded-2xl border border-white/10 bg-white/[0.05] px-3 text-xs font-medium text-slate-200 transition hover:bg-white/[0.1]"
+            >
+              Clear
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -532,6 +648,7 @@ function AssetAccordionList({
   onToggleProject,
   selectedAssetId,
   onSelectAsset,
+  activeTypeLabel = "",
   compact = false,
 }) {
   if (loading) {
@@ -549,9 +666,11 @@ function AssetAccordionList({
       <div className={compact ? "p-4" : "p-5"}>
         <div className="rounded-[28px] border border-dashed border-cyan-300/20 bg-[linear-gradient(180deg,rgba(8,47,73,0.22),rgba(2,6,23,0.88))] p-5 shadow-[0_20px_60px_rgba(2,6,23,0.24)]">
           <div className="text-[11px] uppercase tracking-[0.24em] text-cyan-100/75">Mapped Assets</div>
-          <h3 className="mt-3 text-xl font-semibold text-white">No assets with map coordinates</h3>
+          <h3 className="mt-3 text-xl font-semibold text-white">{activeTypeLabel ? "No assets match this type" : "No assets with map coordinates"}</h3>
           <p className="mt-2 max-w-xl text-sm leading-6 text-slate-300">
-            Add longitude and latitude, or save projected easting and northing against a project CRS, to show assets on the map.
+            {activeTypeLabel
+              ? `${activeTypeLabel} assets are not in the current project scope or map filter. Try a different type or clear the filter.`
+              : "Add longitude and latitude, or save projected easting and northing against a project CRS, to show assets on the map."}
           </p>
         </div>
       </div>
@@ -1442,6 +1561,52 @@ function AttributesIcon(props) {
   );
 }
 
+function CoreTasksIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path d="M9 6.75h9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M9 12h9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M9 17.25h9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="m4.8 6.9 1.1 1.1 1.9-2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="m4.8 12.15 1.1 1.1 1.9-2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="m4.8 17.4 1.1 1.1 1.9-2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function OverviewToggleIcon({ collapsed, ...props }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path
+        d={collapsed ? "M7 10.5 12 15.5 17 10.5" : "M7 13.5 12 8.5 17 13.5"}
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function OverviewToggleButton({ collapsed, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-expanded={!collapsed}
+      className="inline-flex items-center gap-3 rounded-[20px] border border-white/12 bg-slate-950/55 px-3 py-2.5 text-left text-slate-100 shadow-[0_14px_34px_rgba(2,6,23,0.24)] transition hover:border-cyan-300/24 hover:bg-slate-950/72"
+    >
+      <span className={`flex h-10 w-10 items-center justify-center rounded-2xl border ${collapsed ? "border-cyan-300/18 bg-cyan-400/10 text-cyan-100" : "border-amber-300/18 bg-amber-400/10 text-amber-100"}`}>
+        <OverviewToggleIcon collapsed={collapsed} className="h-5 w-5" />
+      </span>
+      <span>
+        <span className="block text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Overview</span>
+        <span className="mt-0.5 block text-sm font-medium text-white">{collapsed ? "Expand details" : "Collapse details"}</span>
+      </span>
+    </button>
+  );
+}
+
 function AttributesDrawer({ open, onClose, title, subtitle, children }) {
   useEffect(() => {
     if (!open) return undefined;
@@ -1457,15 +1622,15 @@ function AttributesDrawer({ open, onClose, title, subtitle, children }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[88] flex items-end justify-center bg-slate-950/54 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[88] flex items-center justify-center bg-slate-950/54 p-3 backdrop-blur-sm md:p-5" onClick={onClose}>
       <div
-        className="max-h-[82vh] w-full max-w-[1180px] overflow-hidden rounded-t-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))] shadow-[0_-28px_90px_rgba(2,6,23,0.48)]"
+        className="flex max-h-[82vh] w-full max-w-[1180px] flex-col overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))] shadow-[0_28px_90px_rgba(2,6,23,0.48)]"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex justify-center pt-3">
+        <div className="flex shrink-0 justify-center pt-3">
           <div className="h-1.5 w-16 rounded-full bg-white/12" />
         </div>
-        <div className="border-b border-white/10 px-4 pb-4 pt-3 md:px-5">
+        <div className="shrink-0 border-b border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(15,23,42,0.92))] px-4 pb-4 pt-3 md:px-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Attributes</div>
@@ -1481,7 +1646,35 @@ function AttributesDrawer({ open, onClose, title, subtitle, children }) {
             </button>
           </div>
         </div>
-        <div className="overflow-y-auto p-0">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-0">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function MapOverviewKpi({ label, value, detail, bars = [], tone = "cyan" }) {
+  const toneClassName = {
+    cyan: "border-cyan-300/16 bg-cyan-400/[0.05]",
+    amber: "border-amber-300/16 bg-amber-400/[0.05]",
+    emerald: "border-emerald-300/16 bg-emerald-400/[0.05]",
+    rose: "border-rose-300/16 bg-rose-400/[0.05]",
+  }[tone] || "border-white/10 bg-white/[0.04]";
+
+  return (
+    <div className={`rounded-[24px] border px-4 py-3 shadow-[0_18px_44px_rgba(2,6,23,0.22)] ${toneClassName}`}>
+      <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">{label}</div>
+      <div className="mt-2 flex items-end justify-between gap-3">
+        <div className="text-2xl font-semibold text-white">{value}</div>
+      </div>
+      <div className="mt-1 text-xs leading-5 text-slate-300">{detail}</div>
+      <div className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-black/20">
+        {bars.length ? bars.map((bar, index) => (
+          <span
+            key={`${label}-${index}`}
+            className="h-full first:rounded-l-full last:rounded-r-full"
+            style={{ width: `${Math.max(0, Math.min(100, Number(bar.value) || 0))}%`, backgroundColor: bar.color }}
+          />
+        )) : <span className="h-full w-full bg-white/10" />}
       </div>
     </div>
   );
@@ -1534,24 +1727,24 @@ function AdvancedFilterPanel({
         <div className="rounded-[24px] border border-cyan-300/14 bg-cyan-400/[0.04] p-4">
           <div className="text-[11px] uppercase tracking-[0.2em] text-cyan-100/80">Drillholes</div>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
-            <FilterSelect
+            <FilterMultiSelect
               label="Drilling Type"
-              value={filters.descriptorId}
+              values={filters.descriptorId}
               onChange={(value) => onChange("descriptorId", value)}
               emptyLabel="All drilling types"
               options={descriptorOptions.map((descriptor) => ({ value: descriptor.id, label: descriptor.name }))}
             />
-            <FilterSelect
+            <FilterMultiSelect
               label="Hole Status"
-              value={filters.holeState}
+              values={filters.holeState}
               onChange={(value) => onChange("holeState", value)}
               emptyLabel="All hole states"
               options={holeStateOptions}
             />
             <div className="md:col-span-2">
-              <FilterSelect
+              <FilterMultiSelect
                 label="Completion Status"
-                value={filters.holeCompletionStatus}
+                values={filters.holeCompletionStatus}
                 onChange={(value) => onChange("holeCompletionStatus", value)}
                 emptyLabel="All completion statuses"
                 options={holeCompletionStatusOptions}
@@ -1563,24 +1756,24 @@ function AdvancedFilterPanel({
         <div className="rounded-[24px] border border-rose-300/14 bg-rose-400/[0.04] p-4">
           <div className="text-[11px] uppercase tracking-[0.2em] text-rose-100/80">Assets</div>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
-            <FilterSelect
+            <FilterMultiSelect
               label="Asset Status"
-              value={filters.assetStatus}
+              values={filters.assetStatus}
               onChange={(value) => onChange("assetStatus", value)}
               emptyLabel="All asset statuses"
               options={assetStatusOptions}
             />
-            <FilterSelect
+            <FilterMultiSelect
               label="Asset Type"
-              value={filters.assetTypeId}
+              values={filters.assetTypeId}
               onChange={(value) => onChange("assetTypeId", value)}
               emptyLabel="All asset types"
               options={assetTypeOptions}
             />
             <div className="md:col-span-2">
-              <FilterSelect
+              <FilterMultiSelect
                 label="Location"
-                value={filters.assetLocationId}
+                values={filters.assetLocationId}
                 onChange={(value) => onChange("assetLocationId", value)}
                 emptyLabel="All locations"
                 options={assetLocationOptions}
@@ -1672,14 +1865,14 @@ function MapSelectionActionDock({
 
       const margin = 12;
       const nextPosition = {
-        x: (parentElement.clientWidth - dockElement.offsetWidth) / 2,
-        y: mobile ? parentElement.clientHeight - dockElement.offsetHeight - margin : margin,
+        x: parentElement.clientWidth - dockElement.offsetWidth - margin,
+        y: margin,
       };
 
       setPosition(clampPosition(nextPosition));
       setPositionReady(true);
     });
-  }, [clampPosition, entity?.id, mobile]);
+  }, [clampPosition, entity?.id]);
 
   useEffect(() => {
     setPositionReady(false);
@@ -1991,8 +2184,10 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const [assetTypes, setAssetTypes] = useState([]);
   const [assetLocations, setAssetLocations] = useState([]);
   const [projectFilter, setProjectFilter] = useState("");
+  const [assetNavigatorTypeFilter, setAssetNavigatorTypeFilter] = useState("");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState(createEmptyMapAdvancedFilters);
+  const [isOverviewStripCollapsed, setIsOverviewStripCollapsed] = useState(true);
   const [navigatorTab, setNavigatorTab] = useState("holes");
   const [expandedProjects, setExpandedProjects] = useState({});
   const [expandedAssetProjects, setExpandedAssetProjects] = useState({});
@@ -2615,18 +2810,23 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   }, [allAssets]);
 
   const matchesHoleAdvancedFilters = useCallback((hole) => {
-    if (advancedFilters.descriptorId && !(hole.descriptor_ids || []).includes(advancedFilters.descriptorId)) return false;
-    if (advancedFilters.holeState && String(hole.state || "") !== advancedFilters.holeState) return false;
-    if (advancedFilters.holeCompletionStatus && String(hole.completion_status || "") !== advancedFilters.holeCompletionStatus) return false;
+    if (advancedFilters.descriptorId.length && !advancedFilters.descriptorId.some((value) => (hole.descriptor_ids || []).includes(value))) return false;
+    if (advancedFilters.holeState.length && !advancedFilters.holeState.includes(String(hole.state || ""))) return false;
+    if (advancedFilters.holeCompletionStatus.length && !advancedFilters.holeCompletionStatus.includes(String(hole.completion_status || ""))) return false;
     return true;
   }, [advancedFilters]);
 
   const matchesAssetAdvancedFilters = useCallback((asset) => {
-    if (advancedFilters.assetStatus && String(asset.status || "") !== advancedFilters.assetStatus) return false;
-    if (advancedFilters.assetTypeId && String(asset.asset_type_id || "") !== advancedFilters.assetTypeId) return false;
-    if (advancedFilters.assetLocationId && String(asset.location_id || "") !== advancedFilters.assetLocationId) return false;
+    if (advancedFilters.assetStatus.length && !advancedFilters.assetStatus.includes(String(asset.status || ""))) return false;
+    if (advancedFilters.assetTypeId.length && !advancedFilters.assetTypeId.includes(String(asset.asset_type_id || ""))) return false;
+    if (advancedFilters.assetLocationId.length && !advancedFilters.assetLocationId.includes(String(asset.location_id || ""))) return false;
     return true;
   }, [advancedFilters]);
+
+  const matchesAssetNavigatorTypeFilter = useCallback((asset) => {
+    if (!assetNavigatorTypeFilter) return true;
+    return String(asset.asset_type_id || "") === assetNavigatorTypeFilter;
+  }, [assetNavigatorTypeFilter]);
 
   const filteredProjects = useMemo(() => {
     return projects
@@ -2693,10 +2893,10 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     return scopedProjects
       .map((project) => ({
         ...project,
-        assets: project.assets.filter(matchesAssetAdvancedFilters),
+        assets: project.assets.filter((asset) => matchesAssetAdvancedFilters(asset) && matchesAssetNavigatorTypeFilter(asset)),
       }))
       .filter((project) => project.assets.length > 0);
-  }, [assetProjects, matchesAssetAdvancedFilters, projectFilter]);
+  }, [assetProjects, matchesAssetAdvancedFilters, matchesAssetNavigatorTypeFilter, projectFilter]);
 
   const activeAdvancedFilterCount = useMemo(() => countActiveMapAdvancedFilters(advancedFilters), [advancedFilters]);
 
@@ -2707,6 +2907,10 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const visibleAssets = useMemo(() => {
     return filteredAssetProjects.flatMap((project) => project.assets);
   }, [filteredAssetProjects]);
+
+  const activeAssetNavigatorTypeLabel = useMemo(() => {
+    return assetTypeOptions.find((option) => option.value === assetNavigatorTypeFilter)?.label || "";
+  }, [assetNavigatorTypeFilter, assetTypeOptions]);
 
   useEffect(() => {
     visibleHolesRef.current = visibleHoles;
@@ -3397,6 +3601,18 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     router.push(`/drillhole-viz?${params.toString()}`);
   };
 
+  const openCoreTasksPage = (hole) => {
+    if (!hole?.id) return;
+    storeMapReturnState(hole.id);
+    const params = new URLSearchParams({
+      holeId: hole.id,
+      from: "map",
+      scope: projectScope,
+      tab: "logging",
+    });
+    router.push(`/coretasks?${params.toString()}`);
+  };
+
   const renderPopupHtml = (hole) => {
     if (!hole) return "";
     const stateTone = getHoleStateTone(hole.state);
@@ -4064,7 +4280,29 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   }, [filteredAssetProjects, filteredProjects]);
   const totalVisibleHoles = visibleHoles.length;
   const totalVisibleAssets = visibleAssets.length;
-  const totalShared = allHoles.filter((hole) => hole.organization_id !== orgId).length;
+  const totalShared = visibleHoles.filter((hole) => hole.organization_id !== orgId).length;
+  const totalVisibleEntities = totalVisibleHoles + totalVisibleAssets;
+  const visibleEntityBars = useMemo(() => {
+    if (!totalVisibleEntities) return [];
+    return [
+      { value: (totalVisibleHoles / totalVisibleEntities) * 100, color: "#38bdf8" },
+      { value: (totalVisibleAssets / totalVisibleEntities) * 100, color: ASSET_COLOR },
+    ];
+  }, [totalVisibleAssets, totalVisibleEntities, totalVisibleHoles]);
+  const visibleHoleStateBars = useMemo(() => {
+    if (!totalVisibleHoles) return [];
+    return HOLE_STATE_STYLES.map((item) => {
+      const count = visibleHoles.filter((hole) => hole.state === item.value).length;
+      return {
+        color: item.color,
+        value: (count / totalVisibleHoles) * 100,
+        count,
+      };
+    }).filter((item) => item.count > 0);
+  }, [totalVisibleHoles, visibleHoles]);
+  const sharedCoverage = totalVisibleHoles ? Math.round((totalShared / totalVisibleHoles) * 100) : 0;
+  const scopeLabel = projectScope === "shared" ? "Client shared mode" : "My projects mode";
+  const projectFocusLabel = projectFilter ? "Project focus active" : "Portfolio view";
   const showCreateProjectPrompt = !loading && projectScope === "own" && totalProjects === 0;
 
   const toggleProjectExpanded = (project, isExpanded) => {
@@ -4275,40 +4513,160 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   return (
     <div className="min-h-screen overflow-x-hidden bg-transparent px-3 pb-24 pt-0 md:px-5 md:pb-8 md:pt-0">
       <div className="mx-auto max-w-[1600px] space-y-4 overflow-x-hidden">
-        <section className="hidden overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/40 shadow-[0_30px_120px_rgba(2,6,23,0.45)] backdrop-blur-xl xl:block">
+        <section className="hidden overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/40 shadow-[0_30px_120px_rgba(2,6,23,0.45)] backdrop-blur-xl lg:block">
           <div className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(15,23,42,0.82),rgba(8,47,73,0.65)_45%,rgba(120,53,15,0.48))] px-4 py-5 md:px-6">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-              <div className="space-y-2">
-                <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-cyan-100">
-                  Spatial Drillhole Workspace
+            <div className="flex flex-col gap-4 border-b border-white/10 pb-4 xl:flex-row xl:items-start xl:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-cyan-100">
+                    Spatial Drillhole Workspace
+                  </div>
+                  <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-[11px] font-medium uppercase tracking-[0.2em] text-slate-200">
+                    {scopeLabel}
+                  </span>
+                  {activeAdvancedFilterCount ? (
+                    <span className="rounded-full border border-cyan-300/16 bg-cyan-400/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.2em] text-cyan-100">
+                      {activeAdvancedFilterCount} filter{activeAdvancedFilterCount === 1 ? "" : "s"}
+                    </span>
+                  ) : null}
                 </div>
-                <div>
-                  <h1 className="text-2xl font-semibold tracking-tight text-white md:text-4xl">Project terrain, collar positions, and drillhole detail in one place.</h1>
-                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300 md:text-base">
-                    This map only reveals holes from your organization or projects explicitly shared with it. Use the scope toggle and project filter to move from a whole portfolio view down to a single pattern.
-                  </p>
+                <div className="mt-3 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                  <div>
+                    <div className="text-[12px] uppercase tracking-[0.24em] text-slate-400">Map command center</div>
+                    <div className="mt-1 text-lg font-semibold text-white">{isOverviewStripCollapsed ? "Focused workspace summary" : "Live spatial overview"}</div>
+                    <p className="mt-1 text-sm text-slate-300">
+                      {isOverviewStripCollapsed
+                        ? "A compact read on what is visible right now, with the full KPI view one tap away."
+                        : "Full coverage, shared visibility, and scope health for the current map view."}
+                    </p>
+                  </div>
+                  <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-medium text-slate-200">
+                    <span className={`h-2 w-2 rounded-full ${isOverviewStripCollapsed ? "bg-cyan-300" : "bg-amber-300"}`} />
+                    {isOverviewStripCollapsed ? "Collapsed by default" : "Expanded overview"}
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:min-w-[560px] xl:max-w-[700px]">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3">
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Visible Projects</div>
-                  <div className="mt-2 text-2xl font-semibold text-white">{loading ? "..." : totalVisibleProjects}</div>
+              <OverviewToggleButton
+                collapsed={isOverviewStripCollapsed}
+                onClick={() => setIsOverviewStripCollapsed((current) => !current)}
+              />
+            </div>
+
+            {isOverviewStripCollapsed ? (
+              <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(260px,0.9fr)_minmax(0,1.45fr)] xl:items-center">
+                <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(140deg,rgba(15,23,42,0.84),rgba(8,47,73,0.52),rgba(15,118,110,0.2))] px-4 py-4 shadow-[0_20px_56px_rgba(2,6,23,0.22)]">
+                  <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-100/75">Current focus</div>
+                  <div className="mt-2 text-xl font-semibold text-white">{projectFocusLabel}</div>
+                  <div className="mt-2 text-sm leading-6 text-slate-300">
+                    {loading ? "Refreshing visible map totals..." : `${totalVisibleEntities} entities are in view across the current map scope.`}
+                  </div>
+                  <div className="mt-4 flex h-2 overflow-hidden rounded-full bg-black/20">
+                    {visibleEntityBars.map((bar, index) => (
+                      <span
+                        key={`collapsed-visible-entity-${index}`}
+                        className="h-full first:rounded-l-full last:rounded-r-full"
+                        style={{ width: `${Math.max(0, Math.min(100, Number(bar.value) || 0))}%`, backgroundColor: bar.color }}
+                      />
+                    ))}
+                  </div>
                 </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3">
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Mapped Holes</div>
-                  <div className="mt-2 text-2xl font-semibold text-white">{loading ? "..." : totalVisibleHoles}</div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3">
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Mapped Assets</div>
-                  <div className="mt-2 text-2xl font-semibold text-white">{loading ? "..." : totalVisibleAssets}</div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3">
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Shared In View</div>
-                  <div className="mt-2 text-2xl font-semibold text-white">{loading ? "..." : totalShared}</div>
+
+                <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
+                  <div className="rounded-[22px] border border-cyan-300/12 bg-cyan-400/[0.05] px-4 py-3 shadow-[0_14px_34px_rgba(2,6,23,0.18)]">
+                    <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Projects</div>
+                    <div className="mt-2 text-2xl font-semibold text-white">{loading ? "..." : totalVisibleProjects}</div>
+                    <div className="mt-1 text-xs text-slate-300">In current scope</div>
+                  </div>
+                  <div className="rounded-[22px] border border-amber-300/12 bg-amber-400/[0.05] px-4 py-3 shadow-[0_14px_34px_rgba(2,6,23,0.18)]">
+                    <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Holes</div>
+                    <div className="mt-2 text-2xl font-semibold text-white">{loading ? "..." : totalVisibleHoles}</div>
+                    <div className="mt-1 text-xs text-slate-300">Mapped drillholes</div>
+                  </div>
+                  <div className="rounded-[22px] border border-rose-300/12 bg-rose-400/[0.05] px-4 py-3 shadow-[0_14px_34px_rgba(2,6,23,0.18)]">
+                    <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Assets</div>
+                    <div className="mt-2 text-2xl font-semibold text-white">{loading ? "..." : totalVisibleAssets}</div>
+                    <div className="mt-1 text-xs text-slate-300">Mapped equipment</div>
+                  </div>
+                  <div className="rounded-[22px] border border-emerald-300/12 bg-emerald-400/[0.05] px-4 py-3 shadow-[0_14px_34px_rgba(2,6,23,0.18)]">
+                    <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Shared</div>
+                    <div className="mt-2 text-2xl font-semibold text-white">{loading ? "..." : totalShared}</div>
+                    <div className="mt-1 text-xs text-slate-300">Visible shared holes</div>
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(320px,1.15fr)_minmax(560px,1fr)] xl:items-stretch">
+                <div className="relative overflow-hidden rounded-[26px] border border-white/10 bg-[linear-gradient(140deg,rgba(15,23,42,0.9),rgba(8,47,73,0.58),rgba(15,118,110,0.28))] px-4 py-4 shadow-[0_24px_70px_rgba(2,6,23,0.28)]">
+                  <div className="absolute inset-y-0 right-0 w-40 bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.18),transparent_68%)]" />
+                  <div className="relative">
+                    <div className="flex items-end justify-between gap-4">
+                      <div className="max-w-md">
+                        <div className="text-[12px] uppercase tracking-[0.24em] text-slate-400">Live Overview</div>
+                        <div className="mt-2 text-[1.65rem] font-semibold leading-8 text-white">Map command center</div>
+                        <p className="mt-2 text-sm leading-6 text-slate-300">
+                          Fast read on mapped coverage, shared visibility, and the current working scope.
+                        </p>
+                      </div>
+                      <div className="min-w-[128px] rounded-[22px] border border-white/10 bg-white/[0.05] px-4 py-3 text-right">
+                        <div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Visible entities</div>
+                        <div className="mt-2 text-3xl font-semibold text-white">{loading ? "..." : totalVisibleEntities}</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex h-2 overflow-hidden rounded-full bg-black/20">
+                      {visibleEntityBars.map((bar, index) => (
+                        <span
+                          key={`visible-entity-${index}`}
+                          className="h-full first:rounded-l-full last:rounded-r-full"
+                          style={{ width: `${Math.max(0, Math.min(100, Number(bar.value) || 0))}%`, backgroundColor: bar.color }}
+                        />
+                      ))}
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-300">
+                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{totalVisibleHoles} holes</span>
+                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{totalVisibleAssets} assets</span>
+                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{projectFocusLabel}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <MapOverviewKpi
+                    label="Visible Projects"
+                    value={loading ? "..." : totalVisibleProjects}
+                    detail={`${projectFocusLabel} across ${totalProjects || 0} total project${totalProjects === 1 ? "" : "s"}`}
+                    bars={[{ value: totalProjects ? (totalVisibleProjects / totalProjects) * 100 : 0, color: "#22d3ee" }]}
+                    tone="cyan"
+                  />
+                  <MapOverviewKpi
+                    label="Mapped Holes"
+                    value={loading ? "..." : totalVisibleHoles}
+                    detail={totalVisibleHoles ? `${totalShared} shared hole${totalShared === 1 ? "" : "s"} currently visible` : "No holes visible in current scope"}
+                    bars={visibleHoleStateBars}
+                    tone="amber"
+                  />
+                  <MapOverviewKpi
+                    label="Mapped Assets"
+                    value={loading ? "..." : totalVisibleAssets}
+                    detail={activeAdvancedFilterCount ? `${activeAdvancedFilterCount} active filter${activeAdvancedFilterCount === 1 ? "" : "s"} shaping asset view` : "All mapped assets in current scope"}
+                    bars={[{ value: totalVisibleEntities ? (totalVisibleAssets / totalVisibleEntities) * 100 : 0, color: ASSET_COLOR }]}
+                    tone="rose"
+                  />
+                  <MapOverviewKpi
+                    label="Shared In View"
+                    value={loading ? "..." : totalShared}
+                    detail={totalVisibleHoles ? `${sharedCoverage}% of visible holes are shared into this workspace` : "Shared visibility appears when shared holes enter the current view"}
+                    bars={[
+                      { value: sharedCoverage, color: "#34d399" },
+                      { value: Math.max(0, 100 - sharedCoverage), color: "rgba(255,255,255,0.1)" },
+                    ]}
+                    tone="emerald"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="px-4 py-4 md:px-6 md:py-5">
@@ -4426,14 +4784,23 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   onSelectHole={focusHole}
                 />
               ) : (
-                <AssetAccordionList
-                  loading={loading}
-                  projects={filteredAssetProjects}
-                  expandedProjects={expandedAssetProjects}
-                  onToggleProject={toggleAssetProjectExpanded}
-                  selectedAssetId={selectedAsset?.id || ""}
-                  onSelectAsset={focusAsset}
-                />
+                <>
+                  <AssetTypeNavigatorFilter
+                    value={assetNavigatorTypeFilter}
+                    onChange={setAssetNavigatorTypeFilter}
+                    options={assetTypeOptions}
+                    resultCount={visibleAssets.length}
+                  />
+                  <AssetAccordionList
+                    loading={loading}
+                    projects={filteredAssetProjects}
+                    expandedProjects={expandedAssetProjects}
+                    onToggleProject={toggleAssetProjectExpanded}
+                    selectedAssetId={selectedAsset?.id || ""}
+                    onSelectAsset={focusAsset}
+                    activeTypeLabel={activeAssetNavigatorTypeLabel}
+                  />
+                </>
               )}
             </div>
           </aside>
@@ -4460,6 +4827,15 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   >
                     <AttributesIcon className="h-[18px] w-[18px]" />
                     <span>Attributes</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex h-11 items-center gap-2 rounded-2xl border border-emerald-300/18 bg-emerald-400/10 px-4 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/16 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-slate-500"
+                    onClick={() => openCoreTasksPage(selectedHole)}
+                    disabled={!selectedHole}
+                  >
+                    <CoreTasksIcon className="h-[18px] w-[18px]" />
+                    <span>Core tasks</span>
                   </button>
                 </div>
                 <div className="mt-4 grid w-full grid-cols-2 gap-2 rounded-2xl bg-white/[0.04] p-1.5">
@@ -4498,6 +4874,15 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   >
                     <AttributesIcon className="h-[18px] w-[18px]" />
                     <span>Attributes</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex h-11 items-center gap-2 rounded-2xl border border-emerald-300/18 bg-emerald-400/10 px-4 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/16 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-slate-500"
+                    onClick={() => openCoreTasksPage(selectedHole)}
+                    disabled={!selectedHole}
+                  >
+                    <CoreTasksIcon className="h-[18px] w-[18px]" />
+                    <span>Core tasks</span>
                   </button>
                   <button
                     type="button"
@@ -4738,15 +5123,25 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   compact
                 />
               ) : mobilePanelTab === "assets" ? (
-                <AssetAccordionList
-                  loading={loading}
-                  projects={filteredAssetProjects}
-                  expandedProjects={expandedAssetProjects}
-                  onToggleProject={toggleAssetProjectExpanded}
-                  selectedAssetId={selectedAsset?.id || ""}
-                  onSelectAsset={focusAsset}
-                  compact
-                />
+                <>
+                  <AssetTypeNavigatorFilter
+                    value={assetNavigatorTypeFilter}
+                    onChange={setAssetNavigatorTypeFilter}
+                    options={assetTypeOptions}
+                    resultCount={visibleAssets.length}
+                    compact
+                  />
+                  <AssetAccordionList
+                    loading={loading}
+                    projects={filteredAssetProjects}
+                    expandedProjects={expandedAssetProjects}
+                    onToggleProject={toggleAssetProjectExpanded}
+                    selectedAssetId={selectedAsset?.id || ""}
+                    onSelectAsset={focusAsset}
+                    activeTypeLabel={activeAssetNavigatorTypeLabel}
+                    compact
+                  />
+                </>
               ) : null}
             </div>
 

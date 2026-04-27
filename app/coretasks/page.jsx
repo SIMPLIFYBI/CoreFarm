@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import HorizontalScrollTabs from "@/app/components/HorizontalScrollTabs";
 import CorePage from "./CorePage";
 import SampleDispatchPage from "./SampleDispatchPage";
@@ -9,17 +9,38 @@ import HoleDetailsTab from "./HoleDetailsTab";
 import BulkUploaderTab from "./BulkUploaderTab";
 
 const PROJECT_SCOPE_STORAGE_KEY = "coretasks:projectScope";
+const CORETASKS_TABS = new Set(["coreworkbench", "bulkuploader", "logging", "sampledispatch", "coretasks"]);
+
+function BackToMapIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path d="M10 7 5 12l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M19 12H6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M17.5 6.5h1a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5h-1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 export default function CoreTasksPage() {
   const pathname = usePathname();
-  const initialTab = pathname === "/addcore" || pathname === "/coretasks" ? "coreworkbench" : "coreworkbench";
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedTab = searchParams.get("tab") || "";
+  const requestedProjectScope = searchParams.get("scope") || "";
+  const requestedHoleId = searchParams.get("holeId") || "";
+  const requestedFrom = searchParams.get("from") || "";
+  const initialTab = CORETASKS_TABS.has(requestedTab) ? requestedTab : "coreworkbench";
   const [tab, setTab] = useState(initialTab);
   const [projectScope, setProjectScope] = useState("own"); // 'own' | 'shared'
   const [isMobileViewport, setIsMobileViewport] = useState(false);
 
   useEffect(() => {
-    setTab(pathname === "/addcore" || pathname === "/coretasks" ? "coreworkbench" : "coreworkbench");
-  }, [pathname]);
+    if (!CORETASKS_TABS.has(requestedTab)) {
+      setTab("coreworkbench");
+      return;
+    }
+    setTab((current) => (current === requestedTab ? current : requestedTab));
+  }, [pathname, requestedTab]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -33,6 +54,11 @@ export default function CoreTasksPage() {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(PROJECT_SCOPE_STORAGE_KEY, projectScope);
   }, [projectScope]);
+
+  useEffect(() => {
+    if (requestedProjectScope !== "own" && requestedProjectScope !== "shared") return;
+    setProjectScope((current) => (current === requestedProjectScope ? current : requestedProjectScope));
+  }, [requestedProjectScope]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -57,24 +83,48 @@ export default function CoreTasksPage() {
     }
   }, [isMobileViewport, tab]);
 
+  const handleBackToMap = () => {
+    const params = new URLSearchParams();
+    if (requestedHoleId) {
+      params.set("holeId", requestedHoleId);
+    }
+    if (projectScope === "own" || projectScope === "shared") {
+      params.set("scope", projectScope);
+    }
+    router.push(`/map?${params.toString()}`);
+  };
+
   return (
     <div className="p-4">
       <div className="max-w-6xl mx-auto">
-        <div className="mb-3 inline-flex rounded-lg border border-white/10 bg-slate-900/40 p-1 gap-1">
-          <button
-            type="button"
-            className={`px-3 py-1.5 text-xs rounded-md transition-base ${projectScope === "own" ? "bg-indigo-600 text-white" : "text-slate-200 hover:bg-white/10"}`}
-            onClick={() => setProjectScope("own")}
-          >
-            My projects
-          </button>
-          <button
-            type="button"
-            className={`px-3 py-1.5 text-xs rounded-md transition-base ${projectScope === "shared" ? "bg-indigo-600 text-white" : "text-slate-200 hover:bg-white/10"}`}
-            onClick={() => setProjectScope("shared")}
-          >
-            Client shared
-          </button>
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="inline-flex rounded-lg border border-white/10 bg-slate-900/40 p-1 gap-1">
+            <button
+              type="button"
+              className={`px-3 py-1.5 text-xs rounded-md transition-base ${projectScope === "own" ? "bg-indigo-600 text-white" : "text-slate-200 hover:bg-white/10"}`}
+              onClick={() => setProjectScope("own")}
+            >
+              My projects
+            </button>
+            <button
+              type="button"
+              className={`px-3 py-1.5 text-xs rounded-md transition-base ${projectScope === "shared" ? "bg-indigo-600 text-white" : "text-slate-200 hover:bg-white/10"}`}
+              onClick={() => setProjectScope("shared")}
+            >
+              Client shared
+            </button>
+          </div>
+
+          {requestedFrom === "map" ? (
+            <button
+              type="button"
+              onClick={handleBackToMap}
+              className="inline-flex items-center gap-2 self-start rounded-2xl border border-cyan-300/20 bg-cyan-400/10 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:bg-cyan-400/16"
+            >
+              <BackToMapIcon className="h-[18px] w-[18px]" />
+              <span>Back to map</span>
+            </button>
+          ) : null}
         </div>
 
         <HorizontalScrollTabs className="mb-6 border-b border-white/10" hint="Swipe tabs" hintClassName="text-slate-500">
@@ -128,7 +178,7 @@ export default function CoreTasksPage() {
           </div>
         ) : (
           <div className="card overflow-hidden">
-            {tab === "logging" ? <CorePage projectScope={projectScope} /> : <SampleDispatchPage projectScope={projectScope} />}
+            {tab === "logging" ? <CorePage projectScope={projectScope} focusedHoleId={requestedHoleId} /> : <SampleDispatchPage projectScope={projectScope} />}
           </div>
         )}
       </div>

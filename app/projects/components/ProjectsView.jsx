@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
@@ -127,16 +127,16 @@ export default function ProjectsView() {
   const TABLE_HEAD_ROW = "text-left bg-slate-900/40 text-slate-200 border-b border-white/10";
   const TABLE_ROW = "border-b border-white/10 last:border-b-0 hover:bg-white/5";
 
-  // Load projects
-  useEffect(() => {
+  const loadProjects = useCallback(async () => {
     if (!orgId) {
       setProjects([]);
       return;
     }
 
-    (async () => {
-      setLoading(true);
-      const { data, error } = await supabase
+    setLoading(true);
+
+    const [projectRes, holeRes, assetRes] = await Promise.all([
+      supabase
         .from("projects")
         .select(`
           id,
@@ -156,12 +156,72 @@ export default function ProjectsView() {
           current_workflow_substage:workflow_substage_definitions!projects_current_workflow_substage_id_fkey(id,name,substage_index)
         `)
         .eq("organization_id", orgId)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("holes")
+        .select("id, hole_id, project_id, state, depth, planned_depth")
+        .eq("organization_id", orgId)
+        .order("hole_id", { ascending: true }),
+      supabase
+        .from("assets")
+        .select("id, name, project_id, status, asset_types(name)")
+        .eq("organization_id", orgId)
+        .order("name", { ascending: true }),
+    ]);
 
-      setProjects(!error ? data || [] : []);
+    if (projectRes.error) {
+      console.error("Failed to load projects:", projectRes.error);
+      setProjects([]);
       setLoading(false);
-    })();
+      return;
+    }
+
+    if (holeRes.error) {
+      console.error("Failed to load project holes:", holeRes.error);
+    }
+
+    if (assetRes.error) {
+      console.error("Failed to load project assets:", assetRes.error);
+    }
+
+    const holesByProject = new Map();
+    (holeRes.data || []).forEach((hole) => {
+      const key = hole.project_id || "";
+      if (!key) return;
+      const current = holesByProject.get(key) || [];
+      current.push(hole);
+      holesByProject.set(key, current);
+    });
+
+    const assetsByProject = new Map();
+    (assetRes.data || []).forEach((asset) => {
+      const key = asset.project_id || "";
+      if (!key) return;
+      const current = assetsByProject.get(key) || [];
+      current.push(asset);
+      assetsByProject.set(key, current);
+    });
+
+    setProjects(
+      (projectRes.data || []).map((project) => {
+        const holes = holesByProject.get(project.id) || [];
+        const assets = assetsByProject.get(project.id) || [];
+        return {
+          ...project,
+          holes,
+          assets,
+          holeCount: holes.length,
+          assetCount: assets.length,
+        };
+      })
+    );
+    setLoading(false);
   }, [orgId, supabase]);
+
+  // Load projects
+  useEffect(() => {
+    void loadProjects();
+  }, [loadProjects]);
 
   useEffect(() => {
     if (!orgId) {
@@ -360,29 +420,7 @@ export default function ProjectsView() {
       }
       if (res.error) throw res.error;
 
-      const { data } = await supabase
-        .from("projects")
-        .select(`
-          id,
-          name,
-          start_date,
-          finish_date,
-          cost_code,
-          wbs_code,
-          coordinate_crs_code,
-          coordinate_crs_name,
-          created_at,
-          current_workflow_id,
-          current_workflow_phase_id,
-          current_workflow_substage_id,
-          current_workflow_status_key,
-          current_workflow_phase:workflow_phase_definitions!projects_current_workflow_phase_id_fkey(id,name,phase_index),
-          current_workflow_substage:workflow_substage_definitions!projects_current_workflow_substage_id_fkey(id,name,substage_index)
-        `)
-        .eq("organization_id", orgId)
-        .order("created_at", { ascending: false });
-
-      setProjects(data || []);
+      await loadProjects();
       setShowModal(false);
       setEditingId(null);
       setForm(emptyForm);

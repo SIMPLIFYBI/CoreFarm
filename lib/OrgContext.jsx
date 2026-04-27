@@ -3,17 +3,40 @@ import { createContext, useContext, useState, useEffect, useCallback, useMemo } 
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import toast from "react-hot-toast";
 
+const ORG_STORAGE_KEY = "cf_org_id";
+const ORG_SELECTION_MODE_STORAGE_KEY = "cf_org_selection_mode";
+const ORG_SELECTION_MODE_MANUAL = "manual";
+const ORG_SELECTION_MODE_AUTO_DEMO = "auto-demo";
+
 const OrgContext = createContext({
   orgId: "",
   setOrgId: () => {},
   memberships: [],
+  currentOrgName: "",
+  isDemoOrg: false,
   loading: true,
   refreshMemberships: () => {},
 });
 
-function isDemoOrgName(name) {
+export function isDemoOrgName(name) {
   const n = (name || "").toLowerCase().trim();
   return n === "demo organisation" || n === "shared demo" || n.includes("demo");
+}
+
+function readStoredOrgId() {
+  try {
+    return typeof window !== "undefined" ? window.localStorage.getItem(ORG_STORAGE_KEY) || "" : "";
+  } catch (_) {
+    return "";
+  }
+}
+
+function readStoredOrgSelectionMode() {
+  try {
+    return typeof window !== "undefined" ? window.localStorage.getItem(ORG_SELECTION_MODE_STORAGE_KEY) || "" : "";
+  } catch (_) {
+    return "";
+  }
 }
 
 export function OrgProvider({ children }) {
@@ -24,15 +47,30 @@ export function OrgProvider({ children }) {
   const [memberships, setMemberships] = useState([]);
 
   // Initialize from localStorage immediately (prevents "newest membership wins" overwriting it on refresh)
-  const [orgId, _setOrgId] = useState(() => {
-    try {
-      return typeof window !== "undefined" ? window.localStorage.getItem("cf_org_id") || "" : "";
-    } catch (_) {
-      return "";
-    }
-  });
+  const [orgId, _setOrgId] = useState(() => readStoredOrgId());
+  const [orgSelectionMode, setOrgSelectionMode] = useState(() => readStoredOrgSelectionMode());
 
   const [loading, setLoading] = useState(true);
+
+  const persistOrgSelection = useCallback((nextOrgId, nextMode = ORG_SELECTION_MODE_MANUAL) => {
+    _setOrgId(nextOrgId || "");
+    setOrgSelectionMode(nextMode || "");
+
+    try {
+      if (!nextOrgId) {
+        window.localStorage.removeItem(ORG_STORAGE_KEY);
+        window.localStorage.removeItem(ORG_SELECTION_MODE_STORAGE_KEY);
+        return;
+      }
+
+      window.localStorage.setItem(ORG_STORAGE_KEY, nextOrgId);
+      if (nextMode) {
+        window.localStorage.setItem(ORG_SELECTION_MODE_STORAGE_KEY, nextMode);
+      } else {
+        window.localStorage.removeItem(ORG_SELECTION_MODE_STORAGE_KEY);
+      }
+    } catch (_) {}
+  }, []);
 
   // Load user (initial) and listen for auth state changes
   useEffect(() => {
@@ -75,39 +113,62 @@ export function OrgProvider({ children }) {
 
       const list = ms || [];
       setMemberships(list);
+      const demoMembership = list.find((membership) => isDemoOrgName(membership.organizations?.name));
+      const nonDemoMembership = list.find((membership) => !isDemoOrgName(membership.organizations?.name));
 
       // If current orgId is valid, keep it (this is the "remember last org" behavior)
       if (orgId && list.find((m) => m.organization_id === orgId)) {
+        const currentMembership = list.find((membership) => membership.organization_id === orgId);
+        if (
+          orgSelectionMode === ORG_SELECTION_MODE_AUTO_DEMO
+          && currentMembership
+          && isDemoOrgName(currentMembership.organizations?.name)
+          && nonDemoMembership
+          && nonDemoMembership.organization_id !== orgId
+        ) {
+          persistOrgSelection(nonDemoMembership.organization_id, ORG_SELECTION_MODE_MANUAL);
+        }
         return;
       }
 
       // Otherwise, try the stored org (in case state was empty but storage has it)
-      let stored = "";
-      try {
-        stored = typeof window !== "undefined" ? window.localStorage.getItem("cf_org_id") || "" : "";
-      } catch (_) {}
+      const stored = readStoredOrgId();
+      const storedMode = readStoredOrgSelectionMode();
 
       if (stored && list.find((m) => m.organization_id === stored)) {
-        _setOrgId(stored);
+        const storedMembership = list.find((membership) => membership.organization_id === stored);
+        if (
+          storedMode === ORG_SELECTION_MODE_AUTO_DEMO
+          && storedMembership
+          && isDemoOrgName(storedMembership.organizations?.name)
+          && nonDemoMembership
+          && nonDemoMembership.organization_id !== stored
+        ) {
+          persistOrgSelection(nonDemoMembership.organization_id, ORG_SELECTION_MODE_MANUAL);
+          return;
+        }
+
+        persistOrgSelection(stored, storedMode || ORG_SELECTION_MODE_MANUAL);
         return;
       }
 
-      // Fallback: pick a non-demo org if possible, else the newest membership
-      const nonDemo = list.find((m) => !isDemoOrgName(m.organizations?.name));
-      const fallback = nonDemo?.organization_id || list[0]?.organization_id || "";
+      if (demoMembership) {
+        persistOrgSelection(demoMembership.organization_id, ORG_SELECTION_MODE_AUTO_DEMO);
+        return;
+      }
+
+      // Fallback when no demo membership exists.
+      const fallback = nonDemoMembership?.organization_id || list[0]?.organization_id || "";
 
       if (fallback) {
-        _setOrgId(fallback);
-        try {
-          window.localStorage.setItem("cf_org_id", fallback);
-        } catch (_) {}
+        persistOrgSelection(fallback, ORG_SELECTION_MODE_MANUAL);
       }
     } catch (e) {
       toast.error("Could not load organizations");
     } finally {
       setLoading(false);
     }
-  }, [user, supabase, orgId]);
+  }, [user, supabase, orgId, orgSelectionMode, persistOrgSelection]);
 
   useEffect(() => {
     loadMemberships();
@@ -119,22 +180,20 @@ export function OrgProvider({ children }) {
     if (!authReady) return;
 
     if (!user) {
-      _setOrgId("");
-      try {
-        window.localStorage.removeItem("cf_org_id");
-      } catch (_) {}
+      persistOrgSelection("", "");
     }
-  }, [user, authReady]); // <-- UPDATE deps
+  }, [user, authReady, persistOrgSelection]); // <-- UPDATE deps
 
   // Wrapped setter persists to localStorage
-  const setOrgId = (val) => {
-    _setOrgId(val);
-    try {
-      if (val) window.localStorage.setItem("cf_org_id", val);
-    } catch (_) {}
+  const setOrgId = (val, options = {}) => {
+    persistOrgSelection(val, options.mode || ORG_SELECTION_MODE_MANUAL);
   };
 
-  const value = { orgId, setOrgId, memberships, loading, refreshMemberships: loadMemberships };
+  const currentOrg = useMemo(() => memberships.find((membership) => membership.organization_id === orgId) || null, [memberships, orgId]);
+  const currentOrgName = currentOrg?.organizations?.name || "";
+  const isDemoOrg = isDemoOrgName(currentOrgName);
+
+  const value = { orgId, setOrgId, memberships, currentOrgName, isDemoOrg, loading, refreshMemberships: loadMemberships };
   return <OrgContext.Provider value={value}>{children}</OrgContext.Provider>;
 }
 

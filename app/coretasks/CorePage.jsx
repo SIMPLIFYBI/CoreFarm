@@ -34,7 +34,7 @@ function humanizeTaskKey(taskKey) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-export default function CorePage({ projectScope = "own" }) {
+export default function CorePage({ projectScope = "own", focusedHoleId = "" }) {
   const supabase = supabaseBrowser();
   const { orgId } = useOrg();
   const defaultTaskMeta = useMemo(
@@ -62,6 +62,8 @@ export default function CorePage({ projectScope = "own" }) {
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const projectMenuRef = useRef(null);
   const [taskMeta, setTaskMeta] = useState(defaultTaskMeta);
+  const autoOpenedHoleRef = useRef("");
+  const autoScrolledHoleRef = useRef("");
 
   const projects = useMemo(() => {
     const set = new Set();
@@ -70,6 +72,11 @@ export default function CorePage({ projectScope = "own" }) {
     });
     return Array.from(set).sort();
   }, [holes]);
+
+  const focusedHole = useMemo(
+    () => (focusedHoleId ? holes.find((hole) => hole.id === focusedHoleId) || null : null),
+    [focusedHoleId, holes]
+  );
 
   const classifyHole = (h) => {
     const s = holeStatus[h.id] || {};
@@ -172,6 +179,19 @@ export default function CorePage({ projectScope = "own" }) {
 
   const taskLabel = (taskKey) => taskMeta[taskKey]?.label || humanizeTaskKey(taskKey);
   const taskColor = (taskKey) => taskMeta[taskKey]?.color || "#64748b";
+
+  useEffect(() => {
+    if (!focusedHole) return;
+
+    const nextProject = focusedHole.projects?.name || "";
+    if (selectedProject !== nextProject) {
+      setSelectedProject(nextProject);
+    }
+
+    if (holeFilters.length !== 3) {
+      setHoleFilters(["complete", "in_progress", "not_started"]);
+    }
+  }, [focusedHole, holeFilters.length, selectedProject]);
 
   useEffect(() => {
     if (!orgId) return;
@@ -444,6 +464,30 @@ export default function CorePage({ projectScope = "own" }) {
     setNewHole((prev) => ({ ...prev, planned_depth: "" }));
   }
 
+  useEffect(() => {
+    if (!focusedHoleId) return;
+    if (!filteredHoles.some((hole) => hole.id === focusedHoleId)) return;
+    if (autoOpenedHoleRef.current === focusedHoleId && expandedHole[focusedHoleId]) return;
+
+    autoOpenedHoleRef.current = focusedHoleId;
+    setExpandedHole((current) => ({ ...current, [focusedHoleId]: true }));
+
+    if (!details[focusedHoleId]) {
+      void loadHoleDetails(focusedHoleId);
+    }
+  }, [details, expandedHole, filteredHoles, focusedHoleId]);
+
+  useEffect(() => {
+    if (!focusedHoleId || !expandedHole[focusedHoleId]) return;
+    if (autoScrolledHoleRef.current === focusedHoleId) return;
+
+    const row = document.querySelector(`[data-core-hole-id="${focusedHoleId}"]`);
+    if (!row) return;
+
+    autoScrolledHoleRef.current = focusedHoleId;
+    row.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [expandedHole, focusedHoleId]);
+
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-5">
       <CoreTaskPanelHeader
@@ -598,7 +642,7 @@ export default function CorePage({ projectScope = "own" }) {
                 <tbody>
               {filteredHoles.map((h) => (
                 <Fragment key={h.id}>
-                  <tr>
+                  <tr data-core-hole-id={h.id} className={focusedHoleId === h.id ? "bg-cyan-400/[0.06]" : undefined}>
                     <td className="p-2 border align-top">
                       <button className="btn btn-3d-glass text-xs" onClick={() => toggleHole(h.id)}>
                         {expandedHole[h.id] ? "−" : "+"}
@@ -761,7 +805,7 @@ export default function CorePage({ projectScope = "own" }) {
           {/* Mobile card list */}
           <div className="md:hidden space-y-3">
             {filteredHoles.map((h) => (
-              <div key={h.id} className="card p-3">
+              <div key={h.id} data-core-hole-id={h.id} className={`card p-3 ${focusedHoleId === h.id ? "ring-1 ring-cyan-300/30" : ""}`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-xs">
                     <span className="text-gray-700">Hole ID: {h.hole_id}</span>
