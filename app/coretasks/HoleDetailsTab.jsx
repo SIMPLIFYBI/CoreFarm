@@ -117,6 +117,265 @@ function getWorkflowMeta(status) {
   return { label: "Planned", className: "bg-orange-400/15 text-orange-100 border-orange-300/20" };
 }
 
+const WORKFLOW_LIGHT_META = {
+  complete: {
+    label: "Signed off",
+    chipClassName: "border-emerald-300/25 bg-emerald-400/10 text-emerald-50",
+    dotClassName: "border-emerald-200/50 bg-emerald-400 shadow-[0_0_24px_rgba(74,222,128,0.48)]",
+    flowRingClassName: "border-emerald-300/50 text-emerald-300 shadow-[0_0_40px_rgba(74,222,128,0.22)]",
+    flowCoreClassName: "border-white/10 bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.16),rgba(30,41,59,0.94)_42%,rgba(15,23,42,0.98)_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-18px_40px_rgba(15,23,42,0.42)]",
+    flowIconBadgeClassName: "border-emerald-200/20 bg-[linear-gradient(145deg,rgba(16,185,129,0.95),rgba(5,150,105,0.82))] text-white shadow-[0_18px_40px_rgba(16,185,129,0.3)]",
+  },
+  in_progress: {
+    label: "In progress",
+    chipClassName: "border-amber-300/25 bg-amber-400/10 text-amber-50",
+    dotClassName: "border-amber-200/50 bg-amber-300 shadow-[0_0_24px_rgba(251,191,36,0.45)]",
+    flowRingClassName: "border-amber-300/50 text-amber-300 shadow-[0_0_40px_rgba(251,191,36,0.22)]",
+    flowCoreClassName: "border-white/10 bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.16),rgba(30,41,59,0.94)_42%,rgba(15,23,42,0.98)_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-18px_40px_rgba(15,23,42,0.42)]",
+    flowIconBadgeClassName: "border-amber-200/20 bg-[linear-gradient(145deg,rgba(251,191,36,0.95),rgba(217,119,6,0.82))] text-slate-950 shadow-[0_18px_40px_rgba(251,191,36,0.3)]",
+  },
+  planned: {
+    label: "Planned",
+    chipClassName: "border-rose-300/25 bg-rose-400/10 text-rose-50",
+    dotClassName: "border-rose-200/40 bg-rose-400 shadow-[0_0_22px_rgba(251,113,133,0.35)]",
+    flowRingClassName: "border-orange-300/50 text-orange-300 shadow-[0_0_40px_rgba(251,146,60,0.2)]",
+    flowCoreClassName: "border-white/10 bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.16),rgba(30,41,59,0.94)_42%,rgba(15,23,42,0.98)_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-18px_40px_rgba(15,23,42,0.42)]",
+    flowIconBadgeClassName: "border-orange-200/20 bg-[linear-gradient(145deg,rgba(249,115,22,0.95),rgba(234,88,12,0.82))] text-white shadow-[0_18px_40px_rgba(249,115,22,0.3)]",
+  },
+  not_started: {
+    label: "Not started",
+    chipClassName: "border-white/10 bg-white/[0.05] text-slate-200",
+    dotClassName: "border-white/12 bg-slate-600",
+    flowRingClassName: "border-slate-400/35 text-slate-300 shadow-[0_0_30px_rgba(148,163,184,0.1)]",
+    flowCoreClassName: "border-white/10 bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.14),rgba(30,41,59,0.94)_42%,rgba(15,23,42,0.98)_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-18px_40px_rgba(15,23,42,0.42)]",
+    flowIconBadgeClassName: "border-white/10 bg-[linear-gradient(145deg,rgba(100,116,139,0.92),rgba(51,65,85,0.88))] text-white shadow-[0_18px_40px_rgba(15,23,42,0.28)]",
+  },
+};
+
+function formatWorkflowDateTime(value) {
+  if (!value) return "Not recorded";
+  const dateValue = new Date(value);
+  if (Number.isNaN(dateValue.getTime())) return "Not recorded";
+  return dateValue.toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function getWorkflowLightMeta(statusKey) {
+  return WORKFLOW_LIGHT_META[statusKey] || WORKFLOW_LIGHT_META.not_started;
+}
+
+function WorkflowStageStatusIcon({ statusKey, className = "" }) {
+  const sharedProps = {
+    "aria-hidden": true,
+    className,
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    viewBox: "0 0 24 24",
+  };
+
+  if (statusKey === "complete") {
+    return (
+      <svg {...sharedProps}>
+        <path d="M5 12.5l4.2 4.2L19 7.8" />
+      </svg>
+    );
+  }
+
+  if (statusKey === "in_progress") {
+    return (
+      <svg {...sharedProps}>
+        <path d="M12 6v6l4 2" />
+        <circle cx="12" cy="12" r="8" />
+      </svg>
+    );
+  }
+
+  if (statusKey === "planned") {
+    return (
+      <svg {...sharedProps}>
+        <path d="M12 7v5" />
+        <path d="M12 16h.01" />
+        <circle cx="12" cy="12" r="8" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...sharedProps}>
+      <path d="M8 12h8" />
+      <circle cx="12" cy="12" r="8" />
+    </svg>
+  );
+}
+
+function getWorkflowSignerLabel(profile, signerId = "") {
+  if (profile) return profile.display_name || profile.full_name || profile.email || signerId || "Unknown user";
+  return signerId || "Not captured";
+}
+
+function summariseWorkflowStepStatuses(steps) {
+  if (!steps.length) return "not_started";
+  if (steps.every((step) => step.statusKey === "complete")) return "complete";
+  if (steps.some((step) => step.statusKey === "in_progress")) return "in_progress";
+  if (steps.some((step) => step.statusKey === "complete")) return "in_progress";
+  if (steps.some((step) => step.statusKey === "planned")) return "planned";
+  return "not_started";
+}
+
+function deriveWorkflowStepStatusKey({
+  explicitStatusKey,
+  phaseIndex,
+  substageIndex,
+  currentPhaseIndex,
+  currentSubstageIndex,
+  currentStatusKey,
+  phaseHasSubstages,
+}) {
+  if (explicitStatusKey) return explicitStatusKey;
+  if (!currentPhaseIndex) return "not_started";
+
+  if (phaseIndex < currentPhaseIndex) return "complete";
+  if (phaseIndex > currentPhaseIndex) return "not_started";
+
+  if (!phaseHasSubstages) {
+    return currentStatusKey || "planned";
+  }
+
+  if (!currentSubstageIndex) {
+    return currentStatusKey || "planned";
+  }
+
+  if (substageIndex < currentSubstageIndex) return "complete";
+  if (substageIndex > currentSubstageIndex) return "not_started";
+  return currentStatusKey || "planned";
+}
+
+function buildHoleWorkflowVisualModel({
+  workflow,
+  currentPhaseId,
+  currentSubstageId,
+  currentStatusKey,
+  phaseStatusById,
+  substageStatusById,
+  profileByUserId,
+}) {
+  if (!workflow) return null;
+
+  const visiblePhases = (workflow.namedPhases?.length ? workflow.namedPhases : workflow.phases || []).filter((phase) => String(phase?.name || "").trim());
+  const currentPhase = visiblePhases.find((phase) => phase.id === currentPhaseId) || null;
+  const currentSubstage = visiblePhases
+    .flatMap((phase) => (phase.substages || []).map((substage) => ({ ...substage, workflow_phase_id: phase.id })))
+    .find((substage) => substage.id === currentSubstageId) || null;
+
+  const currentPhaseIndex = currentPhase?.phase_index || 0;
+  const currentSubstageIndex = currentSubstage?.substage_index || 0;
+  const stepById = {};
+  let currentStepId = "";
+
+  const phases = visiblePhases.map((phase) => {
+    const visibleSubstages = (phase.substages || []).filter((substage) => String(substage?.name || "").trim());
+    const phaseHasSubstages = visibleSubstages.length > 0;
+    const phaseRuntime = phaseStatusById[phase.id] || null;
+
+    const steps = phaseHasSubstages
+      ? visibleSubstages.map((substage) => {
+          const runtime = substageStatusById[substage.id] || null;
+          const statusKey = deriveWorkflowStepStatusKey({
+            explicitStatusKey: runtime?.status_key || "",
+            phaseIndex: phase.phase_index,
+            substageIndex: substage.substage_index,
+            currentPhaseIndex,
+            currentSubstageIndex,
+            currentStatusKey,
+            phaseHasSubstages: true,
+          });
+          const step = {
+            id: `substage:${substage.id}`,
+            stepId: substage.id,
+            phaseId: phase.id,
+            type: "substage",
+            title: substage.name,
+            description: substage.description || phase.description || "No description yet.",
+            phaseIndex: phase.phase_index,
+            substageIndex: substage.substage_index,
+            statusKey,
+            runtime,
+            signerId: runtime?.signed_off_by || "",
+            signerProfile: profileByUserId[runtime?.signed_off_by] || null,
+            signedOffAt: runtime?.signed_off_at || null,
+            signoffNote: runtime?.signoff_note || "",
+            updatedAt: runtime?.updated_at || null,
+            isDerived: !runtime,
+            isCurrent: currentSubstageId === substage.id,
+          };
+          stepById[step.id] = step;
+          if (step.isCurrent) currentStepId = step.id;
+          return step;
+        })
+      : [
+          {
+            id: `phase:${phase.id}`,
+            stepId: phase.id,
+            phaseId: phase.id,
+            type: "phase",
+            title: phase.name,
+            description: phase.description || "No description yet.",
+            phaseIndex: phase.phase_index,
+            substageIndex: 0,
+            statusKey: deriveWorkflowStepStatusKey({
+              explicitStatusKey: phaseRuntime?.status_key || "",
+              phaseIndex: phase.phase_index,
+              substageIndex: 0,
+              currentPhaseIndex,
+              currentSubstageIndex,
+              currentStatusKey,
+              phaseHasSubstages: false,
+            }),
+            runtime: phaseRuntime,
+            signerId: "",
+            signerProfile: profileByUserId[phaseRuntime?.signed_off_by] || null,
+            signedOffAt: phaseRuntime?.signed_off_at || null,
+            signoffNote: phaseRuntime?.signoff_note || "",
+            updatedAt: phaseRuntime?.updated_at || null,
+            isDerived: !phaseRuntime,
+            isCurrent: currentPhaseId === phase.id && !currentSubstageId,
+          },
+        ];
+
+    steps.forEach((step) => {
+      stepById[step.id] = step;
+      if (step.isCurrent) currentStepId = step.id;
+    });
+
+    return {
+      id: phase.id,
+      phaseIndex: phase.phase_index,
+      title: phase.name,
+      description: phase.description || "No description yet.",
+      statusKey: phaseRuntime?.status_key || summariseWorkflowStepStatuses(steps),
+      steps,
+      runtime: phaseRuntime,
+    };
+  });
+
+  if (!currentStepId) {
+    currentStepId = phases.flatMap((phase) => phase.steps)[0]?.id || "";
+  }
+
+  return {
+    workflowId: workflow.id,
+    workflowName: workflow.name,
+    phases,
+    stepById,
+    currentStepId,
+  };
+}
+
 function createEmptyForm(projectId = "") {
   return {
     hole_id: "",
@@ -246,6 +505,14 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
   const [holeWorkflows, setHoleWorkflows] = useState([]);
   const [availableDescriptors, setAvailableDescriptors] = useState([]);
   const [holeStatus, setHoleStatus] = useState({});
+  const [selectedHoleWorkflowRuntime, setSelectedHoleWorkflowRuntime] = useState({
+    loading: false,
+    supportsSignoff: true,
+    phaseStatusById: {},
+    substageStatusById: {},
+    profileByUserId: {},
+  });
+  const [selectedWorkflowPhaseId, setSelectedWorkflowPhaseId] = useState("");
   const [taskMeta, setTaskMeta] = useState(
     Object.fromEntries(DEFAULT_TASK_TYPE_DEFS.map((task) => [task.key, { label: task.name, color: task.color || "#64748b" }]))
   );
@@ -424,6 +691,143 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
 
   const labelForTask = (taskKey) => taskMeta[taskKey]?.label || humanizeLabel(taskKey);
   const colorForTask = (taskKey) => taskMeta[taskKey]?.color || "#64748b";
+
+  const selectedWorkflowDefinition = useMemo(
+    () => holeWorkflows.find((workflow) => workflow.id === form.current_workflow_id) || null,
+    [holeWorkflows, form.current_workflow_id]
+  );
+
+  const selectedHoleWorkflowVisual = useMemo(
+    () =>
+      buildHoleWorkflowVisualModel({
+        workflow: selectedWorkflowDefinition,
+        currentPhaseId: form.current_workflow_phase_id,
+        currentSubstageId: form.current_workflow_substage_id,
+        currentStatusKey: form.current_workflow_status_key,
+        phaseStatusById: selectedHoleWorkflowRuntime.phaseStatusById,
+        substageStatusById: selectedHoleWorkflowRuntime.substageStatusById,
+        profileByUserId: selectedHoleWorkflowRuntime.profileByUserId,
+      }),
+    [
+      selectedWorkflowDefinition,
+      form.current_workflow_phase_id,
+      form.current_workflow_substage_id,
+      form.current_workflow_status_key,
+      selectedHoleWorkflowRuntime.phaseStatusById,
+      selectedHoleWorkflowRuntime.substageStatusById,
+      selectedHoleWorkflowRuntime.profileByUserId,
+    ]
+  );
+
+  const selectedWorkflowPhase = selectedHoleWorkflowVisual?.phases?.find((phase) => phase.id === selectedWorkflowPhaseId) || null;
+
+  useEffect(() => {
+    if (!selectedHoleWorkflowVisual) {
+      setSelectedWorkflowPhaseId("");
+      return;
+    }
+
+    setSelectedWorkflowPhaseId((current) => {
+      if (current && selectedHoleWorkflowVisual.phases.some((phase) => phase.id === current)) return current;
+
+      const currentStep = selectedHoleWorkflowVisual.stepById[selectedHoleWorkflowVisual.currentStepId] || null;
+      if (currentStep?.phaseId) return currentStep.phaseId;
+
+      return selectedHoleWorkflowVisual.phases[0]?.id || "";
+    });
+  }, [selectedHoleWorkflowVisual]);
+
+  const loadSelectedHoleWorkflowRuntime = async (holeId) => {
+    if (!holeId) {
+      setSelectedHoleWorkflowRuntime({
+        loading: false,
+        supportsSignoff: true,
+        phaseStatusById: {},
+        substageStatusById: {},
+        profileByUserId: {},
+      });
+      return;
+    }
+
+    setSelectedHoleWorkflowRuntime((current) => ({ ...current, loading: true }));
+
+    const signedSubstageSelect = "id,hole_id,workflow_phase_id,workflow_substage_id,status_key,updated_at,signed_off_by,signed_off_at,signoff_note";
+    const fallbackPhaseSelect = "id,hole_id,workflow_phase_id,status_key,updated_at";
+    const fallbackSubstageSelect = "id,hole_id,workflow_phase_id,workflow_substage_id,status_key,updated_at";
+
+    try {
+      let supportsSignoff = true;
+      let phaseRes;
+      let substageRes;
+
+      [phaseRes, substageRes] = await Promise.all([
+        supabase.from("hole_workflow_phase_statuses").select(fallbackPhaseSelect).eq("hole_id", holeId),
+        supabase.from("hole_workflow_substage_statuses").select(signedSubstageSelect).eq("hole_id", holeId),
+      ]);
+
+      const missingSignoffColumn = /signed_off_by|signed_off_at|signoff_note/i.test(substageRes?.error?.message || "");
+
+      if (missingSignoffColumn) {
+        supportsSignoff = false;
+        [phaseRes, substageRes] = await Promise.all([
+          supabase.from("hole_workflow_phase_statuses").select(fallbackPhaseSelect).eq("hole_id", holeId),
+          supabase.from("hole_workflow_substage_statuses").select(fallbackSubstageSelect).eq("hole_id", holeId),
+        ]);
+      }
+
+      if (phaseRes.error) throw phaseRes.error;
+      if (substageRes.error) throw substageRes.error;
+
+      const phaseRows = phaseRes.data || [];
+      const substageRows = substageRes.data || [];
+      const signerIds = Array.from(
+        new Set(
+          [...phaseRows, ...substageRows]
+            .map((row) => row.signed_off_by)
+            .filter(Boolean)
+        )
+      );
+
+      let profileByUserId = {};
+      if (signerIds.length) {
+        const profilesRes = await supabase.from("user_profiles").select("user_id,display_name,email").in("user_id", signerIds);
+        if (profilesRes.error) throw profilesRes.error;
+        profileByUserId = Object.fromEntries((profilesRes.data || []).map((profile) => [profile.user_id, profile]));
+      }
+
+      setSelectedHoleWorkflowRuntime({
+        loading: false,
+        supportsSignoff,
+        phaseStatusById: Object.fromEntries(phaseRows.map((row) => [row.workflow_phase_id, row])),
+        substageStatusById: Object.fromEntries(substageRows.map((row) => [row.workflow_substage_id, row])),
+        profileByUserId,
+      });
+    } catch (error) {
+      toast.error(error?.message || "Failed to load hole workflow steps");
+      setSelectedHoleWorkflowRuntime({
+        loading: false,
+        supportsSignoff: false,
+        phaseStatusById: {},
+        substageStatusById: {},
+        profileByUserId: {},
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedHole?.id || !form.current_workflow_id) {
+      setSelectedHoleWorkflowRuntime({
+        loading: false,
+        supportsSignoff: true,
+        phaseStatusById: {},
+        substageStatusById: {},
+        profileByUserId: {},
+      });
+      return;
+    }
+
+    void loadSelectedHoleWorkflowRuntime(selectedHole.id);
+  }, [selectedHole?.id, form.current_workflow_id]);
 
   const classifyHole = (hole) => {
     const status = holeStatus[hole.id] || {};
@@ -1593,7 +1997,202 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
-                <div className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.9fr)]">
+                <div className="space-y-5">
+                  <section className="rounded-[28px] border border-white/10 bg-slate-950/45 p-4 shadow-[0_24px_80px_rgba(2,6,23,0.3)] md:p-5">
+                    <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(145deg,rgba(8,47,73,0.28),rgba(15,23,42,0.72),rgba(30,41,59,0.52))] p-4 shadow-[0_18px_50px_rgba(2,6,23,0.22)]">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-100/75">Workflow visual</div>
+                          <div className="mt-1 text-base font-semibold text-white">Stage overview</div>
+                          <p className="mt-1 max-w-3xl text-sm text-slate-300">
+                            See every main stage at a glance. Select any stage to drill into its substages, sign-off details, and completion trail.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-[11px] text-slate-200">
+                          {Object.entries(WORKFLOW_LIGHT_META).map(([statusKey, meta]) => (
+                            <span key={statusKey} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 ${meta.chipClassName}`}>
+                              <span className={`inline-flex h-2.5 w-2.5 rounded-full border ${meta.dotClassName}`} />
+                              {meta.label}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {selectedHoleWorkflowVisual ? (
+                        <div className="mt-4 space-y-4">
+                          <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] px-4 py-5">
+                            <div className="grid grid-cols-5 gap-3 md:gap-4">
+                              {Array.from({ length: 5 }, (_, index) => {
+                                const phaseNumber = index + 1;
+                                const phase = selectedHoleWorkflowVisual.phases.find((item) => item.phaseIndex === phaseNumber) || null;
+                                const phaseMeta = getWorkflowLightMeta(phase?.statusKey || "not_started");
+                                const completedSteps = phase?.steps.filter((step) => step.statusKey === "complete").length || 0;
+                                const totalSteps = phase?.steps.length || 0;
+                                const isSelected = phase ? selectedWorkflowPhaseId === phase.id : false;
+
+                                return (
+                                  <div key={`stage-gate-${phaseNumber}`} className="relative flex flex-col items-center text-center">
+                                    {phaseNumber < 5 ? (
+                                      <div className="pointer-events-none absolute left-[calc(50%+3rem)] right-[-22%] top-[3rem] hidden h-px md:block">
+                                        <div className="relative h-px w-full bg-gradient-to-r from-white/0 via-white/15 to-white/0">
+                                          <span className="absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-slate-300/70" />
+                                        </div>
+                                      </div>
+                                    ) : null}
+
+                                    <button
+                                      type="button"
+                                      onClick={() => phase && setSelectedWorkflowPhaseId(phase.id)}
+                                      disabled={!phase}
+                                      className={[
+                                        "group relative flex w-full flex-col items-center text-center",
+                                        !phase ? "cursor-default opacity-55" : "",
+                                      ].join(" ")}
+                                    >
+                                      <div
+                                        className={[
+                                          "relative flex h-[74px] w-[74px] items-center justify-center rounded-full border-[5px] bg-transparent transition-base md:h-[96px] md:w-[96px] lg:h-[114px] lg:w-[114px]",
+                                          phaseMeta.flowRingClassName,
+                                          isSelected
+                                            ? "scale-[1.05] shadow-[0_0_0_10px_rgba(34,211,238,0.12),0_0_0_18px_rgba(34,211,238,0.05)]"
+                                            : phase
+                                              ? "group-hover:scale-[1.02]"
+                                              : "",
+                                        ].join(" ")}
+                                      >
+                                        {isSelected ? (
+                                          <span className="pointer-events-none absolute inset-[-14px] rounded-full border border-cyan-300/25" />
+                                        ) : null}
+                                        <span className="absolute -top-1.5 h-2.5 w-2.5 rounded-full bg-current opacity-85" />
+                                        <div
+                                          className={[
+                                            "relative flex h-[58px] w-[58px] flex-col items-center justify-center rounded-full border text-center md:h-[76px] md:w-[76px] lg:h-[92px] lg:w-[92px]",
+                                            phaseMeta.flowCoreClassName,
+                                          ].join(" ")}
+                                        >
+                                          <span className="pointer-events-none absolute inset-[14%] rounded-full border border-white/8" />
+                                          <span
+                                            className={[
+                                              "relative flex h-9 w-9 items-center justify-center rounded-2xl border md:h-11 md:w-11 lg:h-14 lg:w-14",
+                                              phaseMeta.flowIconBadgeClassName,
+                                            ].join(" ")}
+                                          >
+                                          <WorkflowStageStatusIcon
+                                            statusKey={phase?.statusKey || "not_started"}
+                                            className="h-5 w-5 md:h-6 md:w-6 lg:h-7 lg:w-7"
+                                          />
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      <div className={`mt-3 inline-flex rounded-full border px-2 py-1 text-[10px] font-medium uppercase tracking-[0.16em] md:px-3 md:text-[11px] ${phaseMeta.chipClassName}`}>
+                                        Stage Gate {phaseNumber}
+                                      </div>
+                                      <div className={[
+                                        "mt-2 text-sm font-semibold leading-tight md:text-base lg:text-[28px] lg:leading-none",
+                                        isSelected ? "text-cyan-50" : "text-white",
+                                      ].join(" ")}>{phase?.title || "Unused"}</div>
+                                      <div className="mt-2 min-h-[40px] max-w-[180px] text-[11px] leading-4 text-slate-300 md:text-xs md:leading-5 lg:text-sm">
+                                        {phase?.description || "No configured stage in this slot."}
+                                      </div>
+                                      <div className="mt-2 text-[10px] uppercase tracking-[0.16em] text-slate-500 md:text-[11px]">
+                                        {phase ? `${completedSteps}/${totalSteps} signed off` : "No stage configured"}
+                                      </div>
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {selectedWorkflowPhase ? (
+                            <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,rgba(15,23,42,0.96),rgba(8,47,73,0.3),rgba(15,23,42,0.82))] p-4">
+                              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                <div>
+                                  <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Selected stage</div>
+                                  <div className="mt-1 text-lg font-semibold text-white">{selectedWorkflowPhase.title}</div>
+                                  <div className="mt-1 text-sm text-slate-300">{selectedWorkflowPhase.description}</div>
+                                </div>
+                                <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs ${getWorkflowLightMeta(selectedWorkflowPhase.statusKey).chipClassName}`}>
+                                  <span className={`inline-flex h-2.5 w-2.5 rounded-full border ${getWorkflowLightMeta(selectedWorkflowPhase.statusKey).dotClassName}`} />
+                                  {getWorkflowLightMeta(selectedWorkflowPhase.statusKey).label}
+                                </span>
+                              </div>
+
+                              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                                <div className="rounded-2xl border border-white/10 bg-black/10 px-3 py-3">
+                                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Substages signed off</div>
+                                  <div className="mt-1 text-sm font-medium text-white">{selectedWorkflowPhase.steps.filter((step) => step.statusKey === "complete").length} of {selectedWorkflowPhase.steps.length}</div>
+                                </div>
+                                <div className="rounded-2xl border border-white/10 bg-black/10 px-3 py-3">
+                                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Current aggregate state</div>
+                                  <div className="mt-1 text-sm font-medium text-white">{getWorkflowLightMeta(selectedWorkflowPhase.statusKey).label}</div>
+                                </div>
+                                <div className="rounded-2xl border border-white/10 bg-black/10 px-3 py-3">
+                                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">How this stage works</div>
+                                  <div className="mt-1 text-sm font-medium text-white">Stage status is derived from its substages.</div>
+                                </div>
+                              </div>
+
+                              <div className="mt-4 space-y-3">
+                                {selectedWorkflowPhase.steps.map((step) => {
+                                  const stepMeta = getWorkflowLightMeta(step.statusKey);
+                                  return (
+                                    <div key={step.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                        <div>
+                                          <div className="flex items-center gap-2">
+                                            <span className={`inline-flex h-3.5 w-3.5 rounded-full border ${stepMeta.dotClassName}`} />
+                                            <div className="text-sm font-semibold text-white">{step.title}</div>
+                                            {step.isCurrent ? (
+                                              <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.18em] text-cyan-100">
+                                                Current
+                                              </span>
+                                            ) : null}
+                                          </div>
+                                          <div className="mt-1 text-sm text-slate-300">{step.description}</div>
+                                        </div>
+                                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] ${stepMeta.chipClassName}`}>{stepMeta.label}</span>
+                                      </div>
+
+                                      <div className="mt-3 grid gap-3 md:grid-cols-3">
+                                        <div className="rounded-xl border border-white/8 bg-black/10 px-3 py-2.5">
+                                          <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Signed off by</div>
+                                          <div className="mt-1 text-xs font-medium text-white">{getWorkflowSignerLabel(step.signerProfile, step.signerId)}</div>
+                                        </div>
+                                        <div className="rounded-xl border border-white/8 bg-black/10 px-3 py-2.5">
+                                          <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Signed off at</div>
+                                          <div className="mt-1 text-xs font-medium text-white">{formatWorkflowDateTime(step.signedOffAt)}</div>
+                                        </div>
+                                        <div className="rounded-xl border border-white/8 bg-black/10 px-3 py-2.5">
+                                          <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Last status update</div>
+                                          <div className="mt-1 text-xs font-medium text-white">{formatWorkflowDateTime(step.updatedAt)}</div>
+                                        </div>
+                                      </div>
+
+                                      <div className="mt-3 rounded-xl border border-white/8 bg-black/10 px-3 py-2.5 text-xs text-slate-300">
+                                        {step.signoffNote
+                                          ? step.signoffNote
+                                          : selectedHoleWorkflowRuntime.supportsSignoff
+                                            ? "No sign-off note recorded for this substage yet."
+                                            : "This environment does not have workflow sign-off columns yet; the panel is showing workflow status only."}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div className="mt-4 rounded-[24px] border border-dashed border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">
+                          Choose a workflow for this hole to render the stage-gate flow in the unified workbench.
+                        </div>
+                      )}
+                    </div>
+                  </section>
+
+                  <div className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.9fr)]">
                   <section className="space-y-4 rounded-[28px] border border-white/10 bg-slate-950/45 p-4 shadow-[0_24px_80px_rgba(2,6,23,0.3)] md:p-5">
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -1949,6 +2548,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
                       </div>
                     )}
                   </section>
+                </div>
                 </div>
               </div>
             </div>

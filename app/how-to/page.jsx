@@ -1,181 +1,248 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
 
-const LESSONS = [
+const SETUP_ORDER = [
   {
-    id: "start",
-    title: "Start With Projects",
-    duration: "5 min",
+    id: "org",
+    step: "01",
+    title: "Create or choose your organization",
+    href: "/team",
+    area: "Team",
+    summary: "Everything in the app is scoped to an organization first. If the user is still in the demo org, they should create or join their real org before loading production data.",
+    required: ["Organization membership", "User role"],
+    outputs: ["Active org selected", "Admin/member access confirmed"],
+  },
+  {
+    id: "projects",
+    step: "02",
+    title: "Create the project and set the CRS",
     href: "/projects",
-    summary: "Set up the operating structure first so holes, assets, and activity all land in the right place.",
-    goals: [
-      "Create a project and basic metadata",
-      "Set the project coordinate system",
-      "Add locations, tenements, and supporting reference data",
-    ],
-    steps: [
-      "Open Projects and create the project record you want the team to work in.",
-      "Set the project CRS before loading any projected coordinates such as easting and northing.",
-      "Add the supporting records your crew will use later, including tenements, locations, vendors, and resources.",
-    ],
-    tip: "If coordinates matter, configure the CRS first. It avoids cleanup later when importing holes or assets.",
+    area: "Projects",
+    summary: "Projects are the parent records for holes and assets. The coordinate reference system should be configured here before loading any projected locations.",
+    required: ["Organization", "Project name"],
+    outputs: ["Project record", "Coordinate CRS code or name", "Optional dates, cost code, WBS"],
   },
   {
-    id: "holes",
-    title: "Load Holes Into Drilling",
-    duration: "8 min",
+    id: "references",
+    step: "03",
+    title: "Add supporting reference data",
+    href: "/projects",
+    area: "Projects and setup pages",
+    summary: "Before field data starts arriving, set up the supporting records that downstream workflows expect to reference.",
+    required: ["Project exists"],
+    outputs: ["Tenements", "Asset locations", "Asset types", "Resources", "Vendors", "Activity and PLOD types when needed"],
+  },
+  {
+    id: "holes-assets",
+    step: "04",
+    title: "Load holes and assets into the project",
     href: "/coretasks",
-    summary: "Build the hole register, bulk upload planned holes, and keep each hole tied to a project.",
-    goals: [
-      "Add single holes or bulk import many at once",
-      "Use project-linked coordinate handling",
-      "Bulk edit, filter, and manage the hole list",
-    ],
-    steps: [
-      "Go to Drilling and open Hole Details to add a hole manually or use the bulk uploader.",
-      "Choose the destination project before importing so every hole is assigned correctly.",
-      "Use filters and row selection to bulk update status, diameter, or contractor across multiple holes.",
-    ],
-    tip: "Bulk uploads now require a project selection. Keep one import per project for the cleanest workflow.",
-  },
-  {
-    id: "viz",
-    title: "Use Drillhole Viz",
-    duration: "10 min",
-    href: "/drillhole-viz",
-    summary: "Review hole attributes, geology, construction, and completion details in one visual workspace.",
-    goals: [
-      "Inspect collar and planning data",
-      "Log geology and construction intervals",
-      "Review the hole schematic and completion state",
-    ],
-    steps: [
-      "Open Drillhole Viz and choose a project or hole to inspect.",
-      "Use the tabs to enter attributes, geology intervals, annulus intervals, and construction data.",
-      "Confirm planned depth, collar information, and completion details before the hole is considered ready for reporting.",
-    ],
-    tip: "If a hole cannot save additional attributes, confirm it has already been assigned to a project in Hole Details.",
+    area: "CoreYard and Map",
+    summary: "Holes and assets should be attached to a project as early as possible. That keeps mapping, logging, scheduling, and reporting aligned.",
+    required: ["Project", "CRS if using projected coordinates"],
+    outputs: ["Hole register", "Mapped assets", "Project-linked field records"],
   },
   {
     id: "map",
-    title: "Navigate With Map",
-    duration: "6 min",
+    step: "05",
+    title: "Use the map to verify and work spatially",
     href: "/map",
-    summary: "Visualize holes spatially, inspect assets, and move quickly between projects in the field view.",
-    goals: [
-      "See holes on the map",
-      "Use project filters to focus the workspace",
-      "Open supporting details without losing location context",
-    ],
-    steps: [
-      "Open Map and filter to the project or set of holes you want to inspect.",
-      "Use the hole list and map markers together to jump between locations and records.",
-      "Switch to the mobile map when you need the lighter field workflow on smaller screens.",
-    ],
-    tip: "Map visibility depends on valid collar coordinates. If a hole is missing, check its saved coordinates and project CRS.",
+    area: "Map",
+    summary: "Once holes and assets have coordinates, the map becomes the fastest way to inspect records, move locations, create new spatial records, and jump into CoreYard.",
+    required: ["Hole collar longitude and latitude, or asset longitude and latitude"],
+    outputs: ["Verified spatial layout", "Filtered project views", "Map-driven record access"],
   },
   {
-    id: "dispatch",
-    title: "Prepare Sample Dispatch",
-    duration: "7 min",
+    id: "coreyard",
+    step: "06",
+    title: "Run CoreYard workflows",
     href: "/coretasks",
-    summary: "Turn logged intervals into dispatch-ready sample runs with a clear chain of movement.",
-    goals: [
-      "Find eligible core intervals",
-      "Build a dispatch with pallets and lab destination",
-      "Track what has been sent",
-    ],
-    steps: [
-      "Open the Sample Dispatch area inside Drilling and review eligible core intervals.",
-      "Filter by hole when needed, then add the intervals you are sending.",
-      "Set the dispatch date, pallet count, destination, and consignment number before saving.",
-    ],
-    tip: "Use the hole filter when preparing dispatches for a single program so the interval list stays manageable.",
+    area: "CoreYard",
+    summary: "CoreYard is where users manage holes, logging, dispatch, and core task progress. This area should be used after the project and hole register are in place.",
+    required: ["Project-linked holes"],
+    outputs: ["Updated hole attributes", "Logging progress", "Dispatch records", "Core task progress"],
   },
   {
-    id: "activity",
-    title: "Capture Activity And Plods",
-    duration: "9 min",
+    id: "ops",
+    step: "07",
+    title: "Capture operations, consumables, and schedule",
     href: "/activity",
-    summary: "Record daily operational work, link it to assets and activity types, and review the resulting plods.",
-    goals: [
-      "Track operational activity by date and vendor",
-      "Use plods for approval-ready summaries",
-      "Review totals and costs in one place",
-    ],
-    steps: [
-      "Set up activity types and plod types in Projects if your organization has not done that yet.",
-      "Log activity against the relevant assets, vendors, or resources.",
-      "Review the resulting plods and approvals to make sure the operational record is complete.",
-    ],
-    tip: "Activity setup pays off early. Spend a few minutes defining clean activity types before teams start logging heavily.",
-  },
-  {
-    id: "consumables",
-    title: "Manage Consumables",
-    duration: "6 min",
-    href: "/consumables",
-    summary: "Keep inventory, requests, and purchase orders aligned so supply tracking stays current.",
-    goals: [
-      "Track inventory levels",
-      "Create requests and purchase orders",
-      "Filter order items by PO and status",
-    ],
-    steps: [
-      "Use Inventory to keep quantities and reorder points up to date.",
-      "Move into Requests and Orders when items need to be sourced or received.",
-      "Use the order filters to review outstanding, ordered, or received items quickly.",
-    ],
-    tip: "Keep item naming consistent from the start. It makes reorder reporting and history much cleaner later on.",
-  },
-  {
-    id: "team",
-    title: "Set Up Team And Sharing",
-    duration: "5 min",
-    href: "/team",
-    summary: "Invite users, manage roles, and configure organization sharing when client/vendor visibility is needed.",
-    goals: [
-      "Invite team members",
-      "Control organization roles",
-      "Share the right projects with connected organizations",
-    ],
-    steps: [
-      "Open Team to invite users and assign the correct role for each person.",
-      "Create organization connections when work needs to be shared across org boundaries.",
-      "Choose exactly which projects should be visible through shared project access.",
-    ],
-    tip: "Only share the projects a connected organization actually needs. It keeps the client view tight and easier to support.",
+    area: "Activity, Consumables, Scheduler",
+    summary: "Operational workflows become reliable after org, project, hole, and resource structures are already in place.",
+    required: ["Resources", "Vendors", "Projects", "Holes", "Activity types where relevant"],
+    outputs: ["PLODs", "Consumable tracking", "Scheduled drilling tasks"],
   },
 ];
 
-const QUICK_START = [
-  "Create the project and set the CRS.",
-  "Load holes into Drilling.",
-  "Review data in Drillhole Viz and Map.",
-  "Run dispatch, activity, and consumables workflows once the project is live.",
+const DATA_ORDER = [
+  {
+    title: "Organization",
+    where: "Team",
+    why: "Controls access and data ownership.",
+    before: "Everything",
+  },
+  {
+    title: "Projects",
+    where: "Projects",
+    why: "Parent record for holes and assets.",
+    before: "Holes, assets, map workflows, CoreYard work",
+  },
+  {
+    title: "Coordinate system",
+    where: "Projects",
+    why: "Needed before importing projected easting and northing values.",
+    before: "Bulk hole loading, mapped asset loading",
+  },
+  {
+    title: "Holes",
+    where: "CoreYard",
+    why: "CoreYard, scheduling, drillhole viz, and map all depend on the hole register.",
+    before: "Logging, dispatch, drillhole viz, scheduler, most drilling workflows",
+  },
+  {
+    title: "Assets",
+    where: "Map and assets workflows",
+    why: "Required for mapped equipment, operational context, and some field actions.",
+    before: "Asset map use, asset-linked activity capture",
+  },
+  {
+    title: "Resources and vendors",
+    where: "Setup and operational pages",
+    why: "Required for scheduling and operational cost capture.",
+    before: "Scheduler, realistic PLOD logging",
+  },
+  {
+    title: "Core task types and progress",
+    where: "CoreYard",
+    why: "Used to record logging and core-processing progress against holes.",
+    before: "Detailed core task tracking and dispatch readiness",
+  },
+  {
+    title: "PLOD activity types and rates",
+    where: "Operational setup",
+    why: "Needed before users can capture consistent daily operational cost inputs.",
+    before: "Reliable PLOD pricing and cost outputs",
+  },
 ];
+
+const MAP_TOOLS = [
+  {
+    name: "Project scope toggle",
+    description: "Switches the workspace between My Projects and Client shared mode.",
+  },
+  {
+    name: "Project and advanced filters",
+    description: "Narrow the map by project, drilling type, hole status, completion status, asset type, asset location, and asset status.",
+  },
+  {
+    name: "Holes and Assets navigator",
+    description: "Lets users browse visible records from the left panel and frame them on the map.",
+  },
+  {
+    name: "Attributes",
+    description: "Opens the attributes drawer for the currently selected hole or asset.",
+  },
+  {
+    name: "Core tasks",
+    description: "Jumps straight from the selected hole into CoreYard logging for that hole.",
+  },
+  {
+    name: "Full screen",
+    description: "Expands the map canvas for larger-area review.",
+  },
+  {
+    name: "Zoom and compass control",
+    description: "The top-right map control handles zoom in, zoom out, and reset orientation or pitch.",
+  },
+  {
+    name: "Open schematic",
+    description: "Selection dock action for holes. Opens the drillhole schematic workflow for the selected hole.",
+  },
+  {
+    name: "Move selected item",
+    description: "Lets users reposition a selected hole or asset by clicking a new point on the map.",
+  },
+  {
+    name: "Duplicate selected item",
+    description: "Creates a copy workflow from the current selection.",
+  },
+  {
+    name: "Propose location",
+    description: "Creates or replaces a location proposal for the current hole or asset instead of directly overwriting its coordinates.",
+  },
+  {
+    name: "Review pending proposal",
+    description: "Appears when a selected entity already has a pending location proposal waiting for review.",
+  },
+];
+
+const MAP_WORKFLOW = [
+  "Start by selecting the right scope and project so the visible set is small and relevant.",
+  "Use the navigator list and the map together. Clicking either a row or a marker will focus the same record.",
+  "If a hole or asset is missing, first check that it is assigned to the correct project and has valid saved coordinates.",
+  "Create on map is intended for My Projects mode. Users place a free point first, then save the hole or asset into a selected project.",
+  "Use move or proposal actions when spatial correction is needed, rather than silently losing the previous location context.",
+  "Use the Core tasks button when the user has selected a hole and wants to move directly into CoreYard work without searching again.",
+];
+
+const COREYARD_SECTIONS = [
+  {
+    title: "Core Workbench",
+    description: "Best starting point for hole-by-hole work. Users review and edit the drillhole register inside the selected project scope.",
+  },
+  {
+    title: "Bulk Uploader",
+    description: "Use this when loading many holes at once. The destination project should be chosen first so imported holes land in the right place.",
+  },
+  {
+    title: "Logging",
+    description: "Used for recording hole task progress and day-to-day core logging work against selected holes.",
+  },
+  {
+    title: "Sample Dispatch",
+    description: "Turns logged or eligible intervals into dispatch-ready sample runs with shipment details.",
+  },
+  {
+    title: "Core Tasks",
+    description: "Maintains the task catalog that supports detailed progress tracking against holes.",
+  },
+];
+
+const COREYARD_RULES = [
+  "Create the project first, then load the holes into that project before asking users to log work.",
+  "If the user came from the map, CoreYard can open focused on a single hole. That is ideal for field follow-up and quick logging.",
+  "Keep project assignment clean. Most CoreYard flows are easier when each hole already belongs to the correct project.",
+  "Use Bulk Uploader for initial register setup, then use Logging and Sample Dispatch as the project becomes active.",
+  "Core tasks should be treated as the progress layer on top of the hole register, not as a replacement for creating holes.",
+];
+
+function SectionBadge({ children }) {
+  return (
+    <div className="inline-flex items-center rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
+      {children}
+    </div>
+  );
+}
+
+function OpenAreaButton({ href, children }) {
+  return (
+    <Link href={href} className="btn btn-3d-primary w-full justify-center md:w-auto">
+      {children}
+    </Link>
+  );
+}
 
 export default function HowToPage() {
-  const [activeLessonId, setActiveLessonId] = useState(LESSONS[0].id);
-
-  const activeLesson = useMemo(
-    () => LESSONS.find((lesson) => lesson.id === activeLessonId) || LESSONS[0],
-    [activeLessonId]
-  );
-
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 md:px-6 lg:py-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 md:px-6 lg:py-8">
       <section className="card p-6 md:p-7">
-        <div className="max-w-3xl space-y-4">
-          <div className="inline-flex items-center rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
-            Platform Lessons
-          </div>
+        <div className="max-w-4xl space-y-4">
+          <SectionBadge>Platform Guide</SectionBadge>
           <div className="space-y-2">
-            <h1 className="text-3xl font-semibold tracking-tight text-slate-50 md:text-4xl">How To Use CoreFarm</h1>
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-50 md:text-4xl">How to use CoreYard efficiently</h1>
             <p className="text-sm leading-6 text-slate-300 md:text-base">
-              Start with the quick setup path, then use the lesson cards below whenever you need help with a specific area of the platform.
+              CoreYard works best when data is loaded in the right order. Start with organization and project structure, then load holes and assets, use the map to verify spatial data, and move into CoreYard logging and operational workflows once the register is stable.
             </p>
           </div>
         </div>
@@ -184,108 +251,175 @@ export default function HowToPage() {
       <section className="card p-5 md:p-6">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-100">Quick Start</h2>
-            <p className="mt-1 text-sm text-slate-400">The shortest path to getting a project live.</p>
+            <h2 className="text-lg font-semibold text-slate-100">Recommended setup order</h2>
+            <p className="mt-1 text-sm text-slate-400">Follow this sequence to avoid rework and missing links between records.</p>
           </div>
-          <Link href="/projects" className="btn btn-3d-glass w-full justify-center text-xs md:w-auto">
-            Open Projects
-          </Link>
+          <OpenAreaButton href="/team">Start with Team</OpenAreaButton>
         </div>
-        <ol className="mt-5 grid gap-3 md:grid-cols-2">
-          {QUICK_START.map((item, index) => (
-            <li key={item} className="flex gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-cyan-300/20 bg-cyan-400/10 text-sm font-semibold text-cyan-100">
-                {index + 1}
+
+        <div className="mt-5 grid gap-4 xl:grid-cols-2">
+          {SETUP_ORDER.map((item) => (
+            <div key={item.id} className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Step {item.step}</div>
+                  <h3 className="mt-1 text-base font-semibold text-slate-100">{item.title}</h3>
+                  <div className="mt-1 text-xs text-cyan-100/80">{item.area}</div>
+                </div>
+                <Link href={item.href} className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/[0.06]">
+                  Open
+                </Link>
               </div>
-              <p className="text-sm leading-6 text-slate-300">{item}</p>
-            </li>
+
+              <p className="mt-3 text-sm leading-6 text-slate-300">{item.summary}</p>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <div className="rounded-2xl border border-white/8 bg-black/10 p-3">
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Required first</div>
+                  <div className="mt-2 space-y-1.5 text-sm text-slate-300">
+                    {item.required.map((entry) => (
+                      <div key={entry}>{entry}</div>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-white/8 bg-black/10 p-3">
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Creates</div>
+                  <div className="mt-2 space-y-1.5 text-sm text-slate-300">
+                    {item.outputs.map((entry) => (
+                      <div key={entry}>{entry}</div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
           ))}
-        </ol>
+        </div>
       </section>
 
-      <section className="space-y-4">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-lg font-semibold text-slate-100">Lessons</h2>
-          <p className="text-sm text-slate-400">Select a topic for a simple walkthrough and a direct link into the app.</p>
+      <section className="card p-5 md:p-6">
+        <div className="max-w-3xl">
+          <h2 className="text-lg font-semibold text-slate-100">What data needs to exist, and in what order</h2>
+          <p className="mt-1 text-sm leading-6 text-slate-400">
+            This is the practical dependency chain taken from how the app loads records today. If users populate data out of order, they usually feel it first in the map, CoreYard, and scheduling flows.
+          </p>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {LESSONS.map((lesson, index) => {
-            const active = lesson.id === activeLesson.id;
-            return (
-              <button
-                key={lesson.id}
-                type="button"
-                onClick={() => setActiveLessonId(lesson.id)}
-                className={[
-                  "rounded-2xl border p-4 text-left transition-base",
-                  active
-                    ? "border-cyan-300/25 bg-cyan-400/10"
-                    : "border-white/10 bg-white/[0.03] hover:border-white/15 hover:bg-white/[0.05]",
-                ].join(" ")}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Lesson {index + 1}</div>
-                    <div className="mt-1 text-sm font-semibold text-slate-100">{lesson.title}</div>
-                  </div>
-                  <div className="rounded-full border border-white/10 px-2 py-1 text-[11px] text-slate-300">{lesson.duration}</div>
+        <div className="mt-5 grid gap-3 lg:grid-cols-2">
+          {DATA_ORDER.map((item) => (
+            <div key={item.title} className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold text-slate-100">{item.title}</h3>
+                <span className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-slate-300">{item.where}</span>
+              </div>
+              <div className="mt-3 space-y-2 text-sm leading-6 text-slate-300">
+                <div><span className="text-slate-500">Why:</span> {item.why}</div>
+                <div><span className="text-slate-500">Needed before:</span> {item.before}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="card p-5 md:p-6">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div className="max-w-3xl">
+            <h2 className="text-lg font-semibold text-slate-100">Map page explained</h2>
+            <p className="mt-1 text-sm leading-6 text-slate-400">
+              The map is the spatial workspace for holes and assets. It is most useful after records already exist and have valid coordinates saved against them.
+            </p>
+          </div>
+          <OpenAreaButton href="/map">Open Map</OpenAreaButton>
+        </div>
+
+        <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div>
+            <h3 className="text-base font-semibold text-slate-100">How to work on the map</h3>
+            <div className="mt-3 space-y-3">
+              {MAP_WORKFLOW.map((step, index) => (
+                <div key={step} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Map step {index + 1}</div>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">{step}</p>
                 </div>
-                <p className="mt-3 text-sm leading-5 text-slate-400">{lesson.summary}</p>
-              </button>
-            );
-          })}
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Prerequisites</div>
+            <div className="mt-3 space-y-2 text-sm leading-6 text-slate-300">
+              <div>Holes need collar longitude and latitude to appear reliably on the map.</div>
+              <div>Assets need longitude and latitude to appear in the mapped asset view.</div>
+              <div>Both holes and assets should already belong to the correct project so filters and navigators behave as expected.</div>
+              <div>If using projected coordinates in upstream workflows, the project CRS should already be set.</div>
+            </div>
+          </div>
         </div>
 
-        <div className="card p-5 md:p-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div className="max-w-3xl">
-              <div className="text-xs uppercase tracking-[0.18em] text-cyan-200/80">Current Lesson</div>
-              <h3 className="mt-2 text-2xl font-semibold text-white">{activeLesson.title}</h3>
-              <p className="mt-3 text-sm leading-6 text-slate-300 md:text-base">{activeLesson.summary}</p>
-            </div>
-            <Link href={activeLesson.href} className="btn btn-3d-primary w-full justify-center md:w-auto">
-              Open Lesson Area
-            </Link>
+        <div className="mt-6">
+          <h3 className="text-base font-semibold text-slate-100">Map controls and toolbar actions</h3>
+          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {MAP_TOOLS.map((tool) => (
+              <div key={tool.name} className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
+                <div className="text-sm font-semibold text-slate-100">{tool.name}</div>
+                <p className="mt-2 text-sm leading-6 text-slate-300">{tool.description}</p>
+              </div>
+            ))}
           </div>
+        </div>
+      </section>
 
-          <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-            <div className="space-y-6">
-              <div>
-                <h4 className="text-base font-semibold text-slate-100">What You Will Learn</h4>
-                <ul className="mt-3 space-y-3">
-                  {activeLesson.goals.map((goal, index) => (
-                    <li key={goal} className="flex gap-3 text-sm leading-6 text-slate-300">
-                      <span className="mt-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-cyan-300/25 bg-cyan-400/10 text-[11px] text-cyan-100">
-                        {index + 1}
-                      </span>
-                      <span>{goal}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="text-base font-semibold text-slate-100">Recommended Steps</h4>
-                <ol className="mt-3 space-y-3">
-                  {activeLesson.steps.map((step, index) => (
-                    <li key={step} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                      <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Step {index + 1}</div>
-                      <p className="mt-2 text-sm leading-6 text-slate-300">{step}</p>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Field Tip</div>
-              <p className="mt-3 text-sm leading-6 text-slate-300">{activeLesson.tip}</p>
-              <div className="mt-4 rounded-full border border-white/10 px-3 py-1.5 text-xs text-slate-300">
-                Estimated time: {activeLesson.duration}
-              </div>
-            </div>
+      <section className="card p-5 md:p-6">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div className="max-w-3xl">
+            <h2 className="text-lg font-semibold text-slate-100">CoreYard guide</h2>
+            <p className="mt-1 text-sm leading-6 text-slate-400">
+              CoreYard is the place to work once the project exists and the hole register is in place. This is where users maintain holes, log progress, prepare dispatches, and manage core task definitions.
+            </p>
           </div>
+          <OpenAreaButton href="/coretasks">Open CoreYard</OpenAreaButton>
+        </div>
+
+        <div className="mt-5 grid gap-3 lg:grid-cols-2">
+          {COREYARD_SECTIONS.map((section) => (
+            <div key={section.title} className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
+              <div className="text-sm font-semibold text-slate-100">{section.title}</div>
+              <p className="mt-2 text-sm leading-6 text-slate-300">{section.description}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-6 rounded-[24px] border border-cyan-300/14 bg-cyan-400/[0.04] p-4">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-100/80">CoreYard rules of thumb</div>
+          <div className="mt-3 grid gap-3 lg:grid-cols-2">
+            {COREYARD_RULES.map((rule, index) => (
+              <div key={rule} className="rounded-2xl border border-white/10 bg-black/10 p-4 text-sm leading-6 text-slate-200">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-100/70">Rule {index + 1}</div>
+                <div className="mt-2">{rule}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="card p-5 md:p-6">
+        <h2 className="text-lg font-semibold text-slate-100">Fast path for a new real-world rollout</h2>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <Link href="/team" className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4 transition hover:bg-white/[0.05]">
+            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Step 1</div>
+            <div className="mt-2 text-sm font-semibold text-slate-100">Create the organization</div>
+          </Link>
+          <Link href="/projects" className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4 transition hover:bg-white/[0.05]">
+            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Step 2</div>
+            <div className="mt-2 text-sm font-semibold text-slate-100">Create the project and set CRS</div>
+          </Link>
+          <Link href="/coretasks" className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4 transition hover:bg-white/[0.05]">
+            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Step 3</div>
+            <div className="mt-2 text-sm font-semibold text-slate-100">Load holes into CoreYard</div>
+          </Link>
+          <Link href="/map" className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4 transition hover:bg-white/[0.05]">
+            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Step 4</div>
+            <div className="mt-2 text-sm font-semibold text-slate-100">Verify spatial data on the map</div>
+          </Link>
         </div>
       </section>
     </div>
