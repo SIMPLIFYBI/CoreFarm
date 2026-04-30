@@ -7,6 +7,7 @@ import toast from "react-hot-toast";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import { attachHoleDescriptors, fetchHoleDescriptorAssignments, replaceHoleDescriptorAssignments } from "@/lib/holeDescriptors";
+import { normalizeWorkflows } from "@/lib/workflows";
 import DepthAxisBar from "@/app/drillhole-viz/components/DepthAxisBar";
 import BoreholeSchematicPreview from "@/app/drillhole-viz/components/BoreholeSchematicPreview";
 import { convertProjectedToWgs84 } from "@/lib/coordinateTransforms";
@@ -53,6 +54,36 @@ const ASSET_COLOR = "#f472b6";
 const ASSET_STATUS_STYLES = [{ value: "assets", label: "Assets", color: ASSET_COLOR }];
 const VALID_HOLE_COLLAR_SOURCES = new Set(["gps", "survey", "estimated", "imported"]);
 const DEFAULT_HOLE_COLLAR_SOURCE = "estimated";
+const MAP_WORKFLOW_LIGHT_META = {
+  complete: {
+    label: "Signed off",
+    ringClassName: "border-emerald-300/45 text-emerald-300 shadow-[0_0_24px_rgba(74,222,128,0.18)]",
+    coreClassName: "border-white/10 bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.16),rgba(30,41,59,0.92)_42%,rgba(15,23,42,0.98)_100%)]",
+    badgeClassName: "border-emerald-200/20 bg-[linear-gradient(145deg,rgba(16,185,129,0.95),rgba(5,150,105,0.82))] text-white",
+    chipClassName: "border-emerald-300/20 bg-emerald-400/10 text-emerald-50",
+  },
+  in_progress: {
+    label: "In progress",
+    ringClassName: "border-amber-300/45 text-amber-300 shadow-[0_0_24px_rgba(251,191,36,0.18)]",
+    coreClassName: "border-white/10 bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.16),rgba(30,41,59,0.92)_42%,rgba(15,23,42,0.98)_100%)]",
+    badgeClassName: "border-amber-200/20 bg-[linear-gradient(145deg,rgba(251,191,36,0.95),rgba(217,119,6,0.82))] text-slate-950",
+    chipClassName: "border-amber-300/20 bg-amber-400/10 text-amber-50",
+  },
+  planned: {
+    label: "Planned",
+    ringClassName: "border-orange-300/45 text-orange-300 shadow-[0_0_24px_rgba(249,115,22,0.16)]",
+    coreClassName: "border-white/10 bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.16),rgba(30,41,59,0.92)_42%,rgba(15,23,42,0.98)_100%)]",
+    badgeClassName: "border-orange-200/20 bg-[linear-gradient(145deg,rgba(249,115,22,0.95),rgba(234,88,12,0.82))] text-white",
+    chipClassName: "border-orange-300/20 bg-orange-400/10 text-orange-50",
+  },
+  not_started: {
+    label: "Not started",
+    ringClassName: "border-slate-400/30 text-slate-300",
+    coreClassName: "border-white/10 bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.12),rgba(30,41,59,0.92)_42%,rgba(15,23,42,0.98)_100%)]",
+    badgeClassName: "border-white/10 bg-[linear-gradient(145deg,rgba(100,116,139,0.92),rgba(51,65,85,0.88))] text-white",
+    chipClassName: "border-white/10 bg-white/[0.05] text-slate-200",
+  },
+};
 
 function roundCoordinate(value, decimals = 6) {
   const numericValue = Number(value);
@@ -64,6 +95,285 @@ function normalizeHoleCollarSource(value, fallback = DEFAULT_HOLE_COLLAR_SOURCE)
   const normalizedValue = String(value || "").trim().toLowerCase();
   if (VALID_HOLE_COLLAR_SOURCES.has(normalizedValue)) return normalizedValue;
   return fallback;
+}
+
+function getMapWorkflowLightMeta(statusKey) {
+  return MAP_WORKFLOW_LIGHT_META[statusKey] || MAP_WORKFLOW_LIGHT_META.not_started;
+}
+
+function MapWorkflowStatusIcon({ statusKey, className = "" }) {
+  const sharedProps = {
+    "aria-hidden": true,
+    className,
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    viewBox: "0 0 24 24",
+  };
+
+  if (statusKey === "complete") {
+    return (
+      <svg {...sharedProps}>
+        <path d="M5 12.5l4.2 4.2L19 7.8" />
+      </svg>
+    );
+  }
+
+  if (statusKey === "in_progress") {
+    return (
+      <svg {...sharedProps}>
+        <path d="M12 6v6l4 2" />
+        <circle cx="12" cy="12" r="8" />
+      </svg>
+    );
+  }
+
+  if (statusKey === "planned") {
+    return (
+      <svg {...sharedProps}>
+        <path d="M12 7v5" />
+        <path d="M12 16h.01" />
+        <circle cx="12" cy="12" r="8" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...sharedProps}>
+      <path d="M8 12h8" />
+      <circle cx="12" cy="12" r="8" />
+    </svg>
+  );
+}
+
+function summariseMapWorkflowStepStatuses(steps) {
+  if (!steps.length) return "not_started";
+  if (steps.every((step) => step.statusKey === "complete")) return "complete";
+  if (steps.some((step) => step.statusKey === "in_progress")) return "in_progress";
+  if (steps.some((step) => step.statusKey === "complete")) return "in_progress";
+  if (steps.some((step) => step.statusKey === "planned")) return "planned";
+  return "not_started";
+}
+
+function deriveMapWorkflowStepStatusKey({
+  explicitStatusKey,
+  phaseIndex,
+  substageIndex,
+  currentPhaseIndex,
+  currentSubstageIndex,
+  currentStatusKey,
+}) {
+  if (explicitStatusKey) return explicitStatusKey;
+  if (!currentPhaseIndex) return "not_started";
+  if (phaseIndex < currentPhaseIndex) return "complete";
+  if (phaseIndex > currentPhaseIndex) return "not_started";
+  if (!currentSubstageIndex) return currentStatusKey || "planned";
+  if (substageIndex < currentSubstageIndex) return "complete";
+  if (substageIndex > currentSubstageIndex) return "not_started";
+  return currentStatusKey || "planned";
+}
+
+function buildMapHoleWorkflowVisualModel({ workflow, hole, substageStatusById }) {
+  if (!workflow || !hole?.current_workflow_id) return null;
+
+  const visiblePhases = (workflow.namedPhases?.length ? workflow.namedPhases : workflow.phases || []).filter((phase) => String(phase?.name || "").trim());
+  const currentPhase = visiblePhases.find((phase) => phase.id === hole.current_workflow_phase_id) || null;
+  const currentSubstage = visiblePhases
+    .flatMap((phase) => (phase.substages || []).map((substage) => ({ ...substage, workflow_phase_id: phase.id })))
+    .find((substage) => substage.id === hole.current_workflow_substage_id) || null;
+
+  const currentPhaseIndex = currentPhase?.phase_index || 0;
+  const currentSubstageIndex = currentSubstage?.substage_index || 0;
+  const phases = visiblePhases.map((phase) => {
+    const steps = (phase.substages || [])
+      .filter((substage) => String(substage?.name || "").trim())
+      .map((substage) => {
+        const runtime = substageStatusById[substage.id] || null;
+        return {
+          id: `substage:${substage.id}`,
+          stepId: substage.id,
+          phaseId: phase.id,
+          title: substage.name,
+          substageIndex: substage.substage_index,
+          statusKey: deriveMapWorkflowStepStatusKey({
+            explicitStatusKey: runtime?.status_key || "",
+            phaseIndex: phase.phase_index,
+            substageIndex: substage.substage_index,
+            currentPhaseIndex,
+            currentSubstageIndex,
+            currentStatusKey: hole.current_workflow_status_key,
+          }),
+          isCurrent: hole.current_workflow_substage_id === substage.id,
+        };
+      });
+
+    return {
+      id: phase.id,
+      phaseIndex: phase.phase_index,
+      title: phase.name,
+      description: phase.description || "",
+      steps,
+      statusKey: summariseMapWorkflowStepStatuses(steps),
+    };
+  });
+
+  const orderedSteps = phases.flatMap((phase) => phase.steps);
+  const currentStep = orderedSteps.find((step) => step.isCurrent) || orderedSteps.find((step) => step.statusKey !== "complete") || null;
+
+  return {
+    workflowId: workflow.id,
+    phases,
+    currentStepId: currentStep?.id || "",
+  };
+}
+
+function getNextMapWorkflowSelection(workflowVisual, completedStepId) {
+  const orderedSteps = (workflowVisual?.phases || []).flatMap((phase) => phase.steps || []);
+  const nextIncompleteStep = orderedSteps.find((step) => {
+    const effectiveStatusKey = step.id === completedStepId ? "complete" : step.statusKey;
+    return effectiveStatusKey !== "complete";
+  });
+
+  if (!nextIncompleteStep) {
+    const finalStep = orderedSteps.find((step) => step.id === completedStepId) || orderedSteps[orderedSteps.length - 1] || null;
+    return {
+      phaseId: finalStep?.phaseId || "",
+      substageId: finalStep?.stepId || "",
+      statusKey: "complete",
+    };
+  }
+
+  return {
+    phaseId: nextIncompleteStep.phaseId,
+    substageId: nextIncompleteStep.stepId,
+    statusKey: nextIncompleteStep.statusKey === "in_progress" ? "in_progress" : "planned",
+  };
+}
+
+function MapWorkflowStageStrip({ workflowVisual, selectedHole, canManageSelections, signingPhaseId, onSignOffPhase }) {
+  const actionableStep = useMemo(() => {
+    const orderedSteps = (workflowVisual?.phases || []).flatMap((phase) => phase.steps || []);
+    return orderedSteps.find((step) => step.id === workflowVisual?.currentStepId) || orderedSteps.find((step) => step.statusKey !== "complete") || null;
+  }, [workflowVisual]);
+
+  if (!selectedHole) {
+    return (
+      <div className="rounded-[24px] border border-dashed border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-300">
+        Select a hole on the map to view and action its workflow.
+      </div>
+    );
+  }
+
+  if (!workflowVisual) {
+    return (
+      <div className="rounded-[24px] border border-dashed border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-300">
+        This hole does not have a configured workflow yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,rgba(8,47,73,0.22),rgba(15,23,42,0.82),rgba(30,41,59,0.52))] p-3 shadow-[0_18px_50px_rgba(2,6,23,0.28)]">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-100/75">Hole Workflow</div>
+          <div className="mt-1 text-sm font-semibold text-white">{selectedHole.hole_id}</div>
+          <p className="mt-1 max-w-2xl text-xs text-slate-300">
+            Sign off the current active gate directly from the map without leaving the selected hole context.
+          </p>
+        </div>
+        {actionableStep ? (
+          <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[11px] text-slate-200">
+            Next step: {actionableStep.title}
+          </span>
+        ) : (
+          <span className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-2.5 py-1 text-[11px] text-emerald-50">Workflow complete</span>
+        )}
+      </div>
+
+      <div className="mt-3 rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] px-3 py-3">
+        <div className="grid grid-cols-5 gap-2 md:gap-2.5">
+        {Array.from({ length: 5 }, (_, index) => {
+          const phaseNumber = index + 1;
+          const phase = workflowVisual.phases.find((item) => item.phaseIndex === phaseNumber) || null;
+          const phaseMeta = getMapWorkflowLightMeta(phase?.statusKey || "not_started");
+          const completedCount = phase?.steps.filter((step) => step.statusKey === "complete").length || 0;
+          const stepCount = phase?.steps.length || 0;
+          const isActionable = !!phase && !!actionableStep && actionableStep.phaseId === phase.id && canManageSelections;
+          const isSigning = signingPhaseId === phase?.id;
+
+          return (
+            <div key={`map-workflow-phase-${phaseNumber}`} className="relative flex flex-col items-center text-center">
+              {phaseNumber < 5 ? (
+                <div className="pointer-events-none absolute left-[calc(50%+2rem)] right-[-18%] top-[2rem] hidden h-px md:block">
+                  <div className="relative h-px w-full bg-gradient-to-r from-white/0 via-white/15 to-white/0">
+                    <span className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-slate-300/70" />
+                  </div>
+                </div>
+              ) : null}
+
+              <button
+                key={`map-workflow-phase-button-${phaseNumber}`}
+                type="button"
+                disabled={!isActionable || isSigning}
+                onClick={() => phase && onSignOffPhase(phase)}
+                className={[
+                  "group relative flex w-full flex-col items-center text-center",
+                  !phase || !isActionable ? "cursor-default" : "",
+                ].join(" ")}
+              >
+                <div
+                  className={[
+                    "relative flex h-[52px] w-[52px] items-center justify-center rounded-full border-[4px] bg-transparent transition-base md:h-[60px] md:w-[60px] lg:h-[64px] lg:w-[64px]",
+                    phaseMeta.ringClassName,
+                    isActionable
+                      ? "scale-[1.04] shadow-[0_0_0_6px_rgba(34,211,238,0.12),0_0_0_10px_rgba(34,211,238,0.05)]"
+                      : phase
+                        ? "group-hover:scale-[1.02]"
+                        : "",
+                  ].join(" ")}
+                >
+                  {isActionable ? (
+                    <span className="pointer-events-none absolute inset-[-8px] rounded-full border border-cyan-300/25" />
+                  ) : null}
+                  <span className="absolute -top-1 h-2 w-2 rounded-full bg-current opacity-85" />
+                  <div className={[
+                    "relative flex h-[40px] w-[40px] flex-col items-center justify-center rounded-full border text-center md:h-[46px] md:w-[46px] lg:h-[50px] lg:w-[50px]",
+                    phaseMeta.coreClassName,
+                  ].join(" ")}>
+                    <span className="pointer-events-none absolute inset-[14%] rounded-full border border-white/8" />
+                    <span className={[
+                      "relative flex h-6 w-6 items-center justify-center rounded-xl border md:h-7 md:w-7 lg:h-8 lg:w-8",
+                      phaseMeta.badgeClassName,
+                    ].join(" ")}>
+                      <MapWorkflowStatusIcon statusKey={phase?.statusKey || "not_started"} className="h-3.5 w-3.5 md:h-4 md:w-4 lg:h-4.5 lg:w-4.5" />
+                    </span>
+                  </div>
+                </div>
+
+                <div className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.16em] md:px-2.5 md:text-[10px] ${phaseMeta.chipClassName}`}>
+                  Stage Gate {phaseNumber}
+                </div>
+                <div className={[
+                  "mt-1.5 text-xs font-semibold leading-tight md:text-sm lg:text-base lg:leading-none",
+                  isActionable ? "text-cyan-50" : "text-white",
+                ].join(" ")}>{phase?.title || "Unused"}</div>
+                <div className="mt-1.5 text-[9px] uppercase tracking-[0.16em] text-slate-500 md:text-[10px]">
+                  {phase ? `${completedCount}/${stepCount} signed off` : "No stage configured"}
+                </div>
+                <div className="mt-1.5 min-h-[16px] text-[9px] font-medium uppercase tracking-[0.16em] text-cyan-100/90 md:text-[10px]">
+                  {isSigning ? "Signing off..." : isActionable ? "Click to sign off" : phase?.statusKey === "complete" ? "Signed off" : ""}
+                </div>
+              </button>
+            </div>
+          );
+        })}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function createMapHoleDraft(projectId = "") {
@@ -1681,6 +1991,9 @@ function MapOverviewKpi({ label, value, detail, bars = [], tone = "cyan" }) {
 }
 
 function AdvancedFilterPanel({
+  projectFilter,
+  projectOptions,
+  totalProjects,
   filters,
   activeFilterCount,
   descriptorOptions,
@@ -1689,6 +2002,7 @@ function AdvancedFilterPanel({
   assetStatusOptions,
   assetTypeOptions,
   assetLocationOptions,
+  onProjectFilterChange,
   onChange,
   onClear,
   onClose,
@@ -1724,6 +2038,37 @@ function AdvancedFilterPanel({
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
+        <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4 xl:col-span-2">
+          <div className="text-[11px] uppercase tracking-[0.2em] text-slate-300">Project Scope</div>
+          <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+            <label className="flex flex-col gap-2 text-xs uppercase tracking-[0.18em] text-slate-400">
+              Project Filter
+              <select
+                value={projectFilter}
+                onChange={(event) => onProjectFilterChange(event.target.value)}
+                className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm font-medium normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40"
+              >
+                <option value="">All visible projects ({totalProjects})</option>
+                {projectOptions.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name} ({project.holeCount} holes, {project.assetCount} assets)
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {projectFilter ? (
+              <button
+                type="button"
+                className="inline-flex h-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1]"
+                onClick={() => onProjectFilterChange("")}
+              >
+                Clear project
+              </button>
+            ) : null}
+          </div>
+        </div>
+
         <div className="rounded-[24px] border border-cyan-300/14 bg-cyan-400/[0.04] p-4">
           <div className="text-[11px] uppercase tracking-[0.2em] text-cyan-100/80">Drillholes</div>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -1828,6 +2173,7 @@ function MapSelectionActionDock({
   entity,
   pendingProposal,
   mobile = false,
+  onAdd,
   onMove,
   onDuplicate,
   onPropose,
@@ -1961,6 +2307,12 @@ function MapSelectionActionDock({
           </button>
 
           <div className="h-8 w-px bg-white/10" />
+
+          {onAdd ? (
+            <DockIconButton label="Add hole or asset on map" onClick={onAdd} tone="cyan">
+              <span className="text-[20px] font-light leading-none">+</span>
+            </DockIconButton>
+          ) : null}
 
           {entityType === "hole" ? (
             <DockIconButton label="Open schematic" onClick={onOpenSchematic} tone="cyan">
@@ -2181,6 +2533,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const [allAssets, setAllAssets] = useState([]);
   const [locationProposals, setLocationProposals] = useState([]);
   const [ownProjects, setOwnProjects] = useState([]);
+  const [holeWorkflows, setHoleWorkflows] = useState([]);
   const [assetTypes, setAssetTypes] = useState([]);
   const [assetLocations, setAssetLocations] = useState([]);
   const [projectFilter, setProjectFilter] = useState("");
@@ -2226,6 +2579,8 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const [schematicLithologyTypes, setSchematicLithologyTypes] = useState([]);
   const [schematicConstructionTypes, setSchematicConstructionTypes] = useState([]);
   const [schematicAnnulusTypes, setSchematicAnnulusTypes] = useState([]);
+  const [selectedHoleWorkflowRuntime, setSelectedHoleWorkflowRuntime] = useState({ loading: false, substageStatusById: {} });
+  const [signingWorkflowPhaseId, setSigningWorkflowPhaseId] = useState("");
 
   const myRole = useMemo(() => {
     const membership = (memberships || []).find((item) => item.organization_id === orgId);
@@ -2385,6 +2740,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   useEffect(() => {
     if (!orgId) {
       setOwnProjects([]);
+      setHoleWorkflows([]);
       setAssetTypes([]);
       setAssetLocations([]);
       return undefined;
@@ -2393,10 +2749,13 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     let active = true;
 
     (async () => {
-      const [projectsRes, typesRes, locationsRes] = await Promise.all([
+      const [projectsRes, typesRes, locationsRes, workflowsRes, phasesRes, substagesRes] = await Promise.all([
         supabase.from("projects").select("id,name,coordinate_crs_code,coordinate_crs_name").eq("organization_id", orgId).order("name", { ascending: true }),
         supabase.from("asset_types").select("id,name").order("name", { ascending: true }),
         supabase.from("asset_locations").select("id,name").eq("organization_id", orgId).order("name", { ascending: true }),
+        supabase.from("workflow_definitions").select("id,organization_id,entity_type,key,name,description,color,sort_order,is_active").eq("organization_id", orgId).eq("entity_type", "hole").order("sort_order", { ascending: true }),
+        supabase.from("workflow_phase_definitions").select("id,workflow_id,phase_index,name,description").order("phase_index", { ascending: true }),
+        supabase.from("workflow_substage_definitions").select("id,workflow_phase_id,substage_index,name,description").order("substage_index", { ascending: true }),
       ]);
 
       if (!active) return;
@@ -2405,6 +2764,12 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         toast.error(projectsRes.error.message || "Failed to load projects for map creation");
       } else {
         setOwnProjects(projectsRes.data || []);
+      }
+
+      if (workflowsRes.error) {
+        toast.error(workflowsRes.error.message || "Failed to load hole workflows");
+      } else if (!phasesRes.error && !substagesRes.error) {
+        setHoleWorkflows(normalizeWorkflows(workflowsRes.data || [], phasesRes.data || [], substagesRes.data || []));
       }
 
       if (typesRes.error) {
@@ -2575,7 +2940,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
             supabase
               .from("holes")
               .select(
-                "id,organization_id,hole_id,project_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_easting,collar_northing,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state,projects(id,name,coordinate_crs_code,coordinate_crs_name)"
+                "id,organization_id,hole_id,project_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_easting,collar_northing,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state,current_workflow_id,current_workflow_phase_id,current_workflow_substage_id,current_workflow_status_key,projects(id,name,coordinate_crs_code,coordinate_crs_name)"
               )
               .in("project_id", sharedProjectIds)
               .neq("organization_id", orgId)
@@ -2602,7 +2967,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
           supabase
             .from("holes")
             .select(
-              "id,organization_id,hole_id,project_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_easting,collar_northing,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state,projects(id,name,coordinate_crs_code,coordinate_crs_name)"
+              "id,organization_id,hole_id,project_id,depth,planned_depth,water_level_m,azimuth,dip,collar_longitude,collar_latitude,collar_easting,collar_northing,collar_elevation_m,collar_source,started_at,completed_at,completion_status,completion_notes,state,current_workflow_id,current_workflow_phase_id,current_workflow_substage_id,current_workflow_status_key,projects(id,name,coordinate_crs_code,coordinate_crs_name)"
             )
             .eq("organization_id", orgId)
             .order("project_id", { ascending: true })
@@ -2639,6 +3004,10 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
             hole_id: hole.hole_id,
             project_id: hole.project_id || "",
             project_name: hole.projects?.name || "No project",
+            current_workflow_id: hole.current_workflow_id || "",
+            current_workflow_phase_id: hole.current_workflow_phase_id || "",
+            current_workflow_substage_id: hole.current_workflow_substage_id || "",
+            current_workflow_status_key: hole.current_workflow_status_key || "not_started",
             state: hole.state || "",
             depth: hole.depth ?? null,
             planned_depth: hole.planned_depth ?? null,
@@ -2898,7 +3267,10 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
       .filter((project) => project.assets.length > 0);
   }, [assetProjects, matchesAssetAdvancedFilters, matchesAssetNavigatorTypeFilter, projectFilter]);
 
-  const activeAdvancedFilterCount = useMemo(() => countActiveMapAdvancedFilters(advancedFilters), [advancedFilters]);
+  const activeAdvancedFilterCount = useMemo(
+    () => countActiveMapAdvancedFilters(advancedFilters) + (projectFilter ? 1 : 0),
+    [advancedFilters, projectFilter]
+  );
 
   const visibleHoles = useMemo(() => {
     return filteredProjects.flatMap((project) => project.holes);
@@ -2927,6 +3299,143 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const selectedAsset = useMemo(() => {
     return visibleAssets.find((asset) => asset.id === selectedAssetId) || (allowAutoSelectRef.current ? visibleAssets[0] || null : null);
   }, [selectedAssetId, visibleAssets]);
+
+  const selectedHoleWorkflowDefinition = useMemo(
+    () => holeWorkflows.find((workflow) => workflow.id === selectedHole?.current_workflow_id) || null,
+    [holeWorkflows, selectedHole?.current_workflow_id]
+  );
+
+  const selectedHoleWorkflowVisual = useMemo(
+    () => buildMapHoleWorkflowVisualModel({
+      workflow: selectedHoleWorkflowDefinition,
+      hole: selectedHole,
+      substageStatusById: selectedHoleWorkflowRuntime.substageStatusById,
+    }),
+    [selectedHoleWorkflowDefinition, selectedHole, selectedHoleWorkflowRuntime.substageStatusById]
+  );
+
+  const loadSelectedHoleWorkflowRuntime = useCallback(async (holeId) => {
+    if (!holeId) {
+      setSelectedHoleWorkflowRuntime({ loading: false, substageStatusById: {} });
+      return;
+    }
+
+    setSelectedHoleWorkflowRuntime((current) => ({ ...current, loading: true }));
+
+    try {
+      const { data, error } = await supabase
+        .from("hole_workflow_substage_statuses")
+        .select("hole_id,workflow_phase_id,workflow_substage_id,status_key,signed_off_by,signed_off_at,signoff_note,updated_at")
+        .eq("hole_id", holeId);
+
+      if (error) throw error;
+
+      setSelectedHoleWorkflowRuntime({
+        loading: false,
+        substageStatusById: Object.fromEntries((data || []).map((row) => [row.workflow_substage_id, row])),
+      });
+    } catch (error) {
+      toast.error(error?.message || "Failed to load hole workflow runtime");
+      setSelectedHoleWorkflowRuntime({ loading: false, substageStatusById: {} });
+    }
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!selectedHole?.id || !selectedHole?.current_workflow_id) {
+      setSelectedHoleWorkflowRuntime({ loading: false, substageStatusById: {} });
+      return;
+    }
+
+    void loadSelectedHoleWorkflowRuntime(selectedHole.id);
+  }, [loadSelectedHoleWorkflowRuntime, selectedHole?.current_workflow_id, selectedHole?.id]);
+
+  const signOffMapWorkflowPhase = useCallback(async (phase) => {
+    if (!canManageSelections || !selectedHole || !selectedHoleWorkflowVisual) return;
+
+    const actionableStep = (phase?.steps || []).find((step) => step.id === selectedHoleWorkflowVisual.currentStepId) || (phase?.steps || []).find((step) => step.statusKey !== "complete") || null;
+    if (!actionableStep) return;
+
+    setSigningWorkflowPhaseId(phase.id);
+
+    try {
+      const userResult = await supabase.auth.getUser();
+      if (userResult.error) throw userResult.error;
+
+      const userId = userResult.data?.user?.id || "";
+      if (!userId) throw new Error("You must be signed in to sign off a workflow step");
+
+      const signedOffAt = new Date().toISOString();
+      const nextSelection = getNextMapWorkflowSelection(selectedHoleWorkflowVisual, actionableStep.id);
+
+      const { error: signoffError } = await supabase.from("hole_workflow_substage_statuses").upsert(
+        {
+          hole_id: selectedHole.id,
+          workflow_id: selectedHoleWorkflowVisual.workflowId,
+          workflow_phase_id: actionableStep.phaseId,
+          workflow_substage_id: actionableStep.stepId,
+          status_key: "complete",
+          signed_off_by: userId,
+          signed_off_at: signedOffAt,
+          signoff_note: "Signed off from map workflow stage gate.",
+        },
+        { onConflict: "hole_id,workflow_substage_id" }
+      );
+
+      if (signoffError) throw signoffError;
+
+      const { error: holeUpdateError } = await supabase
+        .from("holes")
+        .update({
+          current_workflow_id: selectedHoleWorkflowVisual.workflowId,
+          current_workflow_phase_id: nextSelection.phaseId || null,
+          current_workflow_substage_id: nextSelection.substageId || null,
+          current_workflow_status_key: nextSelection.statusKey,
+        })
+        .eq("id", selectedHole.id)
+        .eq("organization_id", orgId);
+
+      if (holeUpdateError) throw holeUpdateError;
+
+      setSelectedHoleWorkflowRuntime((current) => ({
+        ...current,
+        substageStatusById: {
+          ...current.substageStatusById,
+          [actionableStep.stepId]: {
+            ...(current.substageStatusById[actionableStep.stepId] || {}),
+            hole_id: selectedHole.id,
+            workflow_phase_id: actionableStep.phaseId,
+            workflow_substage_id: actionableStep.stepId,
+            status_key: "complete",
+            signed_off_by: userId,
+            signed_off_at: signedOffAt,
+            signoff_note: "Signed off from map workflow stage gate.",
+            updated_at: signedOffAt,
+          },
+        },
+      }));
+
+      setAllHoles((current) =>
+        current.map((hole) =>
+          hole.id === selectedHole.id
+            ? {
+                ...hole,
+                current_workflow_id: selectedHoleWorkflowVisual.workflowId,
+                current_workflow_phase_id: nextSelection.phaseId || null,
+                current_workflow_substage_id: nextSelection.substageId || null,
+                current_workflow_status_key: nextSelection.statusKey,
+              }
+            : hole
+        )
+      );
+
+      void loadSelectedHoleWorkflowRuntime(selectedHole.id);
+      toast.success(`${actionableStep.title} signed off`);
+    } catch (error) {
+      toast.error(error?.message || "Failed to sign off workflow step");
+    } finally {
+      setSigningWorkflowPhaseId("");
+    }
+  }, [canManageSelections, loadSelectedHoleWorkflowRuntime, orgId, selectedHole, selectedHoleWorkflowVisual, supabase]);
 
   const pendingProposalByEntity = useMemo(() => {
     const next = new Map();
@@ -3587,6 +4096,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   };
 
   const clearAdvancedFilters = () => {
+    setProjectFilter("");
     setAdvancedFilters(createEmptyMapAdvancedFilters());
   };
 
@@ -4694,22 +5204,14 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                 </button>
               </div>
 
-              <div>
-                <label className="flex min-w-[240px] flex-col gap-2 text-xs uppercase tracking-[0.18em] text-slate-400">
-                  Project Filter
-                  <select
-                    value={projectFilter}
-                    onChange={(event) => setProjectFilter(event.target.value)}
-                    className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm font-medium text-slate-100 outline-none transition focus:border-cyan-300/40"
-                  >
-                    <option value="">All visible projects ({totalProjects})</option>
-                    {projectOptions.map((project) => (
-                      <option key={project.id} value={project.id}>
-                        {project.name} ({project.holeCount} holes, {project.assetCount} assets)
-                      </option>
-                    ))}
-                  </select>
-                </label>
+              <div className="min-w-0 flex-1">
+                <MapWorkflowStageStrip
+                  workflowVisual={selectedHoleWorkflowVisual}
+                  selectedHole={selectedHole}
+                  canManageSelections={canManageSelections}
+                  signingPhaseId={signingWorkflowPhaseId}
+                  onSignOffPhase={signOffMapWorkflowPhase}
+                />
               </div>
 
               <div>
@@ -4732,6 +5234,9 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
             </div>
             {showAdvancedFilters ? (
               <AdvancedFilterPanel
+                projectFilter={projectFilter}
+                projectOptions={projectOptions}
+                totalProjects={totalProjects}
                 filters={advancedFilters}
                 activeFilterCount={activeAdvancedFilterCount}
                 descriptorOptions={descriptorOptions}
@@ -4740,6 +5245,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                 assetStatusOptions={assetStatusOptions}
                 assetTypeOptions={assetTypeOptions}
                 assetLocationOptions={assetLocationOptions}
+                onProjectFilterChange={setProjectFilter}
                 onChange={updateAdvancedFilter}
                 onClear={clearAdvancedFilters}
                 onClose={() => setShowAdvancedFilters(false)}
@@ -4820,23 +5326,25 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                     <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Mobile Map View</div>
                     <div className="mt-1 text-lg font-semibold text-white">{mobileSelectionTitle}</div>
                   </div>
-                  <button
-                    type="button"
-                    className="inline-flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1]"
-                    onClick={() => setShowAttributesDrawer(true)}
-                  >
-                    <AttributesIcon className="h-[18px] w-[18px]" />
-                    <span>Attributes</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="inline-flex h-11 items-center gap-2 rounded-2xl border border-emerald-300/18 bg-emerald-400/10 px-4 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/16 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-slate-500"
-                    onClick={() => openCoreTasksPage(selectedHole)}
-                    disabled={!selectedHole}
-                  >
-                    <CoreTasksIcon className="h-[18px] w-[18px]" />
-                    <span>Core tasks</span>
-                  </button>
+                  <div className="flex w-full flex-wrap items-center gap-2 min-[360px]:w-auto">
+                    <button
+                      type="button"
+                      className="inline-flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1]"
+                      onClick={() => setShowAttributesDrawer(true)}
+                    >
+                      <AttributesIcon className="h-[18px] w-[18px]" />
+                      <span>Attributes</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex h-11 items-center gap-2 rounded-2xl border border-emerald-300/18 bg-emerald-400/10 px-4 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/16 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-slate-500"
+                      onClick={() => openCoreTasksPage(selectedHole)}
+                      disabled={!selectedHole}
+                    >
+                      <CoreTasksIcon className="h-[18px] w-[18px]" />
+                      <span>Core tasks</span>
+                    </button>
+                  </div>
                 </div>
                 <div className="mt-4 grid w-full grid-cols-2 gap-2 rounded-2xl bg-white/[0.04] p-1.5">
                   <button
@@ -4895,23 +5403,10 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   >
                     {isMapFullscreen ? <FullscreenExitIcon className="h-[18px] w-[18px]" /> : <FullscreenEnterIcon className="h-[18px] w-[18px]" />}
                   </button>
-                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{totalVisibleHoles} visible holes</span>
-                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{totalVisibleAssets} visible assets</span>
-                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{projectFilter ? "Filtered project" : "Portfolio view"}</span>
                   {activeAdvancedFilterCount ? (
                     <span className="rounded-full border border-cyan-300/18 bg-cyan-400/10 px-3 py-1.5 text-cyan-100">
                       {activeAdvancedFilterCount} filter{activeAdvancedFilterCount === 1 ? "" : "s"} active
                     </span>
-                  ) : null}
-                  {!showCreateProjectPrompt && projectScope === "own" ? (
-                    <button
-                      type="button"
-                      aria-label="Add hole or asset on map"
-                      className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[linear-gradient(135deg,#22d3ee,#0ea5e9)] text-3xl font-light leading-none text-slate-950 shadow-[0_18px_42px_rgba(34,211,238,0.32)] transition hover:brightness-105"
-                      onClick={() => openCreatePanel(createEntityType)}
-                    >
-                      +
-                    </button>
                   ) : null}
                 </div>
               </div>
@@ -4936,21 +5431,11 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   </div>
                 </div>
               ) : null}
-              {!showCreateProjectPrompt && projectScope === "own" ? (
-                <button
-                  type="button"
-                  aria-label="Add hole or asset on map"
-                  className="absolute right-3 top-3 z-20 inline-flex h-12 w-12 items-center justify-center rounded-full bg-[linear-gradient(135deg,#22d3ee,#0ea5e9)] text-3xl font-light leading-none text-slate-950 shadow-[0_18px_42px_rgba(34,211,238,0.32)] transition hover:brightness-105 md:hidden"
-                  onClick={() => openCreatePanel(createEntityType)}
-                >
-                  +
-                </button>
-              ) : null}
               <button
                 type="button"
                 aria-label={isMapFullscreen ? "Exit full screen map" : "Open full screen map"}
                 title={isMapFullscreen ? "Exit full screen map" : "Open full screen map"}
-                className={`absolute z-20 inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-slate-950/82 text-slate-100 shadow-[0_18px_42px_rgba(2,6,23,0.3)] transition hover:bg-slate-900/92 md:hidden ${projectScope === "own" && !showCreateProjectPrompt ? "right-[4.5rem] top-3" : "right-3 top-3"}`}
+                className="absolute right-3 top-3 z-20 inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-slate-950/82 text-slate-100 shadow-[0_18px_42px_rgba(2,6,23,0.3)] transition hover:bg-slate-900/92 md:hidden"
                 onClick={() => {
                   void toggleMapFullscreen();
                 }}
@@ -4993,23 +5478,6 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   </div>
                 </div>
               ) : null}
-              {canManageSelections && activeMapSelection?.entity && !showCreatePanel && !createPlacementActive && !moveSelection && !proposalPlacementSelection ? (
-                <MapSelectionActionDock
-                  entityType={activeMapSelection.entityType}
-                  entity={activeMapSelection.entity}
-                  pendingProposal={activeMapSelectionPendingProposal}
-                  mobile={isMobileViewport}
-                  onMove={() => requestMoveSelection(activeMapSelection.entityType, activeMapSelection.entity)}
-                  onDuplicate={() => openDuplicateSelection(activeMapSelection.entityType, activeMapSelection.entity)}
-                  onPropose={() => requestProposalLocation(activeMapSelection.entityType, activeMapSelection.entity)}
-                  onReview={() => openProposalReview(activeMapSelection.entityType, activeMapSelection.entity)}
-                  onOpenSchematic={() => {
-                    if (activeMapSelection.entityType === "hole") {
-                      void openSchematicModal(activeMapSelection.entity);
-                    }
-                  }}
-                />
-              ) : null}
               {showCreatePanel ? (
                 <MapCreateEntityPanel
                   entityType={createEntityType}
@@ -5028,7 +5496,27 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   }}
                 />
               ) : null}
-              <div ref={mapContainerRef} className={isMapFullscreen ? "h-[100svh] min-h-[100svh] w-full max-w-full" : "h-[58svh] min-h-[400px] w-full max-w-full md:h-[58vh] md:min-h-[480px]"} />
+              <div className="relative">
+                <div ref={mapContainerRef} className={isMapFullscreen ? "h-[100svh] min-h-[100svh] w-full max-w-full" : "h-[58svh] min-h-[400px] w-full max-w-full md:h-[58vh] md:min-h-[480px]"} />
+                {canManageSelections && activeMapSelection?.entity && !showCreatePanel && !createPlacementActive && !moveSelection && !proposalPlacementSelection ? (
+                  <MapSelectionActionDock
+                    entityType={activeMapSelection.entityType}
+                    entity={activeMapSelection.entity}
+                    pendingProposal={activeMapSelectionPendingProposal}
+                    mobile={isMobileViewport}
+                    onAdd={projectScope === "own" && !showCreateProjectPrompt ? () => openCreatePanel(createEntityType) : null}
+                    onMove={() => requestMoveSelection(activeMapSelection.entityType, activeMapSelection.entity)}
+                    onDuplicate={() => openDuplicateSelection(activeMapSelection.entityType, activeMapSelection.entity)}
+                    onPropose={() => requestProposalLocation(activeMapSelection.entityType, activeMapSelection.entity)}
+                    onReview={() => openProposalReview(activeMapSelection.entityType, activeMapSelection.entity)}
+                    onOpenSchematic={() => {
+                      if (activeMapSelection.entityType === "hole") {
+                        void openSchematicModal(activeMapSelection.entity);
+                      }
+                    }}
+                  />
+                ) : null}
+              </div>
             </div>
 
             <div className="xl:hidden min-w-0 overflow-hidden rounded-[32px] border border-white/10 bg-slate-950/60 shadow-[0_24px_80px_rgba(2,6,23,0.32)] backdrop-blur-xl">
@@ -5063,21 +5551,13 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                     </button>
                   </div>
 
-                  <label className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
-                    Project Filter
-                    <select
-                      value={projectFilter}
-                      onChange={(event) => setProjectFilter(event.target.value)}
-                      className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm font-medium text-slate-100 outline-none transition focus:border-cyan-300/40"
-                    >
-                      <option value="">All visible projects ({totalProjects})</option>
-                      {projectOptions.map((project) => (
-                        <option key={project.id} value={project.id}>
-                          {project.name} ({project.holeCount} holes, {project.assetCount} assets)
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <MapWorkflowStageStrip
+                    workflowVisual={selectedHoleWorkflowVisual}
+                    selectedHole={selectedHole}
+                    canManageSelections={canManageSelections}
+                    signingPhaseId={signingWorkflowPhaseId}
+                    onSignOffPhase={signOffMapWorkflowPhase}
+                  />
 
                   <button
                     type="button"
@@ -5097,6 +5577,9 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                 </div>
                 {showAdvancedFilters ? (
                   <AdvancedFilterPanel
+                    projectFilter={projectFilter}
+                    projectOptions={projectOptions}
+                    totalProjects={totalProjects}
                     filters={advancedFilters}
                     activeFilterCount={activeAdvancedFilterCount}
                     descriptorOptions={descriptorOptions}
@@ -5105,6 +5588,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                     assetStatusOptions={assetStatusOptions}
                     assetTypeOptions={assetTypeOptions}
                     assetLocationOptions={assetLocationOptions}
+                    onProjectFilterChange={setProjectFilter}
                     onChange={updateAdvancedFilter}
                     onClear={clearAdvancedFilters}
                     onClose={() => setShowAdvancedFilters(false)}

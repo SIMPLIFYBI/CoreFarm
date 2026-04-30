@@ -376,6 +376,37 @@ function buildHoleWorkflowVisualModel({
   };
 }
 
+function getNextHoleWorkflowSelection(workflowVisual, completedStepId) {
+  const orderedSteps = (workflowVisual?.phases || []).flatMap((phase) => phase.steps || []);
+  if (!orderedSteps.length) {
+    return {
+      phaseId: "",
+      substageId: "",
+      statusKey: "not_started",
+    };
+  }
+
+  const nextIncompleteStep = orderedSteps.find((step) => {
+    const effectiveStatusKey = step.id === completedStepId ? "complete" : step.statusKey;
+    return effectiveStatusKey !== "complete";
+  });
+
+  if (!nextIncompleteStep) {
+    const finalStep = orderedSteps.find((step) => step.id === completedStepId) || orderedSteps[orderedSteps.length - 1];
+    return {
+      phaseId: finalStep?.phaseId || "",
+      substageId: finalStep?.type === "substage" ? finalStep.stepId : "",
+      statusKey: "complete",
+    };
+  }
+
+  return {
+    phaseId: nextIncompleteStep.phaseId,
+    substageId: nextIncompleteStep.type === "substage" ? nextIncompleteStep.stepId : "",
+    statusKey: nextIncompleteStep.statusKey === "in_progress" ? "in_progress" : "planned",
+  };
+}
+
 function createEmptyForm(projectId = "") {
   return {
     hole_id: "",
@@ -513,6 +544,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
     profileByUserId: {},
   });
   const [selectedWorkflowPhaseId, setSelectedWorkflowPhaseId] = useState("");
+  const [workflowActionStepId, setWorkflowActionStepId] = useState("");
   const [taskMeta, setTaskMeta] = useState(
     Object.fromEntries(DEFAULT_TASK_TYPE_DEFS.map((task) => [task.key, { label: task.name, color: task.color || "#64748b" }]))
   );
@@ -811,6 +843,143 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
         substageStatusById: {},
         profileByUserId: {},
       });
+    }
+  };
+
+  const signOffHoleWorkflowStep = async (step) => {
+    if (projectScope === "shared") return toast.error("Client-shared holes are read-only here");
+    if (!selectedHole?.id || !selectedHoleWorkflowVisual) return;
+    if (step.type !== "substage") return toast.error("Only substages can be signed off here");
+    if (!selectedHoleWorkflowRuntime.supportsSignoff) {
+      return toast.error("Workflow sign-off fields are not available in this environment yet");
+    }
+
+    setWorkflowActionStepId(step.id);
+
+    try {
+      const userResult = await supabase.auth.getUser();
+      if (userResult.error) throw userResult.error;
+
+      const currentUser = userResult.data?.user || null;
+      const userId = currentUser?.id || "";
+      if (!userId) throw new Error("You must be signed in to sign off a workflow step");
+
+      const signedOffAt = new Date().toISOString();
+      const nextSelection = getNextHoleWorkflowSelection(selectedHoleWorkflowVisual, step.id);
+      const phase = selectedHoleWorkflowVisual.phases.find((item) => item.id === step.phaseId) || null;
+      const nextPhaseStatusKey = summariseWorkflowStepStatuses(
+        (phase?.steps || []).map((phaseStep) => (phaseStep.id === step.id ? { ...phaseStep, statusKey: "complete" } : phaseStep))
+      );
+
+      const { error: signoffError } = await supabase.from("hole_workflow_substage_statuses").upsert(
+        {
+          hole_id: selectedHole.id,
+          workflow_id: selectedHoleWorkflowVisual.workflowId,
+          workflow_phase_id: step.phaseId,
+          workflow_substage_id: step.stepId,
+          status_key: "complete",
+          signed_off_by: userId,
+          signed_off_at: signedOffAt,
+          signoff_note: step.signoffNote || "Signed off in CoreYard workbench.",
+        },
+        { onConflict: "hole_id,workflow_substage_id" }
+      );
+
+      if (signoffError) throw signoffError;
+
+      const { error: holeUpdateError } = await supabase
+        .from("holes")
+        .update({
+          current_workflow_id: selectedHoleWorkflowVisual.workflowId,
+          current_workflow_phase_id: nextSelection.phaseId || null,
+          current_workflow_substage_id: nextSelection.substageId || null,
+          current_workflow_status_key: nextSelection.statusKey,
+        })
+        .eq("id", selectedHole.id);
+
+      if (holeUpdateError) throw holeUpdateError;
+
+      setSelectedHoleWorkflowRuntime((current) => ({
+        ...current,
+        phaseStatusById: {
+          ...current.phaseStatusById,
+          [step.phaseId]: {
+            ...(current.phaseStatusById[step.phaseId] || {}),
+            hole_id: selectedHole.id,
+            workflow_id: selectedHoleWorkflowVisual.workflowId,
+            workflow_phase_id: step.phaseId,
+            status_key: nextPhaseStatusKey,
+            updated_at: signedOffAt,
+          },
+        },
+        substageStatusById: {
+          ...current.substageStatusById,
+          [step.stepId]: {
+            ...(current.substageStatusById[step.stepId] || {}),
+            hole_id: selectedHole.id,
+            workflow_id: selectedHoleWorkflowVisual.workflowId,
+            workflow_phase_id: step.phaseId,
+            workflow_substage_id: step.stepId,
+            status_key: "complete",
+            signed_off_by: userId,
+            signed_off_at: signedOffAt,
+            signoff_note: step.signoffNote || "Signed off in CoreYard workbench.",
+            updated_at: signedOffAt,
+          },
+        },
+        profileByUserId: {
+          ...current.profileByUserId,
+          [userId]: current.profileByUserId[userId] || {
+            user_id: userId,
+            display_name: currentUser?.user_metadata?.display_name || currentUser?.user_metadata?.full_name || "",
+            full_name: currentUser?.user_metadata?.full_name || "",
+            email: currentUser?.email || "",
+          },
+        },
+      }));
+
+      setForm((current) => ({
+        ...current,
+        current_workflow_id: selectedHoleWorkflowVisual.workflowId || current.current_workflow_id,
+        current_workflow_phase_id: nextSelection.phaseId || "",
+        current_workflow_substage_id: nextSelection.substageId || "",
+        current_workflow_status_key: nextSelection.statusKey,
+      }));
+
+      setSelectedHole((current) =>
+        current
+          ? {
+              ...current,
+              current_workflow_id: selectedHoleWorkflowVisual.workflowId || current.current_workflow_id,
+              current_workflow_phase_id: nextSelection.phaseId || null,
+              current_workflow_substage_id: nextSelection.substageId || null,
+              current_workflow_status_key: nextSelection.statusKey,
+            }
+          : current
+      );
+
+      setHoles((current) =>
+        current.map((hole) =>
+          hole.id === selectedHole.id
+            ? {
+                ...hole,
+                current_workflow_id: selectedHoleWorkflowVisual.workflowId || hole.current_workflow_id,
+                current_workflow_phase_id: nextSelection.phaseId || null,
+                current_workflow_substage_id: nextSelection.substageId || null,
+                current_workflow_status_key: nextSelection.statusKey,
+              }
+            : hole
+        )
+      );
+
+      void loadSelectedHoleWorkflowRuntime(selectedHole.id);
+      void loadData();
+
+      toast.success(`${step.title} signed off`);
+    } catch (error) {
+      toast.error(error?.message || "Failed to sign off workflow step");
+    } finally {
+      setWorkflowActionStepId("");
     }
   };
 
@@ -2137,6 +2306,8 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
                               <div className="mt-4 space-y-3">
                                 {selectedWorkflowPhase.steps.map((step) => {
                                   const stepMeta = getWorkflowLightMeta(step.statusKey);
+                                  const isSigningOff = workflowActionStepId === step.id;
+                                  const canSignOff = step.type === "substage" && step.statusKey !== "complete" && !isSigningOff;
                                   return (
                                     <div key={step.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
                                       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -2152,7 +2323,28 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
                                           </div>
                                           <div className="mt-1 text-sm text-slate-300">{step.description}</div>
                                         </div>
-                                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] ${stepMeta.chipClassName}`}>{stepMeta.label}</span>
+                                        <div className="flex flex-col items-start gap-2 md:items-end">
+                                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] ${stepMeta.chipClassName}`}>{stepMeta.label}</span>
+                                          {step.type === "substage" ? (
+                                            <button
+                                              type="button"
+                                              onClick={() => void signOffHoleWorkflowStep(step)}
+                                              disabled={!canSignOff}
+                                              className={[
+                                                "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold tracking-[0.08em] transition-base",
+                                                step.statusKey === "complete"
+                                                  ? "cursor-default border-emerald-300/20 bg-emerald-400/10 text-emerald-100"
+                                                  : "border-cyan-300/30 bg-[linear-gradient(145deg,rgba(34,211,238,0.18),rgba(14,116,144,0.22))] text-cyan-50 shadow-[0_12px_30px_rgba(34,211,238,0.14)] hover:border-cyan-200/50 hover:bg-cyan-300/18 disabled:cursor-wait disabled:opacity-70",
+                                              ].join(" ")}
+                                            >
+                                              <WorkflowStageStatusIcon
+                                                statusKey="complete"
+                                                className="h-3.5 w-3.5"
+                                              />
+                                              {step.statusKey === "complete" ? "Signed off" : isSigningOff ? "Signing off..." : "Sign off step"}
+                                            </button>
+                                          ) : null}
+                                        </div>
                                       </div>
 
                                       <div className="mt-3 grid gap-3 md:grid-cols-3">
