@@ -148,6 +148,42 @@ function MapWorkflowStatusIcon({ statusKey, className = "" }) {
   );
 }
 
+function MapWorkflowActionIcon({ actionType, className = "" }) {
+  const sharedProps = {
+    "aria-hidden": true,
+    className,
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    viewBox: "0 0 24 24",
+  };
+
+  if (actionType === "revert") {
+    return (
+      <svg {...sharedProps}>
+        <path d="M10 7 5 12l5 5" />
+        <path d="M6 12h8a5 5 0 0 1 0 10h-1" />
+      </svg>
+    );
+  }
+
+  if (actionType === "signoff") {
+    return (
+      <svg {...sharedProps}>
+        <path d="M5 12.5l4.2 4.2L19 7.8" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...sharedProps}>
+      <path d="M8 12h8" />
+    </svg>
+  );
+}
+
 function summariseMapWorkflowStepStatuses(steps) {
   if (!steps.length) return "not_started";
   if (steps.every((step) => step.statusKey === "complete")) return "complete";
@@ -259,6 +295,61 @@ function getLatestCompletedMapWorkflowPhase(workflowVisual) {
     if (!latestPhase) return phase;
     return (phase.phaseIndex || 0) > (latestPhase.phaseIndex || 0) ? phase : latestPhase;
   }, null);
+}
+
+function getLatestCompletedMapWorkflowStep(workflowVisual) {
+  const orderedSteps = (workflowVisual?.phases || []).flatMap((phase) => phase.steps || []);
+  const completedSteps = orderedSteps.filter((step) => step?.statusKey === "complete");
+  return completedSteps[completedSteps.length - 1] || null;
+}
+
+function getMapWorkflowStepActionState({ workflowVisual, phase, step, canManageSelections }) {
+  if (!workflowVisual || !phase || !step || !canManageSelections) {
+    return {
+      actionType: "none",
+      canToggle: false,
+      buttonLabel: canManageSelections ? "Unavailable" : "View only",
+      helperText: canManageSelections ? "This substage is not available right now." : "Stage gate sign-off is available to admins in My Projects.",
+    };
+  }
+
+  const orderedSteps = (workflowVisual.phases || []).flatMap((item) => item.steps || []);
+  const actionableStep = orderedSteps.find((item) => item.id === workflowVisual.currentStepId) || orderedSteps.find((item) => item.statusKey !== "complete") || null;
+  const latestCompletedStep = getLatestCompletedMapWorkflowStep(workflowVisual);
+
+  if (step.statusKey === "complete") {
+    if (latestCompletedStep?.id === step.id) {
+      return {
+        actionType: "revert",
+        canToggle: true,
+        buttonLabel: "Undo",
+        helperText: `Undo ${step.title || "this substage"}.`,
+      };
+    }
+
+    return {
+      actionType: "none",
+      canToggle: false,
+      buttonLabel: "Signed off",
+      helperText: "Only the most recent sign-off can be undone.",
+    };
+  }
+
+  if (actionableStep?.id === step.id) {
+    return {
+      actionType: "signoff",
+      canToggle: true,
+      buttonLabel: "Sign off",
+      helperText: `Sign off ${step.title || "this substage"} to advance this stage gate.`,
+    };
+  }
+
+  return {
+    actionType: "none",
+    canToggle: false,
+    buttonLabel: "Locked",
+    helperText: actionableStep?.phaseId === phase.id ? "Complete the current substage before moving forward." : "This stage gate is not currently active.",
+  };
 }
 
 function getMapWorkflowPhaseActionState({ workflowVisual, phase, canManageSelections }) {
@@ -403,9 +494,6 @@ function MapWorkflowStageStrip({ workflowVisual, selectedHole, canManageSelectio
                   "mt-1.5 text-xs font-semibold leading-tight md:text-sm lg:text-base lg:leading-none",
                   isSelected || isToggleable ? "text-cyan-50" : "text-white",
                 ].join(" ")}>{phase?.title || "Unused"}</div>
-                <div className="mt-1.5 text-[9px] uppercase tracking-[0.16em] text-slate-500 md:text-[10px]">
-                  {phase ? `${completedCount}/${stepCount} signed off` : "No stage configured"}
-                </div>
               </button>
             </div>
           );
@@ -416,7 +504,7 @@ function MapWorkflowStageStrip({ workflowVisual, selectedHole, canManageSelectio
   );
 }
 
-function MapWorkflowPhaseDrawer({ open, selectedHole, phase, workflowVisual, canManageSelections, signingPhaseId, onClose, onTogglePhase }) {
+function MapWorkflowPhaseDrawer({ open, selectedHole, phase, workflowVisual, canManageSelections, signingPhaseId, signingStepId, onClose, onToggleStep }) {
   const [mounted, setMounted] = useState(open);
   const [visible, setVisible] = useState(false);
   const [activePhase, setActivePhase] = useState(phase);
@@ -493,12 +581,14 @@ function MapWorkflowPhaseDrawer({ open, selectedHole, phase, workflowVisual, can
           <div className="mt-5 max-h-[55vh] space-y-3 overflow-y-auto pr-1">
             {(activePhase.steps || []).map((step, index) => {
               const stepMeta = getMapWorkflowLightMeta(step.statusKey || "not_started");
+              const stepActionState = getMapWorkflowStepActionState({ workflowVisual, phase: activePhase, step, canManageSelections });
+              const isSigningStep = signingStepId === step.id;
               return (
                 <div
                   key={step.id || `phase-step-${index}`}
                   className="rounded-[24px] border border-white/10 bg-white/[0.04] px-4 py-3"
                 >
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div className="flex min-w-0 items-start gap-3">
                       <span className={[
                         "mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border",
@@ -514,37 +604,51 @@ function MapWorkflowPhaseDrawer({ open, selectedHole, phase, workflowVisual, can
                       </div>
                     </div>
 
-                    <span className={[
-                      "rounded-full border px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.14em]",
-                      stepMeta.chipClassName,
-                    ].join(" ")}>
-                      {step.statusKey === "complete" ? "Signed off" : step.statusKey === "in_progress" ? "In progress" : step.statusKey === "planned" ? "Planned" : "Not started"}
-                    </span>
+                    <div className="flex flex-col items-start gap-2 md:items-end">
+                      <span className={[
+                        "rounded-full border px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.14em]",
+                        stepMeta.chipClassName,
+                      ].join(" ")}>
+                        {step.statusKey === "complete" ? "Signed off" : step.statusKey === "in_progress" ? "In progress" : step.statusKey === "planned" ? "Planned" : "Not started"}
+                      </span>
+
+                      <button
+                        type="button"
+                        disabled={!stepActionState.canToggle || isSigningStep || signingPhaseId === activePhase.id}
+                        onClick={() => onToggleStep(activePhase, step)}
+                        aria-label={isSigningStep
+                          ? stepActionState.actionType === "revert"
+                            ? `Undoing ${step.title || "substage"}`
+                            : `Signing off ${step.title || "substage"}`
+                          : `${stepActionState.buttonLabel} ${step.title || "substage"}`}
+                        title={isSigningStep
+                          ? stepActionState.actionType === "revert"
+                            ? `Undoing ${step.title || "substage"}`
+                            : `Signing off ${step.title || "substage"}`
+                          : `${stepActionState.buttonLabel} ${step.title || "substage"}`}
+                        className={[
+                          "inline-flex h-10 w-10 items-center justify-center rounded-2xl border transition",
+                          stepActionState.canToggle
+                            ? stepActionState.actionType === "revert"
+                              ? "border-amber-300/30 bg-amber-300/10 text-amber-50 hover:bg-amber-300/16"
+                              : "border-cyan-300/30 bg-[linear-gradient(145deg,rgba(34,211,238,0.18),rgba(14,116,144,0.22))] text-cyan-50 shadow-[0_12px_30px_rgba(34,211,238,0.14)] hover:border-cyan-200/50 hover:bg-cyan-300/18"
+                            : "cursor-not-allowed border-white/10 bg-white/[0.03] text-slate-400",
+                        ].join(" ")}
+                      >
+                        <MapWorkflowActionIcon
+                          actionType={stepActionState.actionType}
+                          className={["h-4.5 w-4.5", isSigningStep ? "animate-spin" : ""].join(" ")}
+                        />
+                      </button>
+                      <div className="max-w-[16rem] text-xs text-slate-400 md:text-right">{stepActionState.helperText}</div>
+                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
 
-          <div className="mt-5 flex flex-col gap-3 border-t border-white/10 pt-4 md:flex-row md:items-center md:justify-between">
-            <div className="text-sm text-slate-300">{actionState.helperText}</div>
-            <button
-              type="button"
-              disabled={!actionState.canToggle || signingPhaseId === activePhase.id}
-              onClick={() => onTogglePhase(activePhase)}
-              className="inline-flex h-12 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#22d3ee,#0ea5e9)] px-5 text-sm font-semibold text-slate-950 shadow-[0_14px_36px_rgba(34,211,238,0.24)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {signingPhaseId === activePhase.id
-                ? actionState.actionType === "revert"
-                  ? "Reverting..."
-                  : "Signing off..."
-                : actionState.actionType === "revert"
-                  ? `Undo ${actionState.actionStep?.title || "sign-off"}`
-                  : actionState.actionType === "signoff"
-                    ? `Sign off ${actionState.actionStep?.title || "stage gate"}`
-                    : "No action available"}
-            </button>
-          </div>
+          <div className="mt-5 border-t border-white/10 pt-4 text-sm text-slate-300">{actionState.helperText}</div>
         </div>
       </div>
     </div>
@@ -2183,9 +2287,13 @@ function AdvancedFilterPanel({
   onChange,
   onClear,
   onClose,
+  containerClassName = "",
 }) {
   return (
-    <div className="mt-3 rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(2,6,23,0.94))] p-4 shadow-[0_24px_80px_rgba(2,6,23,0.36)] backdrop-blur-xl md:p-5">
+    <div className={[
+      "mt-3 rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(2,6,23,0.94))] p-4 shadow-[0_24px_80px_rgba(2,6,23,0.36)] backdrop-blur-xl md:p-5",
+      containerClassName,
+    ].join(" ")}>
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-100/75">Detailed Filters</div>
@@ -2321,6 +2429,61 @@ function AdvancedFilterPanel({
               />
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdvancedFilterDrawer({ open, onClose, children }) {
+  const [mounted, setMounted] = useState(open);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      const animationFrame = window.requestAnimationFrame(() => setVisible(true));
+      return () => window.cancelAnimationFrame(animationFrame);
+    }
+
+    setVisible(false);
+    const timeoutId = window.setTimeout(() => setMounted(false), 320);
+    return () => window.clearTimeout(timeoutId);
+  }, [open]);
+
+  useEffect(() => {
+    if (!mounted) return undefined;
+    const handleEscape = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [mounted, onClose]);
+
+  if (!mounted) return null;
+
+  return (
+    <div
+      className={[
+        "fixed inset-0 z-[92] flex items-end backdrop-blur-sm transition-opacity duration-300 ease-out",
+        visible ? "bg-slate-950/58 opacity-100" : "bg-slate-950/0 opacity-0",
+      ].join(" ")}
+      onClick={onClose}
+    >
+      <div
+        className={[
+          "w-full rounded-t-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.99))] shadow-[0_-24px_80px_rgba(2,6,23,0.48)] transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.18,0.9,0.22,1)]",
+          "max-h-[88vh] overflow-hidden",
+          visible ? "translate-y-0 opacity-100" : "translate-y-[18vh] opacity-0",
+        ].join(" ")}
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="map-advanced-filters-title"
+      >
+        <div className="mx-auto max-w-5xl overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] pt-3 md:px-6">
+          <div className="mx-auto h-1.5 w-12 rounded-full bg-white/15" />
+          {children}
         </div>
       </div>
     </div>
@@ -2787,6 +2950,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const [schematicAnnulusTypes, setSchematicAnnulusTypes] = useState([]);
   const [selectedHoleWorkflowRuntime, setSelectedHoleWorkflowRuntime] = useState({ loading: false, substageStatusById: {} });
   const [signingWorkflowPhaseId, setSigningWorkflowPhaseId] = useState("");
+  const [signingWorkflowStepId, setSigningWorkflowStepId] = useState("");
   const [selectedWorkflowPhaseId, setSelectedWorkflowPhaseId] = useState("");
 
   const myRole = useMemo(() => {
@@ -3564,15 +3728,15 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     }
   }, [selectedHoleWorkflowVisual, selectedWorkflowPhaseId]);
 
-  const signOffMapWorkflowPhase = useCallback(async (phase) => {
+  const toggleMapWorkflowStep = useCallback(async (phase, step) => {
     if (!canManageSelections || !selectedHole || !selectedHoleWorkflowVisual) return;
 
-    const actionState = getMapWorkflowPhaseActionState({ workflowVisual: selectedHoleWorkflowVisual, phase, canManageSelections });
-    const targetStep = actionState.actionStep;
+    const actionState = getMapWorkflowStepActionState({ workflowVisual: selectedHoleWorkflowVisual, phase, step, canManageSelections });
     const isReverting = actionState.actionType === "revert";
-    if (!targetStep) return false;
+    if (!actionState.canToggle) return false;
 
     setSigningWorkflowPhaseId(phase.id);
+    setSigningWorkflowStepId(step.id);
 
     try {
       const userResult = await supabase.auth.getUser();
@@ -3584,18 +3748,18 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
       const signedOffAt = new Date().toISOString();
       const nextSelection = isReverting
         ? {
-            phaseId: targetStep.phaseId,
-            substageId: targetStep.stepId,
+            phaseId: step.phaseId,
+            substageId: step.stepId,
             statusKey: "planned",
           }
-        : getNextMapWorkflowSelection(selectedHoleWorkflowVisual, targetStep.id);
+        : getNextMapWorkflowSelection(selectedHoleWorkflowVisual, step.id);
 
       const { error: signoffError } = await supabase.from("hole_workflow_substage_statuses").upsert(
         {
           hole_id: selectedHole.id,
           workflow_id: selectedHoleWorkflowVisual.workflowId,
-          workflow_phase_id: targetStep.phaseId,
-          workflow_substage_id: targetStep.stepId,
+          workflow_phase_id: step.phaseId,
+          workflow_substage_id: step.stepId,
           status_key: isReverting ? "planned" : "complete",
           signed_off_by: isReverting ? null : userId,
           signed_off_at: isReverting ? null : signedOffAt,
@@ -3623,11 +3787,11 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         ...current,
         substageStatusById: {
           ...current.substageStatusById,
-          [targetStep.stepId]: {
-            ...(current.substageStatusById[targetStep.stepId] || {}),
+          [step.stepId]: {
+            ...(current.substageStatusById[step.stepId] || {}),
             hole_id: selectedHole.id,
-            workflow_phase_id: targetStep.phaseId,
-            workflow_substage_id: targetStep.stepId,
+            workflow_phase_id: step.phaseId,
+            workflow_substage_id: step.stepId,
             status_key: isReverting ? "planned" : "complete",
             signed_off_by: isReverting ? null : userId,
             signed_off_at: isReverting ? null : signedOffAt,
@@ -3652,13 +3816,14 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
       );
 
       void loadSelectedHoleWorkflowRuntime(selectedHole.id);
-      toast.success(isReverting ? `${targetStep.title} reverted` : `${targetStep.title} signed off`);
+      toast.success(isReverting ? `${step.title} reverted` : `${step.title} signed off`);
       return true;
     } catch (error) {
       toast.error(error?.message || `Failed to ${isReverting ? "revert" : "sign off"} workflow step`);
       return false;
     } finally {
       setSigningWorkflowPhaseId("");
+      setSigningWorkflowStepId("");
     }
   }, [canManageSelections, loadSelectedHoleWorkflowRuntime, orgId, selectedHole, selectedHoleWorkflowVisual, supabase]);
 
@@ -3671,12 +3836,9 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     setSelectedWorkflowPhaseId(phase?.id || "");
   }, []);
 
-  const handleWorkflowPhaseToggle = useCallback(async (phase) => {
-    const succeeded = await signOffMapWorkflowPhase(phase);
-    if (succeeded) {
-      setSelectedWorkflowPhaseId("");
-    }
-  }, [signOffMapWorkflowPhase]);
+  const handleWorkflowStepToggle = useCallback(async (phase, step) => {
+    await toggleMapWorkflowStep(phase, step);
+  }, [toggleMapWorkflowStep]);
 
   const pendingProposalByEntity = useMemo(() => {
     const next = new Map();
@@ -5421,60 +5583,14 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
           </div>
 
           <div className="px-4 py-4 md:px-6 md:py-5">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div className="min-w-0 flex-1">
-                <MapWorkflowStageStrip
-                  workflowVisual={selectedHoleWorkflowVisual}
-                  selectedHole={selectedHole}
-                  canManageSelections={canManageSelections}
-                  signingPhaseId={signingWorkflowPhaseId}
-                  onSelectPhase={handleStageGateSelect}
-                  selectedPhaseId={selectedWorkflowPhaseId}
-                />
-              </div>
-
-              <div>
-                <button
-                  type="button"
-                  className="inline-flex h-12 min-w-[220px] items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm font-medium text-slate-100 transition hover:bg-slate-900/70"
-                  onClick={() => setShowAdvancedFilters((current) => !current)}
-                >
-                  <span className="flex items-center gap-2">
-                    <FilterIcon className="h-[18px] w-[18px] text-cyan-200" />
-                    <span>{showAdvancedFilters ? "Hide Filters" : "Open Filters"}</span>
-                  </span>
-                  {activeAdvancedFilterCount ? (
-                    <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2.5 py-1 text-xs font-semibold text-cyan-100">
-                      {activeAdvancedFilterCount}
-                    </span>
-                  ) : null}
-                </button>
-              </div>
-            </div>
-            {showAdvancedFilters ? (
-              <AdvancedFilterPanel
-                projectScope={projectScope}
-                projectFilter={projectFilter}
-                projectOptions={projectOptions}
-                totalProjects={totalProjects}
-                filters={advancedFilters}
-                activeFilterCount={activeAdvancedFilterCount}
-                descriptorOptions={descriptorOptions}
-                holeStateOptions={holeStateOptions}
-                holeCompletionStatusOptions={holeCompletionStatusOptions}
-                assetStatusOptions={assetStatusOptions}
-                assetTypeOptions={assetTypeOptions}
-                assetLocationOptions={assetLocationOptions}
-                onProjectScopeChange={(scope) => {
-                  setProjectScope(scope);
-                  setProjectFilter("");
-                }}
-                onProjectFilterChange={setProjectFilter}
-                onChange={updateAdvancedFilter}
-                onClear={clearAdvancedFilters}
-                onClose={() => setShowAdvancedFilters(false)}
-              />
-            ) : null}
+            <MapWorkflowStageStrip
+              workflowVisual={selectedHoleWorkflowVisual}
+              selectedHole={selectedHole}
+              canManageSelections={canManageSelections}
+              signingPhaseId={signingWorkflowPhaseId}
+              onSelectPhase={handleStageGateSelect}
+              selectedPhaseId={selectedWorkflowPhaseId}
+            />
             {mapNotice ? <div className="mt-3 text-sm text-amber-300">{mapNotice}</div> : null}
             {error ? <div className="mt-3 text-sm text-rose-300">{error}</div> : null}
           </div>
@@ -5568,6 +5684,20 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                       <CoreTasksIcon className="h-[18px] w-[18px]" />
                       <span>Core tasks</span>
                     </button>
+                    <button
+                      type="button"
+                      aria-label="Open filters"
+                      title="Open filters"
+                      className="relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-slate-100 transition hover:bg-white/[0.1]"
+                      onClick={() => setShowAdvancedFilters(true)}
+                    >
+                      <FilterIcon className="h-[18px] w-[18px] text-cyan-200" />
+                      {activeAdvancedFilterCount ? (
+                        <span className="absolute -right-1.5 -top-1.5 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-100">
+                          {activeAdvancedFilterCount}
+                        </span>
+                      ) : null}
+                    </button>
                   </div>
                 </div>
                 <div className="mt-4">
@@ -5603,6 +5733,20 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   >
                     <CoreTasksIcon className="h-[18px] w-[18px]" />
                     <span>Core tasks</span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Open filters"
+                    title="Open filters"
+                    className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-slate-100 shadow-[0_12px_28px_rgba(2,6,23,0.22)] transition hover:bg-white/[0.1]"
+                    onClick={() => setShowAdvancedFilters(true)}
+                  >
+                    <FilterIcon className="h-[18px] w-[18px] text-cyan-200" />
+                    {activeAdvancedFilterCount ? (
+                      <span className="absolute -right-1.5 -top-1.5 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-100">
+                        {activeAdvancedFilterCount}
+                      </span>
+                    ) : null}
                   </button>
                   <button
                     type="button"
@@ -5788,44 +5932,19 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
 
                   <button
                     type="button"
-                    className="inline-flex h-12 items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm font-medium text-slate-100 transition hover:bg-slate-900/70"
-                    onClick={() => setShowAdvancedFilters((current) => !current)}
+                    aria-label="Open filters"
+                    title="Open filters"
+                    className="relative inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-slate-950/55 text-sm font-medium text-slate-100 transition hover:bg-slate-900/70"
+                    onClick={() => setShowAdvancedFilters(true)}
                   >
-                    <span className="flex items-center gap-2">
-                      <FilterIcon className="h-[18px] w-[18px] text-cyan-200" />
-                      <span>{showAdvancedFilters ? "Hide Filters" : "Open Filters"}</span>
-                    </span>
+                    <FilterIcon className="h-[18px] w-[18px] text-cyan-200" />
                     {activeAdvancedFilterCount ? (
-                      <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2.5 py-1 text-xs font-semibold text-cyan-100">
+                      <span className="absolute -right-1.5 -top-1.5 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-100">
                         {activeAdvancedFilterCount}
                       </span>
                     ) : null}
                   </button>
                 </div>
-                {showAdvancedFilters ? (
-                  <AdvancedFilterPanel
-                    projectScope={projectScope}
-                    projectFilter={projectFilter}
-                    projectOptions={projectOptions}
-                    totalProjects={totalProjects}
-                    filters={advancedFilters}
-                    activeFilterCount={activeAdvancedFilterCount}
-                    descriptorOptions={descriptorOptions}
-                    holeStateOptions={holeStateOptions}
-                    holeCompletionStatusOptions={holeCompletionStatusOptions}
-                    assetStatusOptions={assetStatusOptions}
-                    assetTypeOptions={assetTypeOptions}
-                    assetLocationOptions={assetLocationOptions}
-                    onProjectScopeChange={(scope) => {
-                      setProjectScope(scope);
-                      setProjectFilter("");
-                    }}
-                    onProjectFilterChange={setProjectFilter}
-                    onChange={updateAdvancedFilter}
-                    onClear={clearAdvancedFilters}
-                    onClose={() => setShowAdvancedFilters(false)}
-                  />
-                ) : null}
               </div>
 
               {mobilePanelTab === "holes" ? (
@@ -5955,9 +6074,36 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         workflowVisual={selectedHoleWorkflowVisual}
         canManageSelections={canManageSelections}
         signingPhaseId={signingWorkflowPhaseId}
+        signingStepId={signingWorkflowStepId}
         onClose={() => setSelectedWorkflowPhaseId("")}
-        onTogglePhase={handleWorkflowPhaseToggle}
+        onToggleStep={handleWorkflowStepToggle}
       />
+
+      <AdvancedFilterDrawer open={showAdvancedFilters} onClose={() => setShowAdvancedFilters(false)}>
+        <AdvancedFilterPanel
+          projectScope={projectScope}
+          projectFilter={projectFilter}
+          projectOptions={projectOptions}
+          totalProjects={totalProjects}
+          filters={advancedFilters}
+          activeFilterCount={activeAdvancedFilterCount}
+          descriptorOptions={descriptorOptions}
+          holeStateOptions={holeStateOptions}
+          holeCompletionStatusOptions={holeCompletionStatusOptions}
+          assetStatusOptions={assetStatusOptions}
+          assetTypeOptions={assetTypeOptions}
+          assetLocationOptions={assetLocationOptions}
+          onProjectScopeChange={(scope) => {
+            setProjectScope(scope);
+            setProjectFilter("");
+          }}
+          onProjectFilterChange={setProjectFilter}
+          onChange={updateAdvancedFilter}
+          onClear={clearAdvancedFilters}
+          onClose={() => setShowAdvancedFilters(false)}
+          containerClassName="mt-4 border-0 bg-transparent p-0 shadow-none backdrop-blur-none"
+        />
+      </AdvancedFilterDrawer>
     </div>
   );
 }
