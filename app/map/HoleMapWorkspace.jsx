@@ -421,8 +421,8 @@ function MapWorkflowStageStrip({ workflowVisual, selectedHole, canManageSelectio
   }
 
   return (
-    <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,rgba(8,47,73,0.22),rgba(15,23,42,0.82),rgba(30,41,59,0.52))] p-3 shadow-[0_18px_50px_rgba(2,6,23,0.28)]">
-      <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] px-3 py-3">
+    <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,rgba(8,47,73,0.22),rgba(15,23,42,0.82),rgba(30,41,59,0.52))] px-1.5 py-2.5 shadow-[0_18px_50px_rgba(2,6,23,0.28)] md:p-3">
+      <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] px-1.5 py-3 md:px-3">
         <div className="grid grid-cols-5 gap-2 md:gap-2.5">
         {Array.from({ length: 5 }, (_, index) => {
           const phaseNumber = index + 1;
@@ -5884,52 +5884,6 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   </div>
                 </div>
                 <div className="mt-4 flex flex-col gap-3">
-                  <div className="grid w-full grid-cols-2 gap-2 rounded-2xl bg-white/[0.04] p-1.5">
-                    <button
-                      type="button"
-                      className={`min-w-0 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "holes" ? "bg-amber-300 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
-                      onClick={() => {
-                        setMobilePanelTab("holes");
-                        setNavigatorTab("holes");
-                      }}
-                    >
-                      Holes
-                    </button>
-                    <button
-                      type="button"
-                      className={`min-w-0 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "assets" ? "bg-rose-300 text-slate-950 shadow-[0_12px_28px_rgba(244,114,182,0.22)]" : "text-slate-200 hover:bg-white/8"}`}
-                      onClick={() => {
-                        setMobilePanelTab("assets");
-                        setNavigatorTab("assets");
-                      }}
-                    >
-                      Assets
-                    </button>
-                  </div>
-
-                  <div className="grid w-full grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-slate-900/45 p-1.5">
-                    <button
-                      type="button"
-                      className={`min-w-0 rounded-2xl px-3 py-2.5 text-sm font-medium transition ${projectScope === "own" ? "bg-amber-400 text-slate-950 shadow-[0_12px_28px_rgba(251,191,36,0.28)]" : "text-slate-200 hover:bg-white/8"}`}
-                      onClick={() => {
-                        setProjectScope("own");
-                        setProjectFilter("");
-                      }}
-                    >
-                      My Projects
-                    </button>
-                    <button
-                      type="button"
-                      className={`min-w-0 rounded-2xl px-3 py-2.5 text-sm font-medium transition ${projectScope === "shared" ? "bg-cyan-300 text-slate-950 shadow-[0_12px_28px_rgba(34,211,238,0.25)]" : "text-slate-200 hover:bg-white/8"}`}
-                      onClick={() => {
-                        setProjectScope("shared");
-                        setProjectFilter("");
-                      }}
-                    >
-                      Client Shared
-                    </button>
-                  </div>
-
                   <button
                     type="button"
                     aria-label="Open filters"
