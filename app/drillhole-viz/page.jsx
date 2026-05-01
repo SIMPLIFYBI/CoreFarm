@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import toast from "react-hot-toast";
@@ -23,7 +23,15 @@ import { attachHoleDescriptors, fetchHoleDescriptorAssignments } from "@/lib/hol
 
 const PROJECT_SCOPE_STORAGE_KEY = "coretasks:projectScope";
 
-export default function DrillholeVizPage({ projectScope: externalProjectScope }) {
+export default function DrillholeVizPage(props) {
+  return (
+    <Suspense fallback={<div className="max-w-6xl mx-auto p-6">Loading…</div>}>
+      <DrillholeVizPageInner {...props} />
+    </Suspense>
+  );
+}
+
+function DrillholeVizPageInner({ projectScope: externalProjectScope }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = supabaseBrowser();

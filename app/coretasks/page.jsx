@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import HorizontalScrollTabs from "@/app/components/HorizontalScrollTabs";
 import CorePage from "./CorePage";
@@ -22,6 +22,14 @@ function BackToMapIcon(props) {
 }
 
 export default function CoreTasksPage() {
+  return (
+    <Suspense fallback={<div className="max-w-6xl mx-auto p-6">Loading…</div>}>
+      <CoreTasksPageInner />
+    </Suspense>
+  );
+}
+
+function CoreTasksPageInner() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();

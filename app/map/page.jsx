@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import HoleMapWorkspace from "./HoleMapWorkspace";
 
 export default function MapPage() {
@@ -5,7 +6,9 @@ export default function MapPage() {
 
   return (
     <div className="overflow-x-hidden md:-mt-[72px]">
-      <HoleMapWorkspace publicToken={publicToken} />
+      <Suspense fallback={<div className="max-w-6xl mx-auto p-6">Loading…</div>}>
+        <HoleMapWorkspace publicToken={publicToken} />
+      </Suspense>
     </div>
   );
 }
