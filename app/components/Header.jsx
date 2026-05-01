@@ -29,7 +29,7 @@ export default function Header() {
   const [email, setEmail] = useState(null);
   const [displayName, setDisplayName] = useState(null);
   const [userId, setUserId] = useState(null);
-  const { orgId, memberships } = useOrg();
+  const { orgId, memberships, currentOrgName: contextOrgName, isAnonymousDemo } = useOrg();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMounted, setDrawerMounted] = useState(false);
@@ -145,10 +145,11 @@ export default function Header() {
   }, [supabase]);
 
   const currentOrgName = useMemo(() => {
+    if (contextOrgName) return contextOrgName;
     if (!orgId) return null;
     const m = memberships.find((m) => m.organization_id === orgId);
     return m?.organizations?.name || null;
-  }, [orgId, memberships]);
+  }, [contextOrgName, orgId, memberships]);
 
   const navTabs = [
     { href: "/map", label: "Map", icon: IconMap },
@@ -160,9 +161,9 @@ export default function Header() {
     { href: "/projects", label: "Projects", icon: IconClipboard },
     { href: "/assets", label: "Assets", icon: AssetIcon },
     { href: "/plods", label: "Plods", icon: IconPlods },
-    { href: "/team", label: "Team", icon: IconTeam },
+    ...(!isAnonymousDemo ? [{ href: "/team", label: "Team", icon: IconTeam }] : []),
     { href: "/how-to", label: "How To", icon: IconClipboard },
-    ...(isAppAdmin ? [{ href: "/admin", label: "AppAdmin", icon: IconAdmin }] : []),
+    ...(isAppAdmin && !isAnonymousDemo ? [{ href: "/admin", label: "AppAdmin", icon: IconAdmin }] : []),
   ];
 
   const activeProjectsChildHref = useMemo(() => {
@@ -216,12 +217,14 @@ export default function Header() {
               type="button"
               className="glass inline-flex flex-col justify-center h-9 px-3 rounded-xl max-w-[180px] overflow-hidden text-slate-100 hover:bg-white/10 transition-base focus-ring"
               title={`${currentOrgName}${email ? " — " + email : ""}`}
-              onClick={() => router.push("/team")}
+              onClick={() => router.push(isAnonymousDemo ? "/?mode=signup" : "/team")}
             >
               <span className="text-[10px] leading-tight font-medium truncate">{currentOrgName}</span>
-              {email && (
+              {email ? (
                 <span className="text-[9px] leading-tight opacity-80 truncate -mt-0.5">{email}</span>
-              )}
+              ) : isAnonymousDemo ? (
+                <span className="text-[9px] leading-tight opacity-80 truncate -mt-0.5">Public demo</span>
+              ) : null}
             </button>
           )}
         </div>
@@ -362,15 +365,27 @@ export default function Header() {
                     Signed in as <span className="font-medium text-slate-100">{email}</span>
                   </div>
                 ) : (
-                  <Link
-                    href="/"
-                    className="flex items-center gap-3 px-3 py-2 rounded-xl text-slate-200 hover:bg-white/5 hover:text-white transition-base"
-                  >
-                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-100">
-                      <IconLogin />
-                    </span>
-                    <span className="font-medium">Sign in</span>
-                  </Link>
+                  <div className="space-y-2">
+                    {isAnonymousDemo ? <div className="px-3 text-[11px] uppercase tracking-[0.18em] text-amber-200/80">Browsing public demo</div> : null}
+                    <Link
+                      href="/?mode=signin"
+                      className="flex items-center gap-3 px-3 py-2 rounded-xl text-slate-200 hover:bg-white/5 hover:text-white transition-base"
+                    >
+                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-100">
+                        <IconLogin />
+                      </span>
+                      <span className="font-medium">Sign in</span>
+                    </Link>
+                    <Link
+                      href="/?mode=signup"
+                      className="flex items-center gap-3 px-3 py-2 rounded-xl text-slate-200 hover:bg-white/5 hover:text-white transition-base"
+                    >
+                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-100">
+                        <IconUser />
+                      </span>
+                      <span className="font-medium">Create account</span>
+                    </Link>
+                  </div>
                 )}
               </div>
             </nav>

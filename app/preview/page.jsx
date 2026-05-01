@@ -18,7 +18,7 @@ export default function PreviewPage() {
             {/* Mobile-only CTA */}
             <div className="block md:hidden mb-6">
               <Link
-                href="/auth"
+                href="/?mode=signup"
                 className="w-full inline-flex items-center justify-center px-4 py-2 bg-indigo-600 text-white rounded-md font-medium"
               >
                 Try it now — Sign up
@@ -38,7 +38,7 @@ export default function PreviewPage() {
             </ul>
 
             <div className="mt-6 hidden md:block">
-              <Link href="/auth" className="block text-center w-full px-4 py-2 bg-indigo-600 text-white rounded-md font-medium">Try it now — Sign up</Link>
+              <Link href="/?mode=signup" className="block text-center w-full px-4 py-2 bg-indigo-600 text-white rounded-md font-medium">Try it now — Sign up</Link>
             </div>
           </aside>
         </div>

@@ -2,6 +2,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import toast from "react-hot-toast";
+import { DEMO_ORG_ID, DEMO_ORG_NAME, isPublicDemoEnabled } from "@/lib/demoMode";
 
 const ORG_STORAGE_KEY = "cf_org_id";
 const ORG_SELECTION_MODE_STORAGE_KEY = "cf_org_selection_mode";
@@ -14,6 +15,9 @@ const OrgContext = createContext({
   memberships: [],
   currentOrgName: "",
   isDemoOrg: false,
+  isPublicDemoMode: false,
+  isAnonymousDemo: false,
+  canAccessPublicDemo: false,
   loading: true,
   refreshMemberships: () => {},
 });
@@ -41,6 +45,7 @@ function readStoredOrgSelectionMode() {
 
 export function OrgProvider({ children }) {
   const supabase = useMemo(() => supabaseBrowser(), []);
+  const publicDemoEnabled = isPublicDemoEnabled();
 
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false); // <-- ADD
@@ -97,6 +102,9 @@ export function OrgProvider({ children }) {
   const loadMemberships = useCallback(async () => {
     if (!user) {
       setMemberships([]);
+      if (publicDemoEnabled) {
+        persistOrgSelection(DEMO_ORG_ID, ORG_SELECTION_MODE_AUTO_DEMO);
+      }
       setLoading(false);
       return;
     }
@@ -168,7 +176,7 @@ export function OrgProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, [user, supabase, orgId, orgSelectionMode, persistOrgSelection]);
+  }, [user, supabase, orgId, orgSelectionMode, persistOrgSelection, publicDemoEnabled]);
 
   useEffect(() => {
     loadMemberships();
@@ -180,20 +188,42 @@ export function OrgProvider({ children }) {
     if (!authReady) return;
 
     if (!user) {
-      persistOrgSelection("", "");
+      if (publicDemoEnabled) {
+        persistOrgSelection(DEMO_ORG_ID, ORG_SELECTION_MODE_AUTO_DEMO);
+      } else {
+        persistOrgSelection("", "");
+      }
     }
-  }, [user, authReady, persistOrgSelection]); // <-- UPDATE deps
+  }, [user, authReady, persistOrgSelection, publicDemoEnabled]); // <-- UPDATE deps
 
   // Wrapped setter persists to localStorage
   const setOrgId = (val, options = {}) => {
+    if (!user && publicDemoEnabled) {
+      persistOrgSelection(DEMO_ORG_ID, ORG_SELECTION_MODE_AUTO_DEMO);
+      return;
+    }
+
     persistOrgSelection(val, options.mode || ORG_SELECTION_MODE_MANUAL);
   };
 
   const currentOrg = useMemo(() => memberships.find((membership) => membership.organization_id === orgId) || null, [memberships, orgId]);
-  const currentOrgName = currentOrg?.organizations?.name || "";
-  const isDemoOrg = isDemoOrgName(currentOrgName);
+  const isAnonymousDemo = !user && publicDemoEnabled;
+  const currentOrgName = currentOrg?.organizations?.name || (isAnonymousDemo ? DEMO_ORG_NAME : "");
+  const isDemoOrg = isDemoOrgName(currentOrgName) || isAnonymousDemo;
+  const isPublicDemoMode = isDemoOrg && publicDemoEnabled;
 
-  const value = { orgId, setOrgId, memberships, currentOrgName, isDemoOrg, loading, refreshMemberships: loadMemberships };
+  const value = {
+    orgId,
+    setOrgId,
+    memberships,
+    currentOrgName,
+    isDemoOrg,
+    isPublicDemoMode,
+    isAnonymousDemo,
+    canAccessPublicDemo: publicDemoEnabled,
+    loading,
+    refreshMemberships: loadMemberships,
+  };
   return <OrgContext.Provider value={value}>{children}</OrgContext.Provider>;
 }
 

@@ -252,11 +252,66 @@ function getNextMapWorkflowSelection(workflowVisual, completedStepId) {
   };
 }
 
-function MapWorkflowStageStrip({ workflowVisual, selectedHole, canManageSelections, signingPhaseId, onSignOffPhase }) {
+function getLatestCompletedMapWorkflowPhase(workflowVisual) {
+  const completedPhases = (workflowVisual?.phases || []).filter((phase) => phase?.statusKey === "complete");
+  if (!completedPhases.length) return null;
+  return completedPhases.reduce((latestPhase, phase) => {
+    if (!latestPhase) return phase;
+    return (phase.phaseIndex || 0) > (latestPhase.phaseIndex || 0) ? phase : latestPhase;
+  }, null);
+}
+
+function getMapWorkflowPhaseActionState({ workflowVisual, phase, canManageSelections }) {
+  if (!workflowVisual || !phase || !canManageSelections) {
+    return {
+      actionStep: null,
+      actionType: "none",
+      canToggle: false,
+      helperText: canManageSelections ? "This stage gate is view only right now." : "Stage gate sign-off is available to admins in My Projects.",
+    };
+  }
+
+  const orderedSteps = (workflowVisual.phases || []).flatMap((item) => item.steps || []);
+  const actionableStep = orderedSteps.find((step) => step.id === workflowVisual.currentStepId) || orderedSteps.find((step) => step.statusKey !== "complete") || null;
+  const latestCompletedPhase = getLatestCompletedMapWorkflowPhase(workflowVisual);
+  const revertStep = phase.statusKey === "complete" && latestCompletedPhase?.id === phase.id
+    ? [...(phase.steps || [])].reverse().find((step) => step.statusKey === "complete") || null
+    : null;
+
+  if (revertStep) {
+    return {
+      actionStep: revertStep,
+      actionType: "revert",
+      canToggle: true,
+      helperText: `Undo the most recent sign-off in ${phase.title}.`,
+    };
+  }
+
+  if (actionableStep?.phaseId === phase.id) {
+    return {
+      actionStep: actionableStep,
+      actionType: "signoff",
+      canToggle: true,
+      helperText: `Sign off ${actionableStep.title} to advance this stage gate.`,
+    };
+  }
+
+  return {
+    actionStep: null,
+    actionType: "none",
+    canToggle: false,
+    helperText: phase.statusKey === "complete"
+      ? "Only the latest completed stage gate can be reverted."
+      : "This stage gate is not currently active.",
+  };
+}
+
+function MapWorkflowStageStrip({ workflowVisual, selectedHole, canManageSelections, signingPhaseId, onSelectPhase, selectedPhaseId = "" }) {
   const actionableStep = useMemo(() => {
     const orderedSteps = (workflowVisual?.phases || []).flatMap((phase) => phase.steps || []);
     return orderedSteps.find((step) => step.id === workflowVisual?.currentStepId) || orderedSteps.find((step) => step.statusKey !== "complete") || null;
   }, [workflowVisual]);
+  const latestCompletedPhaseId = useMemo(() => getLatestCompletedMapWorkflowPhase(workflowVisual)?.id || "", [workflowVisual]);
 
   if (!selectedHole) {
     return (
@@ -276,24 +331,7 @@ function MapWorkflowStageStrip({ workflowVisual, selectedHole, canManageSelectio
 
   return (
     <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,rgba(8,47,73,0.22),rgba(15,23,42,0.82),rgba(30,41,59,0.52))] p-3 shadow-[0_18px_50px_rgba(2,6,23,0.28)]">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-100/75">Hole Workflow</div>
-          <div className="mt-1 text-sm font-semibold text-white">{selectedHole.hole_id}</div>
-          <p className="mt-1 max-w-2xl text-xs text-slate-300">
-            Sign off the current active gate directly from the map without leaving the selected hole context.
-          </p>
-        </div>
-        {actionableStep ? (
-          <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[11px] text-slate-200">
-            Next step: {actionableStep.title}
-          </span>
-        ) : (
-          <span className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-2.5 py-1 text-[11px] text-emerald-50">Workflow complete</span>
-        )}
-      </div>
-
-      <div className="mt-3 rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] px-3 py-3">
+      <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] px-3 py-3">
         <div className="grid grid-cols-5 gap-2 md:gap-2.5">
         {Array.from({ length: 5 }, (_, index) => {
           const phaseNumber = index + 1;
@@ -302,7 +340,10 @@ function MapWorkflowStageStrip({ workflowVisual, selectedHole, canManageSelectio
           const completedCount = phase?.steps.filter((step) => step.statusKey === "complete").length || 0;
           const stepCount = phase?.steps.length || 0;
           const isActionable = !!phase && !!actionableStep && actionableStep.phaseId === phase.id && canManageSelections;
+          const isRevertable = !!phase && phase.statusKey === "complete" && phase.id === latestCompletedPhaseId && canManageSelections;
+          const isToggleable = isActionable || isRevertable;
           const isSigning = signingPhaseId === phase?.id;
+          const isSelected = selectedPhaseId === phase?.id;
 
           return (
             <div key={`map-workflow-phase-${phaseNumber}`} className="relative flex flex-col items-center text-center">
@@ -317,25 +358,27 @@ function MapWorkflowStageStrip({ workflowVisual, selectedHole, canManageSelectio
               <button
                 key={`map-workflow-phase-button-${phaseNumber}`}
                 type="button"
-                disabled={!isActionable || isSigning}
-                onClick={() => phase && onSignOffPhase(phase)}
+                disabled={!phase}
+                onClick={() => phase && onSelectPhase(phase)}
                 className={[
                   "group relative flex w-full flex-col items-center text-center",
-                  !phase || !isActionable ? "cursor-default" : "",
+                  !phase ? "cursor-default" : "",
                 ].join(" ")}
               >
                 <div
                   className={[
                     "relative flex h-[52px] w-[52px] items-center justify-center rounded-full border-[4px] bg-transparent transition-base md:h-[60px] md:w-[60px] lg:h-[64px] lg:w-[64px]",
                     phaseMeta.ringClassName,
-                    isActionable
+                    isSelected
+                      ? "scale-[1.05] shadow-[0_0_0_6px_rgba(34,211,238,0.18),0_0_0_12px_rgba(34,211,238,0.08)]"
+                      : isToggleable
                       ? "scale-[1.04] shadow-[0_0_0_6px_rgba(34,211,238,0.12),0_0_0_10px_rgba(34,211,238,0.05)]"
                       : phase
                         ? "group-hover:scale-[1.02]"
                         : "",
                   ].join(" ")}
                 >
-                  {isActionable ? (
+                  {isSelected || isToggleable ? (
                     <span className="pointer-events-none absolute inset-[-8px] rounded-full border border-cyan-300/25" />
                   ) : null}
                   <span className="absolute -top-1 h-2 w-2 rounded-full bg-current opacity-85" />
@@ -358,18 +401,150 @@ function MapWorkflowStageStrip({ workflowVisual, selectedHole, canManageSelectio
                 </div>
                 <div className={[
                   "mt-1.5 text-xs font-semibold leading-tight md:text-sm lg:text-base lg:leading-none",
-                  isActionable ? "text-cyan-50" : "text-white",
+                  isSelected || isToggleable ? "text-cyan-50" : "text-white",
                 ].join(" ")}>{phase?.title || "Unused"}</div>
                 <div className="mt-1.5 text-[9px] uppercase tracking-[0.16em] text-slate-500 md:text-[10px]">
                   {phase ? `${completedCount}/${stepCount} signed off` : "No stage configured"}
-                </div>
-                <div className="mt-1.5 min-h-[16px] text-[9px] font-medium uppercase tracking-[0.16em] text-cyan-100/90 md:text-[10px]">
-                  {isSigning ? "Signing off..." : isActionable ? "Click to sign off" : phase?.statusKey === "complete" ? "Signed off" : ""}
                 </div>
               </button>
             </div>
           );
         })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MapWorkflowPhaseDrawer({ open, selectedHole, phase, workflowVisual, canManageSelections, signingPhaseId, onClose, onTogglePhase }) {
+  const [mounted, setMounted] = useState(open);
+  const [visible, setVisible] = useState(false);
+  const [activePhase, setActivePhase] = useState(phase);
+
+  useEffect(() => {
+    if (phase) {
+      setActivePhase(phase);
+    }
+  }, [phase]);
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      const animationFrame = window.requestAnimationFrame(() => setVisible(true));
+      return () => window.cancelAnimationFrame(animationFrame);
+    }
+
+    setVisible(false);
+    const timeoutId = window.setTimeout(() => setMounted(false), 220);
+    return () => window.clearTimeout(timeoutId);
+  }, [open]);
+
+  useEffect(() => {
+    if (!mounted) return undefined;
+    const handleEscape = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [mounted, onClose]);
+
+  const actionState = useMemo(
+    () => getMapWorkflowPhaseActionState({ workflowVisual, phase: activePhase, canManageSelections }),
+    [activePhase, canManageSelections, workflowVisual]
+  );
+
+  if (!mounted || !activePhase) return null;
+
+  return (
+    <div className="fixed inset-0 z-[95] flex items-end bg-slate-950/58 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className={[
+          "w-full rounded-t-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.99))] shadow-[0_-24px_80px_rgba(2,6,23,0.48)] transition duration-200 ease-out",
+          visible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0",
+        ].join(" ")}
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="map-workflow-phase-drawer-title"
+      >
+        <div className="mx-auto flex max-w-4xl flex-col px-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] pt-3 md:px-6">
+          <div className="mx-auto h-1.5 w-12 rounded-full bg-white/15" />
+
+          <div className="mt-4 flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-100/75">Stage Gate</div>
+              <div id="map-workflow-phase-drawer-title" className="mt-2 text-xl font-semibold text-white">
+                {activePhase.title || "Unnamed stage gate"}
+              </div>
+              <div className="mt-1 text-sm text-slate-300">
+                {selectedHole?.hole_id ? `${selectedHole.hole_id} · ${activePhase.steps.length} substage${activePhase.steps.length === 1 ? "" : "s"}` : `${activePhase.steps.length} substage${activePhase.steps.length === 1 ? "" : "s"}`}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex items-center rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1]"
+            >
+              Close
+            </button>
+          </div>
+
+          <div className="mt-5 max-h-[55vh] space-y-3 overflow-y-auto pr-1">
+            {(activePhase.steps || []).map((step, index) => {
+              const stepMeta = getMapWorkflowLightMeta(step.statusKey || "not_started");
+              return (
+                <div
+                  key={step.id || `phase-step-${index}`}
+                  className="rounded-[24px] border border-white/10 bg-white/[0.04] px-4 py-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span className={[
+                        "mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border",
+                        stepMeta.badgeClassName,
+                      ].join(" ")}>
+                        <MapWorkflowStatusIcon statusKey={step.statusKey || "not_started"} className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-white">{step.title || `Substage ${index + 1}`}</div>
+                        <div className="mt-1 text-xs text-slate-300">
+                          {step.isCurrent ? "Current substage" : step.statusKey === "complete" ? "Signed off" : step.statusKey === "in_progress" ? "In progress" : step.statusKey === "planned" ? "Planned" : "Not started"}
+                        </div>
+                      </div>
+                    </div>
+
+                    <span className={[
+                      "rounded-full border px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.14em]",
+                      stepMeta.chipClassName,
+                    ].join(" ")}>
+                      {step.statusKey === "complete" ? "Signed off" : step.statusKey === "in_progress" ? "In progress" : step.statusKey === "planned" ? "Planned" : "Not started"}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-5 flex flex-col gap-3 border-t border-white/10 pt-4 md:flex-row md:items-center md:justify-between">
+            <div className="text-sm text-slate-300">{actionState.helperText}</div>
+            <button
+              type="button"
+              disabled={!actionState.canToggle || signingPhaseId === activePhase.id}
+              onClick={() => onTogglePhase(activePhase)}
+              className="inline-flex h-12 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#22d3ee,#0ea5e9)] px-5 text-sm font-semibold text-slate-950 shadow-[0_14px_36px_rgba(34,211,238,0.24)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {signingPhaseId === activePhase.id
+                ? actionState.actionType === "revert"
+                  ? "Reverting..."
+                  : "Signing off..."
+                : actionState.actionType === "revert"
+                  ? `Undo ${actionState.actionStep?.title || "sign-off"}`
+                  : actionState.actionType === "signoff"
+                    ? `Sign off ${actionState.actionStep?.title || "stage gate"}`
+                    : "No action available"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1991,6 +2166,7 @@ function MapOverviewKpi({ label, value, detail, bars = [], tone = "cyan" }) {
 }
 
 function AdvancedFilterPanel({
+  projectScope,
   projectFilter,
   projectOptions,
   totalProjects,
@@ -2002,6 +2178,7 @@ function AdvancedFilterPanel({
   assetStatusOptions,
   assetTypeOptions,
   assetLocationOptions,
+  onProjectScopeChange,
   onProjectFilterChange,
   onChange,
   onClear,
@@ -2040,7 +2217,25 @@ function AdvancedFilterPanel({
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
         <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4 xl:col-span-2">
           <div className="text-[11px] uppercase tracking-[0.2em] text-slate-300">Project Scope</div>
-          <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+          <div className="mt-3 grid gap-3">
+            <div className="inline-flex w-full flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-slate-900/45 p-1.5 xl:w-auto">
+              <button
+                type="button"
+                className={`rounded-xl px-4 py-2.5 text-sm font-medium transition ${projectScope === "own" ? "bg-amber-400 text-slate-950 shadow-[0_12px_28px_rgba(251,191,36,0.28)]" : "text-slate-200 hover:bg-white/8"}`}
+                onClick={() => onProjectScopeChange("own")}
+              >
+                My Projects
+              </button>
+              <button
+                type="button"
+                className={`rounded-xl px-4 py-2.5 text-sm font-medium transition ${projectScope === "shared" ? "bg-cyan-300 text-slate-950 shadow-[0_12px_28px_rgba(34,211,238,0.25)]" : "text-slate-200 hover:bg-white/8"}`}
+                onClick={() => onProjectScopeChange("shared")}
+              >
+                Client Shared
+              </button>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
             <label className="flex flex-col gap-2 text-xs uppercase tracking-[0.18em] text-slate-400">
               Project Filter
               <select
@@ -2066,6 +2261,7 @@ function AdvancedFilterPanel({
                 Clear project
               </button>
             ) : null}
+            </div>
           </div>
         </div>
 
@@ -2245,6 +2441,10 @@ function MapSelectionActionDock({
   if (!entity) return null;
 
   const entityLabel = getMapEntityLabel(entityType, entity);
+  const hasManageActions = Boolean(onAdd || onMove || onDuplicate || onPropose || onReview);
+  const hasSchematicAction = entityType === "hole" && Boolean(onOpenSchematic);
+
+  if (!hasManageActions && !hasSchematicAction) return null;
 
   return (
     <div className="pointer-events-none absolute inset-0 z-20">
@@ -2314,25 +2514,31 @@ function MapSelectionActionDock({
             </DockIconButton>
           ) : null}
 
-          {entityType === "hole" ? (
+          {hasSchematicAction ? (
             <DockIconButton label="Open schematic" onClick={onOpenSchematic} tone="cyan">
               <DockSchematicIcon className="h-[18px] w-[18px]" />
             </DockIconButton>
           ) : null}
 
-          <DockIconButton label="Move selected item" onClick={onMove} tone="orange">
-            <DockMoveIcon className="h-[18px] w-[18px]" />
-          </DockIconButton>
+          {onMove ? (
+            <DockIconButton label="Move selected item" onClick={onMove} tone="orange">
+              <DockMoveIcon className="h-[18px] w-[18px]" />
+            </DockIconButton>
+          ) : null}
 
-          <DockIconButton label="Duplicate selected item" onClick={onDuplicate} tone="cyan">
-            <DockDuplicateIcon className="h-[18px] w-[18px]" />
-          </DockIconButton>
+          {onDuplicate ? (
+            <DockIconButton label="Duplicate selected item" onClick={onDuplicate} tone="cyan">
+              <DockDuplicateIcon className="h-[18px] w-[18px]" />
+            </DockIconButton>
+          ) : null}
 
-          <DockIconButton label={pendingProposal ? "Replace location proposal" : "Propose location"} onClick={onPropose} tone="default" active={Boolean(pendingProposal)}>
-            <DockProposalIcon className="h-[18px] w-[18px]" />
-          </DockIconButton>
+          {onPropose ? (
+            <DockIconButton label={pendingProposal ? "Replace location proposal" : "Propose location"} onClick={onPropose} tone="default" active={Boolean(pendingProposal)}>
+              <DockProposalIcon className="h-[18px] w-[18px]" />
+            </DockIconButton>
+          ) : null}
 
-          {pendingProposal ? (
+          {pendingProposal && onReview ? (
             <DockIconButton label="Review pending proposal" onClick={onReview} tone="emerald" active>
               <DockReviewIcon className="h-[18px] w-[18px]" />
             </DockIconButton>
@@ -2500,7 +2706,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = useMemo(() => supabaseBrowser(), []);
-  const { orgId, memberships } = useOrg();
+  const { orgId, memberships, isAnonymousDemo } = useOrg();
   const requestedHoleId = searchParams.get("holeId") || "";
   const requestedProjectScope = searchParams.get("scope") || "";
 
@@ -2514,7 +2720,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const fallbackStyleActiveRef = useRef(false);
   const visibleHolesRef = useRef([]);
   const visibleAssetsRef = useRef([]);
-  const allowAutoSelectRef = useRef(true);
+  const allowAutoSelectRef = useRef(false);
   const createPlacementActiveRef = useRef(false);
   const moveSelectionRef = useRef(null);
   const proposalPlacementSelectionRef = useRef(null);
@@ -2581,6 +2787,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const [schematicAnnulusTypes, setSchematicAnnulusTypes] = useState([]);
   const [selectedHoleWorkflowRuntime, setSelectedHoleWorkflowRuntime] = useState({ loading: false, substageStatusById: {} });
   const [signingWorkflowPhaseId, setSigningWorkflowPhaseId] = useState("");
+  const [selectedWorkflowPhaseId, setSelectedWorkflowPhaseId] = useState("");
 
   const myRole = useMemo(() => {
     const membership = (memberships || []).find((item) => item.organization_id === orgId);
@@ -2588,6 +2795,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   }, [memberships, orgId]);
 
   const canManageSelections = projectScope !== "shared" && myRole === "admin";
+  const canOpenDemoSchematic = isAnonymousDemo && projectScope !== "shared";
 
   useEffect(() => {
     createPlacementActiveRef.current = createPlacementActive;
@@ -3349,11 +3557,20 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     void loadSelectedHoleWorkflowRuntime(selectedHole.id);
   }, [loadSelectedHoleWorkflowRuntime, selectedHole?.current_workflow_id, selectedHole?.id]);
 
+  useEffect(() => {
+    if (!selectedWorkflowPhaseId) return;
+    if (!selectedHoleWorkflowVisual?.phases?.some((phase) => phase.id === selectedWorkflowPhaseId)) {
+      setSelectedWorkflowPhaseId("");
+    }
+  }, [selectedHoleWorkflowVisual, selectedWorkflowPhaseId]);
+
   const signOffMapWorkflowPhase = useCallback(async (phase) => {
     if (!canManageSelections || !selectedHole || !selectedHoleWorkflowVisual) return;
 
-    const actionableStep = (phase?.steps || []).find((step) => step.id === selectedHoleWorkflowVisual.currentStepId) || (phase?.steps || []).find((step) => step.statusKey !== "complete") || null;
-    if (!actionableStep) return;
+    const actionState = getMapWorkflowPhaseActionState({ workflowVisual: selectedHoleWorkflowVisual, phase, canManageSelections });
+    const targetStep = actionState.actionStep;
+    const isReverting = actionState.actionType === "revert";
+    if (!targetStep) return false;
 
     setSigningWorkflowPhaseId(phase.id);
 
@@ -3365,18 +3582,24 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
       if (!userId) throw new Error("You must be signed in to sign off a workflow step");
 
       const signedOffAt = new Date().toISOString();
-      const nextSelection = getNextMapWorkflowSelection(selectedHoleWorkflowVisual, actionableStep.id);
+      const nextSelection = isReverting
+        ? {
+            phaseId: targetStep.phaseId,
+            substageId: targetStep.stepId,
+            statusKey: "planned",
+          }
+        : getNextMapWorkflowSelection(selectedHoleWorkflowVisual, targetStep.id);
 
       const { error: signoffError } = await supabase.from("hole_workflow_substage_statuses").upsert(
         {
           hole_id: selectedHole.id,
           workflow_id: selectedHoleWorkflowVisual.workflowId,
-          workflow_phase_id: actionableStep.phaseId,
-          workflow_substage_id: actionableStep.stepId,
-          status_key: "complete",
-          signed_off_by: userId,
-          signed_off_at: signedOffAt,
-          signoff_note: "Signed off from map workflow stage gate.",
+          workflow_phase_id: targetStep.phaseId,
+          workflow_substage_id: targetStep.stepId,
+          status_key: isReverting ? "planned" : "complete",
+          signed_off_by: isReverting ? null : userId,
+          signed_off_at: isReverting ? null : signedOffAt,
+          signoff_note: isReverting ? null : "Signed off from map workflow stage gate.",
         },
         { onConflict: "hole_id,workflow_substage_id" }
       );
@@ -3400,15 +3623,15 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         ...current,
         substageStatusById: {
           ...current.substageStatusById,
-          [actionableStep.stepId]: {
-            ...(current.substageStatusById[actionableStep.stepId] || {}),
+          [targetStep.stepId]: {
+            ...(current.substageStatusById[targetStep.stepId] || {}),
             hole_id: selectedHole.id,
-            workflow_phase_id: actionableStep.phaseId,
-            workflow_substage_id: actionableStep.stepId,
-            status_key: "complete",
-            signed_off_by: userId,
-            signed_off_at: signedOffAt,
-            signoff_note: "Signed off from map workflow stage gate.",
+            workflow_phase_id: targetStep.phaseId,
+            workflow_substage_id: targetStep.stepId,
+            status_key: isReverting ? "planned" : "complete",
+            signed_off_by: isReverting ? null : userId,
+            signed_off_at: isReverting ? null : signedOffAt,
+            signoff_note: isReverting ? null : "Signed off from map workflow stage gate.",
             updated_at: signedOffAt,
           },
         },
@@ -3429,13 +3652,31 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
       );
 
       void loadSelectedHoleWorkflowRuntime(selectedHole.id);
-      toast.success(`${actionableStep.title} signed off`);
+      toast.success(isReverting ? `${targetStep.title} reverted` : `${targetStep.title} signed off`);
+      return true;
     } catch (error) {
-      toast.error(error?.message || "Failed to sign off workflow step");
+      toast.error(error?.message || `Failed to ${isReverting ? "revert" : "sign off"} workflow step`);
+      return false;
     } finally {
       setSigningWorkflowPhaseId("");
     }
   }, [canManageSelections, loadSelectedHoleWorkflowRuntime, orgId, selectedHole, selectedHoleWorkflowVisual, supabase]);
+
+  const selectedWorkflowPhase = useMemo(
+    () => selectedHoleWorkflowVisual?.phases?.find((phase) => phase.id === selectedWorkflowPhaseId) || null,
+    [selectedHoleWorkflowVisual, selectedWorkflowPhaseId]
+  );
+
+  const handleStageGateSelect = useCallback((phase) => {
+    setSelectedWorkflowPhaseId(phase?.id || "");
+  }, []);
+
+  const handleWorkflowPhaseToggle = useCallback(async (phase) => {
+    const succeeded = await signOffMapWorkflowPhase(phase);
+    if (succeeded) {
+      setSelectedWorkflowPhaseId("");
+    }
+  }, [signOffMapWorkflowPhase]);
 
   const pendingProposalByEntity = useMemo(() => {
     const next = new Map();
@@ -5181,36 +5422,14 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
 
           <div className="px-4 py-4 md:px-6 md:py-5">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div className="inline-flex w-full flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-slate-900/45 p-1.5 xl:w-auto">
-                <button
-                  type="button"
-                  className={`rounded-xl px-4 py-2.5 text-sm font-medium transition ${projectScope === "own" ? "bg-amber-400 text-slate-950 shadow-[0_12px_28px_rgba(251,191,36,0.28)]" : "text-slate-200 hover:bg-white/8"}`}
-                  onClick={() => {
-                    setProjectScope("own");
-                    setProjectFilter("");
-                  }}
-                >
-                  My Projects
-                </button>
-                <button
-                  type="button"
-                  className={`rounded-xl px-4 py-2.5 text-sm font-medium transition ${projectScope === "shared" ? "bg-cyan-300 text-slate-950 shadow-[0_12px_28px_rgba(34,211,238,0.25)]" : "text-slate-200 hover:bg-white/8"}`}
-                  onClick={() => {
-                    setProjectScope("shared");
-                    setProjectFilter("");
-                  }}
-                >
-                  Client Shared
-                </button>
-              </div>
-
               <div className="min-w-0 flex-1">
                 <MapWorkflowStageStrip
                   workflowVisual={selectedHoleWorkflowVisual}
                   selectedHole={selectedHole}
                   canManageSelections={canManageSelections}
                   signingPhaseId={signingWorkflowPhaseId}
-                  onSignOffPhase={signOffMapWorkflowPhase}
+                  onSelectPhase={handleStageGateSelect}
+                  selectedPhaseId={selectedWorkflowPhaseId}
                 />
               </div>
 
@@ -5234,6 +5453,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
             </div>
             {showAdvancedFilters ? (
               <AdvancedFilterPanel
+                projectScope={projectScope}
                 projectFilter={projectFilter}
                 projectOptions={projectOptions}
                 totalProjects={totalProjects}
@@ -5245,6 +5465,10 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                 assetStatusOptions={assetStatusOptions}
                 assetTypeOptions={assetTypeOptions}
                 assetLocationOptions={assetLocationOptions}
+                onProjectScopeChange={(scope) => {
+                  setProjectScope(scope);
+                  setProjectFilter("");
+                }}
                 onProjectFilterChange={setProjectFilter}
                 onChange={updateAdvancedFilter}
                 onClear={clearAdvancedFilters}
@@ -5346,27 +5570,15 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                     </button>
                   </div>
                 </div>
-                <div className="mt-4 grid w-full grid-cols-2 gap-2 rounded-2xl bg-white/[0.04] p-1.5">
-                  <button
-                    type="button"
-                    className={`min-w-0 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "holes" ? "bg-amber-300 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
-                    onClick={() => {
-                      setMobilePanelTab("holes");
-                      setNavigatorTab("holes");
-                    }}
-                  >
-                    Holes
-                  </button>
-                  <button
-                    type="button"
-                    className={`min-w-0 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "assets" ? "bg-rose-300 text-slate-950 shadow-[0_12px_28px_rgba(244,114,182,0.22)]" : "text-slate-200 hover:bg-white/8"}`}
-                    onClick={() => {
-                      setMobilePanelTab("assets");
-                      setNavigatorTab("assets");
-                    }}
-                  >
-                    Assets
-                  </button>
+                <div className="mt-4">
+                  <MapWorkflowStageStrip
+                    workflowVisual={selectedHoleWorkflowVisual}
+                    selectedHole={selectedHole}
+                    canManageSelections={canManageSelections}
+                    signingPhaseId={signingWorkflowPhaseId}
+                    onSelectPhase={handleStageGateSelect}
+                    selectedPhaseId={selectedWorkflowPhaseId}
+                  />
                 </div>
               </div>
               <div className="relative hidden items-center justify-between gap-3 border-b border-white/10 px-4 py-4 md:flex md:px-5">
@@ -5498,17 +5710,17 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
               ) : null}
               <div className="relative">
                 <div ref={mapContainerRef} className={isMapFullscreen ? "h-[100svh] min-h-[100svh] w-full max-w-full" : "h-[58svh] min-h-[400px] w-full max-w-full md:h-[58vh] md:min-h-[480px]"} />
-                {canManageSelections && activeMapSelection?.entity && !showCreatePanel && !createPlacementActive && !moveSelection && !proposalPlacementSelection ? (
+                {(canManageSelections || (canOpenDemoSchematic && activeMapSelection?.entityType === "hole")) && activeMapSelection?.entity && !showCreatePanel && !createPlacementActive && !moveSelection && !proposalPlacementSelection ? (
                   <MapSelectionActionDock
                     entityType={activeMapSelection.entityType}
                     entity={activeMapSelection.entity}
                     pendingProposal={activeMapSelectionPendingProposal}
                     mobile={isMobileViewport}
-                    onAdd={projectScope === "own" && !showCreateProjectPrompt ? () => openCreatePanel(createEntityType) : null}
-                    onMove={() => requestMoveSelection(activeMapSelection.entityType, activeMapSelection.entity)}
-                    onDuplicate={() => openDuplicateSelection(activeMapSelection.entityType, activeMapSelection.entity)}
-                    onPropose={() => requestProposalLocation(activeMapSelection.entityType, activeMapSelection.entity)}
-                    onReview={() => openProposalReview(activeMapSelection.entityType, activeMapSelection.entity)}
+                    onAdd={canManageSelections && projectScope === "own" && !showCreateProjectPrompt ? () => openCreatePanel(createEntityType) : null}
+                    onMove={canManageSelections ? () => requestMoveSelection(activeMapSelection.entityType, activeMapSelection.entity) : null}
+                    onDuplicate={canManageSelections ? () => openDuplicateSelection(activeMapSelection.entityType, activeMapSelection.entity) : null}
+                    onPropose={canManageSelections ? () => requestProposalLocation(activeMapSelection.entityType, activeMapSelection.entity) : null}
+                    onReview={canManageSelections ? () => openProposalReview(activeMapSelection.entityType, activeMapSelection.entity) : null}
                     onOpenSchematic={() => {
                       if (activeMapSelection.entityType === "hole") {
                         void openSchematicModal(activeMapSelection.entity);
@@ -5528,6 +5740,29 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   </div>
                 </div>
                 <div className="mt-4 flex flex-col gap-3">
+                  <div className="grid w-full grid-cols-2 gap-2 rounded-2xl bg-white/[0.04] p-1.5">
+                    <button
+                      type="button"
+                      className={`min-w-0 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "holes" ? "bg-amber-300 text-slate-950" : "text-slate-200 hover:bg-white/8"}`}
+                      onClick={() => {
+                        setMobilePanelTab("holes");
+                        setNavigatorTab("holes");
+                      }}
+                    >
+                      Holes
+                    </button>
+                    <button
+                      type="button"
+                      className={`min-w-0 rounded-2xl px-3 py-2 text-sm font-medium transition ${mobilePanelTab === "assets" ? "bg-rose-300 text-slate-950 shadow-[0_12px_28px_rgba(244,114,182,0.22)]" : "text-slate-200 hover:bg-white/8"}`}
+                      onClick={() => {
+                        setMobilePanelTab("assets");
+                        setNavigatorTab("assets");
+                      }}
+                    >
+                      Assets
+                    </button>
+                  </div>
+
                   <div className="grid w-full grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-slate-900/45 p-1.5">
                     <button
                       type="button"
@@ -5551,14 +5786,6 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                     </button>
                   </div>
 
-                  <MapWorkflowStageStrip
-                    workflowVisual={selectedHoleWorkflowVisual}
-                    selectedHole={selectedHole}
-                    canManageSelections={canManageSelections}
-                    signingPhaseId={signingWorkflowPhaseId}
-                    onSignOffPhase={signOffMapWorkflowPhase}
-                  />
-
                   <button
                     type="button"
                     className="inline-flex h-12 items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm font-medium text-slate-100 transition hover:bg-slate-900/70"
@@ -5577,6 +5804,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                 </div>
                 {showAdvancedFilters ? (
                   <AdvancedFilterPanel
+                    projectScope={projectScope}
                     projectFilter={projectFilter}
                     projectOptions={projectOptions}
                     totalProjects={totalProjects}
@@ -5588,6 +5816,10 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                     assetStatusOptions={assetStatusOptions}
                     assetTypeOptions={assetTypeOptions}
                     assetLocationOptions={assetLocationOptions}
+                    onProjectScopeChange={(scope) => {
+                      setProjectScope(scope);
+                      setProjectFilter("");
+                    }}
                     onProjectFilterChange={setProjectFilter}
                     onChange={updateAdvancedFilter}
                     onClear={clearAdvancedFilters}
@@ -5714,6 +5946,17 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         onChangeReviewNote={(value) => setProposalReview((current) => (current ? { ...current, reviewNote: value } : current))}
         onApprove={() => submitProposalReview("approved")}
         onReject={() => submitProposalReview("rejected")}
+      />
+
+      <MapWorkflowPhaseDrawer
+        open={!!selectedWorkflowPhase}
+        selectedHole={selectedHole}
+        phase={selectedWorkflowPhase}
+        workflowVisual={selectedHoleWorkflowVisual}
+        canManageSelections={canManageSelections}
+        signingPhaseId={signingWorkflowPhaseId}
+        onClose={() => setSelectedWorkflowPhaseId("")}
+        onTogglePhase={handleWorkflowPhaseToggle}
       />
     </div>
   );

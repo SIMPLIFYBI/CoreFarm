@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
+import { useOrg } from "@/lib/OrgContext";
 import { IconCore, IconAdmin, IconTeam, IconUser, IconReport, IconClipboard, IconCoreTasks, IconMap, AssetIcon, IconPlods } from "./icons";
 
 const tabs = [
@@ -22,6 +23,7 @@ const tabs = [
 export default function MobileNav() {
   const supabase = useMemo(() => supabaseBrowser(), []);
   const pathname = usePathname();
+  const { isAnonymousDemo } = useOrg();
   const [isAppAdmin, setIsAppAdmin] = useState(false);
 
   useEffect(() => {
@@ -46,7 +48,12 @@ export default function MobileNav() {
     };
   }, [supabase]);
 
-  const visibleTabs = isAppAdmin ? [...tabs, { href: "/admin", label: "AppAdmin", icon: IconAdmin }] : tabs;
+  const filteredTabs = useMemo(
+    () => tabs.filter((tab) => !(isAnonymousDemo && tab.href === "/team")),
+    [isAnonymousDemo]
+  );
+
+  const visibleTabs = isAppAdmin && !isAnonymousDemo ? [...filteredTabs, { href: "/admin", label: "AppAdmin", icon: IconAdmin }] : filteredTabs;
 
   return (
     <nav className="md:hidden fixed inset-x-0 bottom-0 z-40 px-2 pb-2" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.5rem)" }}>

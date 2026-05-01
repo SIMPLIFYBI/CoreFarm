@@ -1,14 +1,25 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { redirectTo } from "@/lib/siteUrl";
 import toast from "react-hot-toast";
 
 export default function HomePage() {
+  return (
+    <Suspense fallback={<div className="max-w-6xl mx-auto p-6">Loading…</div>}>
+      <HomePageInner />
+    </Suspense>
+  );
+}
+
+function HomePageInner() {
   const supabase = supabaseBrowser();
   const router = useRouter();
-  const [mode, setMode] = useState("signin"); // signin | signup
+  const searchParams = useSearchParams();
+  const requestedMode = searchParams.get("mode") === "signup" ? "signup" : "signin";
+  const requestedFlow = searchParams.get("flow") === "setup" ? "setup" : null;
+  const [mode, setMode] = useState(requestedMode); // signin | signup
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -19,6 +30,58 @@ export default function HomePage() {
   const [recoveryMode, setRecoveryMode] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [updatingPassword, setUpdatingPassword] = useState(false);
+  const [setupPassword, setSetupPassword] = useState("");
+  const [setupConfirm, setSetupConfirm] = useState("");
+  const [savingSetup, setSavingSetup] = useState(false);
+
+  useEffect(() => {
+    setMode((current) => (current === requestedMode ? current : requestedMode));
+  }, [requestedMode]);
+
+  useEffect(() => {
+    const errorDescription = searchParams.get("error_description");
+    const code = searchParams.get("code");
+    if (errorDescription) {
+      toast.error(errorDescription);
+    }
+    if (!code) {
+      return;
+    }
+
+    let active = true;
+
+    const finalizeAuthCallback = async () => {
+      const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
+      if (!active) {
+        return;
+      }
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+
+      const nextParams = new URLSearchParams(searchParams.toString());
+      [
+        "code",
+        "error",
+        "error_description",
+        "type",
+        "token_hash",
+        "access_token",
+        "refresh_token",
+        "expires_at",
+        "expires_in",
+      ].forEach((key) => nextParams.delete(key));
+      const nextQuery = nextParams.toString();
+      router.replace(nextQuery ? `/?${nextQuery}` : "/");
+    };
+
+    finalizeAuthCallback();
+
+    return () => {
+      active = false;
+    };
+  }, [router, searchParams, supabase]);
 
   useEffect(() => {
     let active = true;
@@ -39,6 +102,7 @@ export default function HomePage() {
     // If signed in, check for pending invites; if none, redirect to app
     (async () => {
       if (!session?.user) return;
+      if (recoveryMode || requestedFlow === "setup") return;
       setCheckingInvites(true);
       const email = (session.user.email || "").toLowerCase();
       const { data: invs, error } = await supabase
@@ -57,7 +121,7 @@ export default function HomePage() {
       setInvites(invs || []);
       setCheckingInvites(false);
     })();
-  }, [session, router, supabase]);
+  }, [recoveryMode, requestedFlow, session, router, supabase]);
 
   const signIn = async (e) => {
     e.preventDefault();
@@ -92,6 +156,11 @@ export default function HomePage() {
 
   const goTeam = () => router.push("/team");
 
+  const switchMode = (nextMode) => {
+    setMode(nextMode);
+    router.replace(nextMode === "signup" ? "/?mode=signup" : "/?mode=signin");
+  };
+
   const acceptInvite = async (inv) => {
     if (!session?.user) return;
     const userId = session.user.id;
@@ -122,17 +191,42 @@ export default function HomePage() {
   };
 
   const sendReset = async () => {
-  if (!email) {
+    if (!email) {
       return toast.error("Enter your email above first");
     }
     setLoading(true);
-  const normalized = (email || "").trim().toLowerCase();
-  const { error } = await supabase.auth.resetPasswordForEmail(normalized, {
-      redirectTo: redirectTo("/register"),
+    const normalized = (email || "").trim().toLowerCase();
+    const { error } = await supabase.auth.resetPasswordForEmail(normalized, {
+      redirectTo: redirectTo("/"),
     });
     setLoading(false);
     if (error) return toast.error(error.message);
     toast.success("If an account exists, a reset link was sent");
+  };
+
+  const finishAccountSetup = async (e) => {
+    e.preventDefault();
+    const existingName = session?.user?.user_metadata?.name || session?.user?.raw_user_meta_data?.name || "";
+    const trimmedName = name.trim();
+
+    if (!existingName && !trimmedName) return toast.error("Enter a short name");
+    if (trimmedName && trimmedName.length > 10) return toast.error("Name must be 10 characters or less");
+    if (!setupPassword || setupPassword.length < 6) return toast.error("Password must be at least 6 characters");
+    if (setupPassword !== setupConfirm) return toast.error("Passwords do not match");
+
+    setSavingSetup(true);
+    const { error } = await supabase.auth.updateUser({
+      password: setupPassword,
+      data: existingName ? {} : { name: trimmedName },
+    });
+    setSavingSetup(false);
+
+    if (error) return toast.error(error.message);
+
+    toast.success("Account created. You're all set.");
+    setSetupPassword("");
+    setSetupConfirm("");
+    router.replace("/");
   };
 
   const updatePassword = async (e) => {
@@ -149,6 +243,9 @@ export default function HomePage() {
     setNewPassword("");
   router.replace("/dashboard");
   };
+
+  const existingName = session?.user?.user_metadata?.name || session?.user?.raw_user_meta_data?.name || "";
+  const showSetupForm = requestedFlow === "setup" && !!session?.user && !recoveryMode;
 
   return (
     <div className="max-w-6xl mx-auto p-6 grid md:grid-cols-2 gap-8">
@@ -181,6 +278,48 @@ export default function HomePage() {
               />
               <button className="btn btn-primary" disabled={updatingPassword}>
                 {updatingPassword ? "Updating…" : "Update"}
+              </button>
+            </form>
+          </div>
+        )}
+        {showSetupForm && (
+          <div className="mb-5 rounded border border-emerald-200 bg-emerald-50 p-4 text-sm">
+            <div className="font-medium mb-2">Finish setting up your account</div>
+            <p className="mb-4 text-gray-600">
+              Signed in as {session.user.email}
+            </p>
+            <form onSubmit={finishAccountSetup} className="space-y-3">
+              {!existingName && (
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2"
+                  placeholder="Your display name (≤ 10 chars)"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  maxLength={10}
+                  required
+                />
+              )}
+              <input
+                type="password"
+                className="w-full border rounded px-3 py-2"
+                placeholder="Choose a password"
+                value={setupPassword}
+                onChange={(e) => setSetupPassword(e.target.value)}
+                minLength={6}
+                required
+              />
+              <input
+                type="password"
+                className="w-full border rounded px-3 py-2"
+                placeholder="Confirm password"
+                value={setupConfirm}
+                onChange={(e) => setSetupConfirm(e.target.value)}
+                minLength={6}
+                required
+              />
+              <button disabled={savingSetup} className="w-full btn btn-primary">
+                {savingSetup ? "Saving…" : "Save and continue"}
               </button>
             </form>
           </div>
@@ -219,19 +358,22 @@ export default function HomePage() {
         <div className="flex gap-4 mb-4">
           <button
             className={`btn text-sm ${mode === "signin" ? "bg-gray-100" : ""}`}
-            onClick={() => setMode("signin")}
+            onClick={() => switchMode("signin")}
+            disabled={showSetupForm}
           >
             Sign in
           </button>
           <button
             className={`btn text-sm ${mode === "signup" ? "bg-gray-100" : ""}`}
-            onClick={() => setMode("signup")}
+            onClick={() => switchMode("signup")}
+            disabled={showSetupForm}
           >
             Create account
           </button>
         </div>
 
-        <form onSubmit={mode === "signin" ? signIn : signUp} className="space-y-3">
+        {!showSetupForm && (
+          <form onSubmit={mode === "signin" ? signIn : signUp} className="space-y-3">
           {mode === "signup" && (
             <input
               type="text"
@@ -267,7 +409,20 @@ export default function HomePage() {
           <button disabled={loading} className="w-full btn btn-primary">
             {loading ? "Please wait…" : mode === "signin" ? "Sign in" : "Create account"}
           </button>
-        </form>
+          </form>
+        )}
+
+        {!session?.user && !showSetupForm && !recoveryMode && (
+          <div className="mt-4 border-t pt-4">
+            <button
+              type="button"
+              className="w-full btn"
+              onClick={() => router.push("/map")}
+            >
+              Continue as guest
+            </button>
+          </div>
+        )}
 
         <div className="mt-4 text-sm text-gray-600 space-y-2">
           <p>

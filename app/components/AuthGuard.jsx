@@ -2,8 +2,9 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseClient";
+import { isPublicDemoEnabled, isPublicDemoRoute } from "@/lib/demoMode";
 
-const PUBLIC_PATHS = new Set(["/", "/auth", "/register"]);
+const PUBLIC_PATHS = new Set(["/"]);
 
 export default function AuthGuard({ children }) {
   const supabase = supabaseBrowser();
@@ -15,8 +16,10 @@ export default function AuthGuard({ children }) {
     let active = true;
     (async () => {
       // Allow public paths and Next.js internals/assets
+      const allowAnonymousDemoRoute = isPublicDemoEnabled() && isPublicDemoRoute(pathname);
       if (
         PUBLIC_PATHS.has(pathname) ||
+        allowAnonymousDemoRoute ||
         pathname.startsWith("/_next") ||
         pathname.startsWith("/favicon") ||
         pathname.startsWith("/public") ||
@@ -38,7 +41,7 @@ export default function AuthGuard({ children }) {
     };
   }, [supabase, router, pathname]);
 
-  if (!checked && !PUBLIC_PATHS.has(pathname)) {
+  if (!checked && !PUBLIC_PATHS.has(pathname) && !(isPublicDemoEnabled() && isPublicDemoRoute(pathname))) {
     return null;
   }
   return children;

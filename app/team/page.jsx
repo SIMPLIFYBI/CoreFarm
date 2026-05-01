@@ -186,7 +186,7 @@ export default function TeamPage() {
     }
     const { error: mailErr } = await supabase.auth.signInWithOtp({
       email: inviteEmail,
-      options: { emailRedirectTo: redirectTo('/register') },
+      options: { emailRedirectTo: redirectTo('/?flow=setup') },
     });
     if (mailErr) {
       toast.error("Invite created, email failed");
@@ -664,7 +664,7 @@ export default function TeamPage() {
                 } else {
                   const { error: mailErr } = await supabase.auth.signInWithOtp({
                     email,
-                    options: { emailRedirectTo: redirectTo('/register') }
+                    options: { emailRedirectTo: redirectTo('/?flow=setup') }
                   });
                   if (mailErr) {
                     message = 'Invite created, email failed';

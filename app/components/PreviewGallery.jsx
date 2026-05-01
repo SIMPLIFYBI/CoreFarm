@@ -33,7 +33,7 @@ export default function PreviewGallery() {
               <img src={selected.src} alt={selected.title} className="w-full h-[60vh] object-contain" />
             </div>
             <div className="p-4 text-right">
-              <button className="px-4 py-2 bg-indigo-600 text-white rounded-md" onClick={() => window.location.href = '/auth'}>Sign in to try</button>
+              <button className="px-4 py-2 bg-indigo-600 text-white rounded-md" onClick={() => window.location.href = '/?mode=signin'}>Sign in to try</button>
             </div>
           </div>
         </div>
