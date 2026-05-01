@@ -670,8 +670,10 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
     };
   }, [orgId, projectScope, supabase]);
 
+  const workflowSourceOrgId = projectScope === "shared" ? selectedHole?.organization_id || "" : orgId;
+
   useEffect(() => {
-    if (!orgId || projectScope === "shared") {
+    if (!workflowSourceOrgId) {
       setHoleWorkflows([]);
       return undefined;
     }
@@ -683,7 +685,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
         supabase
           .from("workflow_definitions")
           .select("id, organization_id, entity_type, key, name, description, color, sort_order, is_active, created_at")
-          .eq("organization_id", orgId)
+          .eq("organization_id", workflowSourceOrgId)
           .eq("entity_type", "hole"),
         supabase
           .from("workflow_phase_definitions")
@@ -719,7 +721,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
     return () => {
       active = false;
     };
-  }, [orgId, projectScope, supabase]);
+  }, [supabase, workflowSourceOrgId]);
 
   const labelForTask = (taskKey) => taskMeta[taskKey]?.label || humanizeLabel(taskKey);
   const colorForTask = (taskKey) => taskMeta[taskKey]?.color || "#64748b";
@@ -2189,22 +2191,21 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
 
                       {selectedHoleWorkflowVisual ? (
                         <div className="mt-4 space-y-4">
-                          <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] px-4 py-5">
-                            <div className="grid grid-cols-5 gap-3 md:gap-4">
+                          <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,rgba(8,47,73,0.22),rgba(15,23,42,0.82),rgba(30,41,59,0.52))] px-1.5 py-2.5 shadow-[0_18px_50px_rgba(2,6,23,0.28)] md:p-3">
+                            <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] px-1.5 py-3 md:px-3">
+                            <div className="grid grid-cols-5 gap-2 md:gap-2.5">
                               {Array.from({ length: 5 }, (_, index) => {
                                 const phaseNumber = index + 1;
                                 const phase = selectedHoleWorkflowVisual.phases.find((item) => item.phaseIndex === phaseNumber) || null;
                                 const phaseMeta = getWorkflowLightMeta(phase?.statusKey || "not_started");
-                                const completedSteps = phase?.steps.filter((step) => step.statusKey === "complete").length || 0;
-                                const totalSteps = phase?.steps.length || 0;
                                 const isSelected = phase ? selectedWorkflowPhaseId === phase.id : false;
 
                                 return (
                                   <div key={`stage-gate-${phaseNumber}`} className="relative flex flex-col items-center text-center">
                                     {phaseNumber < 5 ? (
-                                      <div className="pointer-events-none absolute left-[calc(50%+3rem)] right-[-22%] top-[3rem] hidden h-px md:block">
+                                      <div className="pointer-events-none absolute left-[calc(50%+2rem)] right-[-18%] top-[2rem] hidden h-px md:block">
                                         <div className="relative h-px w-full bg-gradient-to-r from-white/0 via-white/15 to-white/0">
-                                          <span className="absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-slate-300/70" />
+                                          <span className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-slate-300/70" />
                                         </div>
                                       </div>
                                     ) : null}
@@ -2220,57 +2221,52 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
                                     >
                                       <div
                                         className={[
-                                          "relative flex h-[74px] w-[74px] items-center justify-center rounded-full border-[5px] bg-transparent transition-base md:h-[96px] md:w-[96px] lg:h-[114px] lg:w-[114px]",
+                                          "relative flex h-[52px] w-[52px] items-center justify-center rounded-full border-[4px] bg-transparent transition-base md:h-[60px] md:w-[60px] lg:h-[64px] lg:w-[64px]",
                                           phaseMeta.flowRingClassName,
                                           isSelected
-                                            ? "scale-[1.05] shadow-[0_0_0_10px_rgba(34,211,238,0.12),0_0_0_18px_rgba(34,211,238,0.05)]"
+                                            ? "scale-[1.05] shadow-[0_0_0_6px_rgba(34,211,238,0.18),0_0_0_12px_rgba(34,211,238,0.08)]"
                                             : phase
                                               ? "group-hover:scale-[1.02]"
                                               : "",
                                         ].join(" ")}
                                       >
                                         {isSelected ? (
-                                          <span className="pointer-events-none absolute inset-[-14px] rounded-full border border-cyan-300/25" />
+                                          <span className="pointer-events-none absolute inset-[-8px] rounded-full border border-cyan-300/25" />
                                         ) : null}
-                                        <span className="absolute -top-1.5 h-2.5 w-2.5 rounded-full bg-current opacity-85" />
+                                        <span className="absolute -top-1 h-2 w-2 rounded-full bg-current opacity-85" />
                                         <div
                                           className={[
-                                            "relative flex h-[58px] w-[58px] flex-col items-center justify-center rounded-full border text-center md:h-[76px] md:w-[76px] lg:h-[92px] lg:w-[92px]",
+                                            "relative flex h-[40px] w-[40px] flex-col items-center justify-center rounded-full border text-center md:h-[46px] md:w-[46px] lg:h-[50px] lg:w-[50px]",
                                             phaseMeta.flowCoreClassName,
                                           ].join(" ")}
                                         >
                                           <span className="pointer-events-none absolute inset-[14%] rounded-full border border-white/8" />
                                           <span
                                             className={[
-                                              "relative flex h-9 w-9 items-center justify-center rounded-2xl border md:h-11 md:w-11 lg:h-14 lg:w-14",
+                                              "relative flex h-6 w-6 items-center justify-center rounded-xl border md:h-7 md:w-7 lg:h-8 lg:w-8",
                                               phaseMeta.flowIconBadgeClassName,
                                             ].join(" ")}
                                           >
                                           <WorkflowStageStatusIcon
                                             statusKey={phase?.statusKey || "not_started"}
-                                            className="h-5 w-5 md:h-6 md:w-6 lg:h-7 lg:w-7"
+                                            className="h-3.5 w-3.5 md:h-4 md:w-4 lg:h-4.5 lg:w-4.5"
                                           />
                                           </span>
                                         </div>
                                       </div>
 
-                                      <div className={`mt-3 inline-flex rounded-full border px-2 py-1 text-[10px] font-medium uppercase tracking-[0.16em] md:px-3 md:text-[11px] ${phaseMeta.chipClassName}`}>
+                                      <div className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.16em] md:px-2.5 md:text-[10px] ${phaseMeta.chipClassName}`}>
                                         Stage Gate {phaseNumber}
                                       </div>
                                       <div className={[
-                                        "mt-2 text-sm font-semibold leading-tight md:text-base lg:text-[28px] lg:leading-none",
+                                        "mt-1.5 text-xs font-semibold leading-tight md:text-sm lg:text-base lg:leading-none",
                                         isSelected ? "text-cyan-50" : "text-white",
                                       ].join(" ")}>{phase?.title || "Unused"}</div>
-                                      <div className="mt-2 min-h-[40px] max-w-[180px] text-[11px] leading-4 text-slate-300 md:text-xs md:leading-5 lg:text-sm">
-                                        {phase?.description || "No configured stage in this slot."}
-                                      </div>
-                                      <div className="mt-2 text-[10px] uppercase tracking-[0.16em] text-slate-500 md:text-[11px]">
-                                        {phase ? `${completedSteps}/${totalSteps} signed off` : "No stage configured"}
-                                      </div>
                                     </button>
                                   </div>
                                 );
                               })}
+                            </div>
                             </div>
                           </div>
 
