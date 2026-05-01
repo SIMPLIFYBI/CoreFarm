@@ -245,7 +245,7 @@ export default function Header() {
           <aside
             id="app-nav-drawer"
             className={[
-              "fixed left-0 top-0 z-10 h-dvh w-[320px] max-w-[85vw] border-r border-white/10 shadow-2xl bg-slate-950",
+              "fixed left-0 top-0 z-10 flex h-dvh w-[272px] max-w-[72vw] flex-col border-r border-white/10 shadow-2xl bg-slate-950",
               "transform transition-transform duration-300 ease-out will-change-transform",
               drawerOpen ? "translate-x-0" : "-translate-x-full",
             ].join(" ")}
@@ -273,7 +273,7 @@ export default function Header() {
               </button>
             </div>
 
-            <nav className="p-3">
+            <nav className="min-h-0 flex-1 overflow-y-auto p-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:w-0">
               <div className="space-y-1">
                 {navTabs.map((t) => {
                   const isProjects = t.href === "/projects";
@@ -286,7 +286,7 @@ export default function Header() {
                         key={t.href}
                         href={t.href}
                         className={[
-                          "flex items-center gap-3 px-3 py-2 rounded-xl transition-base",
+                          "flex items-center gap-3 px-3 py-2 rounded-xl text-[0.7rem] transition-base",
                           active ? "bg-white/10 text-white" : "text-slate-200 hover:bg-white/5 hover:text-white",
                         ].join(" ")}
                       >
@@ -299,7 +299,7 @@ export default function Header() {
                         >
                           <Icon />
                         </span>
-                        <span className="font-medium">{t.label}</span>
+                        <span className="font-medium leading-5">{t.label}</span>
                       </Link>
                     );
                   }
@@ -311,7 +311,7 @@ export default function Header() {
                         type="button"
                         onClick={() => setProjectsExpanded((v) => !v)}
                         className={[
-                          "w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-base",
+                          "w-full flex items-center gap-3 px-3 py-2 rounded-xl text-[0.7rem] transition-base",
                           active ? "bg-white/10 text-white" : "text-slate-200 hover:bg-white/5 hover:text-white",
                         ].join(" ")}
                         aria-expanded={projectsExpanded}
@@ -327,9 +327,9 @@ export default function Header() {
                           <Icon />
                         </span>
 
-                        <span className="font-medium flex-1 text-left">{t.label}</span>
+                        <span className="font-medium flex-1 text-left leading-5">{t.label}</span>
 
-                        <span className="text-slate-300/70 text-sm">{projectsExpanded ? "▾" : "▸"}</span>
+                        <span className="text-slate-300/70 text-[0.7rem]">{projectsExpanded ? "▾" : "▸"}</span>
                       </button>
 
                       {projectsExpanded && (
@@ -341,7 +341,7 @@ export default function Header() {
                                 key={c.href}
                                 href={c.href}
                                 className={[
-                                  "block px-3 py-2 rounded-lg text-sm transition-base",
+                                  "block px-3 py-2 rounded-lg text-[0.7rem] transition-base",
                                   childActive
                                     ? "bg-white/10 text-white"
                                     : "text-slate-200 hover:bg-white/5 hover:text-white",
@@ -361,29 +361,29 @@ export default function Header() {
 
               <div className="mt-4 pt-4 border-t border-white/10">
                 {email ? (
-                  <div className="text-xs text-slate-300">
+                  <div className="text-[0.6rem] text-slate-300">
                     Signed in as <span className="font-medium text-slate-100">{email}</span>
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {isAnonymousDemo ? <div className="px-3 text-[11px] uppercase tracking-[0.18em] text-amber-200/80">Browsing public demo</div> : null}
+                    {isAnonymousDemo ? <div className="px-3 text-[0.55rem] uppercase tracking-[0.18em] text-amber-200/80">Browsing public demo</div> : null}
                     <Link
                       href="/?mode=signin"
-                      className="flex items-center gap-3 px-3 py-2 rounded-xl text-slate-200 hover:bg-white/5 hover:text-white transition-base"
+                      className="flex items-center gap-3 px-3 py-2 rounded-xl text-[0.7rem] text-slate-200 hover:bg-white/5 hover:text-white transition-base"
                     >
                       <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-100">
                         <IconLogin />
                       </span>
-                      <span className="font-medium">Sign in</span>
+                      <span className="font-medium leading-5">Sign in</span>
                     </Link>
                     <Link
                       href="/?mode=signup"
-                      className="flex items-center gap-3 px-3 py-2 rounded-xl text-slate-200 hover:bg-white/5 hover:text-white transition-base"
+                      className="flex items-center gap-3 px-3 py-2 rounded-xl text-[0.7rem] text-slate-200 hover:bg-white/5 hover:text-white transition-base"
                     >
                       <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-100">
                         <IconUser />
                       </span>
-                      <span className="font-medium">Create account</span>
+                      <span className="font-medium leading-5">Create account</span>
                     </Link>
                   </div>
                 )}
