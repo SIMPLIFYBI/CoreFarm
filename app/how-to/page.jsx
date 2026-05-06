@@ -192,8 +192,8 @@ const COREYARD_SECTIONS = [
     description: "Best starting point for hole-by-hole work. Users review and edit the drillhole register inside the selected project scope.",
   },
   {
-    title: "Bulk Uploader",
-    description: "Use this when loading many holes at once. The destination project should be chosen first so imported holes land in the right place.",
+    title: "Add Core and Bulk Import",
+    description: "Use Add Core for both one-by-one hole creation and spreadsheet imports. The bulk import mode is the fastest way to load an initial drillhole register into the correct project.",
   },
   {
     title: "Logging",
@@ -213,8 +213,44 @@ const COREYARD_RULES = [
   "Create the project first, then load the holes into that project before asking users to log work.",
   "If the user came from the map, CoreYard can open focused on a single hole. That is ideal for field follow-up and quick logging.",
   "Keep project assignment clean. Most CoreYard flows are easier when each hole already belongs to the correct project.",
-  "Use Bulk Uploader for initial register setup, then use Logging and Sample Dispatch as the project becomes active.",
+  "Use Bulk import for initial register setup, then use Logging and Sample Dispatch as the project becomes active.",
   "Core tasks should be treated as the progress layer on top of the hole register, not as a replacement for creating holes.",
+];
+
+const BULK_UPLOAD_CHAPTER = [
+  {
+    step: "01",
+    title: "Set the destination project first",
+    detail: "Open Add Core, switch to Bulk import, and choose the project before pasting any data. If you are using easting and northing values, make sure the project CRS is configured first.",
+  },
+  {
+    step: "02",
+    title: "Use the exact header row",
+    detail: "The importer expects the first row to contain headers. The only required header is hole_id. Use the Copy headers or Download sample actions if you need a clean template.",
+  },
+  {
+    step: "03",
+    title: "Paste directly from Excel, CSV, or TSV",
+    detail: "You can paste tab-delimited data from a spreadsheet or comma-delimited CSV content. The preview panel shows the first 200 rows so you can confirm the import shape before writing anything.",
+  },
+  {
+    step: "04",
+    title: "Resolve validation before importing",
+    detail: "Fix missing headers, invalid azimuth or dip values, incomplete longitude and latitude pairs, missing CRS for projected coordinates, and unknown descriptor_keys before running the import.",
+  },
+  {
+    step: "05",
+    title: "Verify the result in CoreYard and on the map",
+    detail: "After import, review the new holes in Add Core or Core Workbench and use the map to confirm that collar coordinates landed where expected.",
+  },
+];
+
+const BULK_UPLOAD_NOTES = [
+  "Required header: hole_id.",
+  "Projected collar_easting and collar_northing require the selected project to already have a CRS.",
+  "Longitude and latitude must be supplied as a pair, or both left blank.",
+  "descriptor_keys can contain descriptor keys or names separated by |, ;, or line breaks.",
+  "The importer writes holes into the selected project only; it does not guess the destination from the pasted data.",
 ];
 
 function SectionBadge({ children }) {
@@ -397,6 +433,49 @@ export default function HowToPage() {
                 <div className="mt-2">{rule}</div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="bulk-uploading" className="card scroll-mt-24 p-5 md:p-6">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div className="max-w-3xl">
+            <h2 className="text-lg font-semibold text-slate-100">Bulk uploading chapter</h2>
+            <p className="mt-1 text-sm leading-6 text-slate-400">
+              This is the clearest path for loading a new hole register from a spreadsheet. Use it when a project already exists and you want to create many holes in one pass.
+            </p>
+          </div>
+          <OpenAreaButton href="/coretasks?tab=addcore">Open Add Core</OpenAreaButton>
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          {BULK_UPLOAD_CHAPTER.map((item) => (
+            <div key={item.step} className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-100/75">Step {item.step}</div>
+              <div className="mt-2 text-sm font-semibold text-slate-100">{item.title}</div>
+              <p className="mt-2 text-sm leading-6 text-slate-300">{item.detail}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+            <h3 className="text-base font-semibold text-slate-100">What the importer validates</h3>
+            <div className="mt-3 space-y-3 text-sm leading-6 text-slate-300">
+              <div>Headers must be recognized. Extra unexpected column names are rejected.</div>
+              <div>Numeric fields like azimuth, dip, and depths are checked before import.</div>
+              <div>Coordinate pairs must be complete. Longitude and latitude belong together, and projected coordinates require a project CRS.</div>
+              <div>Descriptor tokens are resolved against the org’s configured hole descriptors.</div>
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-cyan-300/14 bg-cyan-400/[0.04] p-4">
+            <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-100/80">Key reminders</div>
+            <div className="mt-3 space-y-2 text-sm leading-6 text-slate-200">
+              {BULK_UPLOAD_NOTES.map((item) => (
+                <div key={item}>{item}</div>
+              ))}
+            </div>
           </div>
         </div>
       </section>

@@ -196,7 +196,7 @@ export default function CoreTasksPage() {
   return (
     <div className="p-4 md:p-5 space-y-4">
       <CoreTaskPanelHeader
-        eyebrow="Core Tasks"
+        eyebrow="Setup"
         title=""
         stats={stats}
         actions={
@@ -257,29 +257,16 @@ export default function CoreTasksPage() {
               />
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
-              <div>
-                <label className="mb-1 block text-xs text-slate-300">Color</label>
-                <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-2.5">
-                  <input
-                    type="color"
-                    value={form.color}
-                    onChange={(event) => handleChange("color", event.target.value)}
-                    className="h-9 w-10 cursor-pointer rounded border border-white/10 bg-transparent"
-                  />
-                  <span className="font-mono text-xs text-slate-300">{form.color || "None"}</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs text-slate-300">Sort order</label>
+            <div>
+              <label className="mb-1 block text-xs text-slate-300">Color</label>
+              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-2.5">
                 <input
-                  type="number"
-                  value={form.sortOrder}
-                  onChange={(event) => handleChange("sortOrder", event.target.value)}
-                  className="input w-full"
-                  placeholder={String(nextSuggestedSortOrder)}
+                  type="color"
+                  value={form.color}
+                  onChange={(event) => handleChange("color", event.target.value)}
+                  className="h-9 w-10 cursor-pointer rounded border border-white/10 bg-transparent"
                 />
+                <span className="text-xs text-slate-400">Pick a display color for the task.</span>
               </div>
             </div>
 
@@ -354,8 +341,6 @@ export default function CoreTasksPage() {
                       </div>
 
                       <div className="grid shrink-0 gap-2 text-xs text-slate-400 sm:text-right">
-                        <div>Sort order: <span className="text-slate-200">{task.sort_order ?? 0}</span></div>
-                        <div>Color: <span className="font-mono text-slate-200">{task.color || "-"}</span></div>
                         <div className="flex flex-wrap justify-end gap-2 pt-1">
                           <button
                             type="button"

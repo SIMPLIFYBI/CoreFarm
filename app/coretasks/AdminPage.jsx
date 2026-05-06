@@ -14,7 +14,7 @@ function humanizeTaskKey(taskKey) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-export function AdminPage({ projectScope = "own" }) {
+export function AdminPage({ projectScope = "own", embedded = false }) {
   const supabase = supabaseBrowser();
   const { orgId } = useOrg();
   const defaultTaskMeta = useMemo(
@@ -71,6 +71,24 @@ export function AdminPage({ projectScope = "own" }) {
     () => taskTypeKeys.reduce((acc, t) => ({ ...acc, [t]: [] }), {}),
     [taskTypeKeys]
   );
+
+  const resetSingleDraft = () => {
+    setEditingId(null);
+    setSingle({
+      hole_id: "",
+      depth: "",
+      planned_depth: "",
+      drilling_diameter: "",
+      project_id: "",
+      drilling_contractor: "",
+    });
+  };
+
+  const openCreateHole = () => {
+    if (projectScope === "shared") return;
+    resetSingleDraft();
+    setShowHoleModal(true);
+  };
 
   const sampleHeaders = useMemo(
     () =>
@@ -791,11 +809,13 @@ export function AdminPage({ projectScope = "own" }) {
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-5">
+    <div className={embedded ? "space-y-5" : "max-w-6xl mx-auto p-4 md:p-6 space-y-5"}>
+      {!embedded ? (
       <div className="card p-4 md:p-5">
         <h1 className="text-2xl font-semibold">Add Core</h1>
         <p className="text-sm text-slate-300 mt-1">Create drillholes and define task intervals in one workflow.</p>
       </div>
+      ) : null}
 
       {!user && (
         <div className="p-3 border rounded bg-yellow-50 text-sm">
@@ -925,7 +945,22 @@ export function AdminPage({ projectScope = "own" }) {
 
           </div>
 
-          <div className="flex items-start justify-end gap-3 lg:ml-3" />
+          <div className="flex items-start justify-end gap-3 lg:ml-3">
+            {projectScope === "shared" ? (
+              <div className="rounded-full border border-amber-300/20 bg-amber-400/10 px-3 py-1.5 text-xs text-amber-100">
+                Client shared is read-only
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-3d-primary"
+                onClick={openCreateHole}
+                disabled={!user}
+              >
+                Add core
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="pb-2 text-xs text-slate-400">
@@ -941,10 +976,17 @@ export function AdminPage({ projectScope = "own" }) {
           <div className="space-y-3 md:hidden">
             {filteredHoles.map((h) => (
               <Fragment key={h.id}>
-                <button
-                  type="button"
+                <div
+                  role="button"
+                  tabIndex={0}
                   className={`w-full rounded-2xl border p-4 text-left transition-base ${selectedId === h.id ? "border-indigo-400/60 bg-indigo-500/10" : "border-white/10 bg-slate-950/35 hover:bg-white/5"}`}
                   onClick={() => toggleExpandHole(h)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      toggleExpandHole(h);
+                    }
+                  }}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -983,7 +1025,7 @@ export function AdminPage({ projectScope = "own" }) {
                       <DeleteIconButton disabled={projectScope === "shared"} onClick={() => deleteHole(h.id)} />
                     </div>
                   </div>
-                </button>
+                </div>
 
                 {selectedId === h.id && (
                   <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/35">
@@ -1157,8 +1199,8 @@ export function AdminPage({ projectScope = "own" }) {
       )}
 
       {showHoleModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.12),transparent_32%),rgba(2,6,23,0.78)] p-4 backdrop-blur-md">
-          <div className="glass relative w-full max-w-lg border border-white/15 bg-slate-950/90 p-5 shadow-[0_30px_90px_rgba(2,6,23,0.65)]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.12),transparent_32%),rgba(2,6,23,0.78)] p-4 backdrop-blur-md">
+          <div className="glass relative flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col overflow-hidden border border-white/15 bg-slate-950/90 p-5 shadow-[0_30px_90px_rgba(2,6,23,0.65)]">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-white">{editingId ? "Edit Core" : "Add New Core"}</h2>
               <button className="btn" onClick={() => { setShowHoleModal(false); setEditingId(null); }}>
@@ -1166,7 +1208,7 @@ export function AdminPage({ projectScope = "own" }) {
               </button>
             </div>
 
-            <div className="mb-4 grid grid-cols-1 gap-4">
+            <div className="mb-4 grid min-h-0 grid-cols-1 gap-4 overflow-y-auto pr-1">
               <label className="flex flex-col gap-1.5 text-sm text-slate-200">
                 Hole ID
                 <input type="text" name="hole_id" value={single.hole_id} onChange={onChangeSingle} className="input" placeholder="HOLE-001" />
@@ -1223,17 +1265,7 @@ export function AdminPage({ projectScope = "own" }) {
                 <button
                   type="button"
                   className="btn"
-                  onClick={() => {
-                    setEditingId(null);
-                    setSingle({
-                      hole_id: "",
-                      depth: "",
-                      planned_depth: "",
-                      drilling_diameter: "",
-                      project_id: "",
-                      drilling_contractor: "",
-                    });
-                  }}
+                  onClick={resetSingleDraft}
                 >
                   New
                 </button>

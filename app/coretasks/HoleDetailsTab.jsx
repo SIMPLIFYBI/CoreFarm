@@ -497,13 +497,13 @@ function MobileFiltersDrawer({ open, onClose, children }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[88] flex items-end justify-center bg-slate-950/54 backdrop-blur-sm md:hidden" onClick={onClose}>
+    <div className="filter-drawer-backdrop fixed inset-0 z-[88] flex items-end justify-center bg-slate-950/54 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="max-h-[82vh] w-full overflow-hidden rounded-t-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))] shadow-[0_-28px_90px_rgba(2,6,23,0.48)]"
+        className="filter-drawer-panel flex max-h-[82vh] w-full flex-col overflow-hidden rounded-t-[32px] border border-cyan-300/15 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))] shadow-[0_-28px_90px_rgba(2,6,23,0.48)] sm:max-w-4xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex justify-center pt-3">
-          <div className="h-1.5 w-16 rounded-full bg-white/12" />
+          <div className="h-1.5 w-16 rounded-full bg-cyan-200/30 shadow-[0_0_24px_rgba(34,211,238,0.25)]" />
         </div>
         <div className="border-b border-white/10 px-4 pb-4 pt-3">
           <div className="flex items-end justify-between gap-3">
@@ -520,7 +520,7 @@ function MobileFiltersDrawer({ open, onClose, children }) {
             </button>
           </div>
         </div>
-        <div className="overflow-y-auto p-4">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-8">{children}</div>
       </div>
     </div>
   );
@@ -1245,17 +1245,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
       if (descriptorFilter && !(hole.descriptor_ids || []).includes(descriptorFilter)) return false;
       if (!term) return true;
 
-      return [
-        hole.hole_id,
-        hole.projects?.name,
-        hole.drilling_contractor,
-        hole.state,
-        hole.drilling_diameter,
-        hole.descriptor_names_text,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(term);
+      return String(hole.hole_id || "").toLowerCase().includes(term);
     });
   }, [descriptorFilter, diameterFilter, holes, projectFilter, search, stateFilter]);
 
@@ -1933,17 +1923,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
 
   const filtersPanelContent = (
     <>
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_repeat(4,minmax(0,0.8fr))_auto] xl:items-end">
-        <label className="flex min-w-[220px] flex-col gap-1.5 text-sm text-slate-200">
-          Search holes
-          <input
-            className="input h-11"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Hole ID, project, contractor..."
-          />
-        </label>
-
+      <div className="grid gap-4 xl:grid-cols-[repeat(4,minmax(0,0.9fr))_auto] xl:items-end">
         <label className="flex flex-col gap-1.5 text-sm text-slate-200">
           Project
           <select className="select-gradient-sm h-11" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
@@ -2021,13 +2001,41 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
 
   return (
     <div className="p-4 md:p-5 space-y-5">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-        <button type="button" className="btn btn-3d-glass hidden md:inline-flex" onClick={openBulkEditModal} disabled={projectScope === "shared" || !selectedHoleIds.length}>
-          Bulk editor
-        </button>
-        <button type="button" className="btn btn-3d-primary" onClick={openCreateHole} disabled={projectScope === "shared"}>
-          Add New Core
-        </button>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-end justify-between gap-3">
+          <div className="text-sm text-slate-200">Hole name</div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+          <button
+            type="button"
+            className={[
+              "btn text-left sm:text-center",
+              activeFilterCount > 0
+                ? "border-cyan-200/30 bg-[linear-gradient(145deg,rgba(8,47,73,0.95),rgba(6,78,59,0.8),rgba(14,116,144,0.78))] text-cyan-50 shadow-[0_18px_50px_rgba(34,211,238,0.22)] hover:border-cyan-200/40 hover:bg-[linear-gradient(145deg,rgba(8,47,73,0.98),rgba(6,95,70,0.84),rgba(8,145,178,0.82))]"
+                : "btn-3d-glass",
+            ].join(" ")}
+            onClick={() => setShowMobileFilters(true)}
+          >
+            <span className="flex items-center gap-2">
+              <span>Filters</span>
+              {activeFilterCount > 0 ? (
+                <span className="inline-flex min-w-6 items-center justify-center rounded-full border border-cyan-100/25 bg-cyan-200/18 px-2 py-0.5 text-[11px] font-semibold text-cyan-50 shadow-[0_0_18px_rgba(34,211,238,0.18)]">
+                  {activeFilterCount}
+                </span>
+              ) : null}
+            </span>
+          </button>
+          </div>
+        </div>
+
+        <label className="flex min-w-0 flex-1 flex-col gap-1.5 text-sm text-slate-200 xl:max-w-sm">
+          <input
+            className="input h-11"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Filter by hole name as you type..."
+          />
+        </label>
       </div>
 
       {projectScope !== "shared" && selectedHoleIds.length > 0 ? (
@@ -2052,21 +2060,6 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
           </div>
         </section>
       ) : null}
-
-      <div className="md:hidden">
-        <button
-          type="button"
-          className={["btn w-full justify-between px-4", showMobileFilters || activeFilterCount > 0 ? "btn-3d-glass" : ""].join(" ")}
-          onClick={() => setShowMobileFilters(true)}
-        >
-          <span>Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}</span>
-          <span className="text-xs text-slate-300">Open</span>
-        </button>
-      </div>
-
-      <section className="hidden rounded-[30px] border border-white/10 bg-slate-950/50 p-4 shadow-[0_24px_80px_rgba(2,6,23,0.35)] md:block md:p-5">
-        {filtersPanelContent}
-      </section>
 
       {renderOverlay(
         <MobileFiltersDrawer open={showMobileFilters} onClose={() => setShowMobileFilters(false)}>

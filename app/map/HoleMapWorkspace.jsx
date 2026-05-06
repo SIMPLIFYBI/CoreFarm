@@ -2177,25 +2177,6 @@ function OverviewToggleIcon({ collapsed, ...props }) {
   );
 }
 
-function OverviewToggleButton({ collapsed, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-expanded={!collapsed}
-      className="inline-flex items-center gap-3 rounded-[20px] border border-white/12 bg-slate-950/55 px-3 py-2.5 text-left text-slate-100 shadow-[0_14px_34px_rgba(2,6,23,0.24)] transition hover:border-cyan-300/24 hover:bg-slate-950/72"
-    >
-      <span className={`flex h-10 w-10 items-center justify-center rounded-2xl border ${collapsed ? "border-cyan-300/18 bg-cyan-400/10 text-cyan-100" : "border-amber-300/18 bg-amber-400/10 text-amber-100"}`}>
-        <OverviewToggleIcon collapsed={collapsed} className="h-5 w-5" />
-      </span>
-      <span>
-        <span className="block text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Overview</span>
-        <span className="mt-0.5 block text-sm font-medium text-white">{collapsed ? "Expand details" : "Collapse details"}</span>
-      </span>
-    </button>
-  );
-}
-
 function AttributesDrawer({ open, onClose, title, subtitle, children }) {
   useEffect(() => {
     if (!open) return undefined;
@@ -2236,34 +2217,6 @@ function AttributesDrawer({ open, onClose, title, subtitle, children }) {
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-0">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-function MapOverviewKpi({ label, value, detail, bars = [], tone = "cyan" }) {
-  const toneClassName = {
-    cyan: "border-cyan-300/16 bg-cyan-400/[0.05]",
-    amber: "border-amber-300/16 bg-amber-400/[0.05]",
-    emerald: "border-emerald-300/16 bg-emerald-400/[0.05]",
-    rose: "border-rose-300/16 bg-rose-400/[0.05]",
-  }[tone] || "border-white/10 bg-white/[0.04]";
-
-  return (
-    <div className={`rounded-[24px] border px-4 py-3 shadow-[0_18px_44px_rgba(2,6,23,0.22)] ${toneClassName}`}>
-      <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">{label}</div>
-      <div className="mt-2 flex items-end justify-between gap-3">
-        <div className="text-2xl font-semibold text-white">{value}</div>
-      </div>
-      <div className="mt-1 text-xs leading-5 text-slate-300">{detail}</div>
-      <div className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-black/20">
-        {bars.length ? bars.map((bar, index) => (
-          <span
-            key={`${label}-${index}`}
-            className="h-full first:rounded-l-full last:rounded-r-full"
-            style={{ width: `${Math.max(0, Math.min(100, Number(bar.value) || 0))}%`, backgroundColor: bar.color }}
-          />
-        )) : <span className="h-full w-full bg-white/10" />}
       </div>
     </div>
   );
@@ -2909,7 +2862,6 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const [assetNavigatorTypeFilter, setAssetNavigatorTypeFilter] = useState("");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState(createEmptyMapAdvancedFilters);
-  const [isOverviewStripCollapsed, setIsOverviewStripCollapsed] = useState(true);
   const [navigatorTab, setNavigatorTab] = useState("holes");
   const [expandedProjects, setExpandedProjects] = useState({});
   const [expandedAssetProjects, setExpandedAssetProjects] = useState({});
@@ -5427,161 +5379,6 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     <div className="min-h-screen overflow-x-hidden bg-transparent px-3 pb-24 pt-0 md:px-5 md:pb-8 md:pt-0">
       <div className="mx-auto max-w-[1600px] space-y-4 overflow-x-hidden">
         <section className="hidden overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/40 shadow-[0_30px_120px_rgba(2,6,23,0.45)] backdrop-blur-xl lg:block">
-          <div className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(15,23,42,0.82),rgba(8,47,73,0.65)_45%,rgba(120,53,15,0.48))] px-4 py-5 md:px-6">
-            <div className="flex flex-col gap-4 border-b border-white/10 pb-4 xl:flex-row xl:items-start xl:justify-between">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-cyan-100">
-                    Spatial Drillhole Workspace
-                  </div>
-                  <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-[11px] font-medium uppercase tracking-[0.2em] text-slate-200">
-                    {scopeLabel}
-                  </span>
-                  {activeAdvancedFilterCount ? (
-                    <span className="rounded-full border border-cyan-300/16 bg-cyan-400/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.2em] text-cyan-100">
-                      {activeAdvancedFilterCount} filter{activeAdvancedFilterCount === 1 ? "" : "s"}
-                    </span>
-                  ) : null}
-                </div>
-                <div className="mt-3 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-                  <div>
-                    <div className="text-[12px] uppercase tracking-[0.24em] text-slate-400">Map command center</div>
-                    <div className="mt-1 text-lg font-semibold text-white">{isOverviewStripCollapsed ? "Focused workspace summary" : "Live spatial overview"}</div>
-                    <p className="mt-1 text-sm text-slate-300">
-                      {isOverviewStripCollapsed
-                        ? "A compact read on what is visible right now, with the full KPI view one tap away."
-                        : "Full coverage, shared visibility, and scope health for the current map view."}
-                    </p>
-                  </div>
-                  <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-medium text-slate-200">
-                    <span className={`h-2 w-2 rounded-full ${isOverviewStripCollapsed ? "bg-cyan-300" : "bg-amber-300"}`} />
-                    {isOverviewStripCollapsed ? "Collapsed by default" : "Expanded overview"}
-                  </div>
-                </div>
-              </div>
-
-              <OverviewToggleButton
-                collapsed={isOverviewStripCollapsed}
-                onClick={() => setIsOverviewStripCollapsed((current) => !current)}
-              />
-            </div>
-
-            {isOverviewStripCollapsed ? (
-              <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(260px,0.9fr)_minmax(0,1.45fr)] xl:items-center">
-                <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(140deg,rgba(15,23,42,0.84),rgba(8,47,73,0.52),rgba(15,118,110,0.2))] px-4 py-4 shadow-[0_20px_56px_rgba(2,6,23,0.22)]">
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-100/75">Current focus</div>
-                  <div className="mt-2 text-xl font-semibold text-white">{projectFocusLabel}</div>
-                  <div className="mt-2 text-sm leading-6 text-slate-300">
-                    {loading ? "Refreshing visible map totals..." : `${totalVisibleEntities} entities are in view across the current map scope.`}
-                  </div>
-                  <div className="mt-4 flex h-2 overflow-hidden rounded-full bg-black/20">
-                    {visibleEntityBars.map((bar, index) => (
-                      <span
-                        key={`collapsed-visible-entity-${index}`}
-                        className="h-full first:rounded-l-full last:rounded-r-full"
-                        style={{ width: `${Math.max(0, Math.min(100, Number(bar.value) || 0))}%`, backgroundColor: bar.color }}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
-                  <div className="rounded-[22px] border border-cyan-300/12 bg-cyan-400/[0.05] px-4 py-3 shadow-[0_14px_34px_rgba(2,6,23,0.18)]">
-                    <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Projects</div>
-                    <div className="mt-2 text-2xl font-semibold text-white">{loading ? "..." : totalVisibleProjects}</div>
-                    <div className="mt-1 text-xs text-slate-300">In current scope</div>
-                  </div>
-                  <div className="rounded-[22px] border border-amber-300/12 bg-amber-400/[0.05] px-4 py-3 shadow-[0_14px_34px_rgba(2,6,23,0.18)]">
-                    <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Holes</div>
-                    <div className="mt-2 text-2xl font-semibold text-white">{loading ? "..." : totalVisibleHoles}</div>
-                    <div className="mt-1 text-xs text-slate-300">Mapped drillholes</div>
-                  </div>
-                  <div className="rounded-[22px] border border-rose-300/12 bg-rose-400/[0.05] px-4 py-3 shadow-[0_14px_34px_rgba(2,6,23,0.18)]">
-                    <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Assets</div>
-                    <div className="mt-2 text-2xl font-semibold text-white">{loading ? "..." : totalVisibleAssets}</div>
-                    <div className="mt-1 text-xs text-slate-300">Mapped equipment</div>
-                  </div>
-                  <div className="rounded-[22px] border border-emerald-300/12 bg-emerald-400/[0.05] px-4 py-3 shadow-[0_14px_34px_rgba(2,6,23,0.18)]">
-                    <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Shared</div>
-                    <div className="mt-2 text-2xl font-semibold text-white">{loading ? "..." : totalShared}</div>
-                    <div className="mt-1 text-xs text-slate-300">Visible shared holes</div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(320px,1.15fr)_minmax(560px,1fr)] xl:items-stretch">
-                <div className="relative overflow-hidden rounded-[26px] border border-white/10 bg-[linear-gradient(140deg,rgba(15,23,42,0.9),rgba(8,47,73,0.58),rgba(15,118,110,0.28))] px-4 py-4 shadow-[0_24px_70px_rgba(2,6,23,0.28)]">
-                  <div className="absolute inset-y-0 right-0 w-40 bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.18),transparent_68%)]" />
-                  <div className="relative">
-                    <div className="flex items-end justify-between gap-4">
-                      <div className="max-w-md">
-                        <div className="text-[12px] uppercase tracking-[0.24em] text-slate-400">Live Overview</div>
-                        <div className="mt-2 text-[1.65rem] font-semibold leading-8 text-white">Map command center</div>
-                        <p className="mt-2 text-sm leading-6 text-slate-300">
-                          Fast read on mapped coverage, shared visibility, and the current working scope.
-                        </p>
-                      </div>
-                      <div className="min-w-[128px] rounded-[22px] border border-white/10 bg-white/[0.05] px-4 py-3 text-right">
-                        <div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Visible entities</div>
-                        <div className="mt-2 text-3xl font-semibold text-white">{loading ? "..." : totalVisibleEntities}</div>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 flex h-2 overflow-hidden rounded-full bg-black/20">
-                      {visibleEntityBars.map((bar, index) => (
-                        <span
-                          key={`visible-entity-${index}`}
-                          className="h-full first:rounded-l-full last:rounded-r-full"
-                          style={{ width: `${Math.max(0, Math.min(100, Number(bar.value) || 0))}%`, backgroundColor: bar.color }}
-                        />
-                      ))}
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-300">
-                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{totalVisibleHoles} holes</span>
-                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{totalVisibleAssets} assets</span>
-                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{projectFocusLabel}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <MapOverviewKpi
-                    label="Visible Projects"
-                    value={loading ? "..." : totalVisibleProjects}
-                    detail={`${projectFocusLabel} across ${totalProjects || 0} total project${totalProjects === 1 ? "" : "s"}`}
-                    bars={[{ value: totalProjects ? (totalVisibleProjects / totalProjects) * 100 : 0, color: "#22d3ee" }]}
-                    tone="cyan"
-                  />
-                  <MapOverviewKpi
-                    label="Mapped Holes"
-                    value={loading ? "..." : totalVisibleHoles}
-                    detail={totalVisibleHoles ? `${totalShared} shared hole${totalShared === 1 ? "" : "s"} currently visible` : "No holes visible in current scope"}
-                    bars={visibleHoleStateBars}
-                    tone="amber"
-                  />
-                  <MapOverviewKpi
-                    label="Mapped Assets"
-                    value={loading ? "..." : totalVisibleAssets}
-                    detail={activeAdvancedFilterCount ? `${activeAdvancedFilterCount} active filter${activeAdvancedFilterCount === 1 ? "" : "s"} shaping asset view` : "All mapped assets in current scope"}
-                    bars={[{ value: totalVisibleEntities ? (totalVisibleAssets / totalVisibleEntities) * 100 : 0, color: ASSET_COLOR }]}
-                    tone="rose"
-                  />
-                  <MapOverviewKpi
-                    label="Shared In View"
-                    value={loading ? "..." : totalShared}
-                    detail={totalVisibleHoles ? `${sharedCoverage}% of visible holes are shared into this workspace` : "Shared visibility appears when shared holes enter the current view"}
-                    bars={[
-                      { value: sharedCoverage, color: "#34d399" },
-                      { value: Math.max(0, 100 - sharedCoverage), color: "rgba(255,255,255,0.1)" },
-                    ]}
-                    tone="emerald"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
           <div className="px-4 py-4 md:px-6 md:py-5">
             <MapWorkflowStageStrip
               workflowVisual={selectedHoleWorkflowVisual}

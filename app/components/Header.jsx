@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
@@ -19,6 +18,33 @@ import {
   AssetIcon,
   IconPlods,
 } from "./icons";
+
+function WorkMineLogo({ compact = false }) {
+  return (
+    <span className="inline-flex items-center">
+      <span className="flex min-w-0 flex-col leading-none">
+        <span className="flex items-end">
+          <span
+            className={[
+              "bg-[linear-gradient(135deg,#f8fafc_0%,#e2e8f0_48%,#67e8f9_100%)] bg-clip-text font-black uppercase tracking-[-0.065em] text-transparent",
+              compact ? "text-[1.04rem]" : "text-[1.18rem]",
+            ].join(" ")}
+          >
+            WorkMine
+          </span>
+        </span>
+        <span
+          className={[
+            "mt-1.5 uppercase tracking-[0.26em] text-slate-400",
+            compact ? "text-[0.39rem]" : "text-[0.44rem]",
+          ].join(" ")}
+        >
+          MINE OPS PLATFORM
+        </span>
+      </span>
+    </span>
+  );
+}
 
 export default function Header() {
   const supabase = useMemo(() => supabaseBrowser(), []);
@@ -189,7 +215,7 @@ export default function Header() {
           {/* Burger */}
           <button
             type="button"
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 backdrop-blur-xl shadow-lg shadow-black/30 text-slate-100 hover:border-white/30 hover:bg-white/15 active:scale-95 transition-base focus-ring"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 backdrop-blur-xl shadow-lg shadow-black/30 text-slate-100 hover:border-white/30 hover:bg-white/15 active:scale-95 transition-base focus-ring"
             aria-label="Open menu"
             aria-expanded={drawerOpen}
             aria-controls="app-nav-drawer"
@@ -197,23 +223,16 @@ export default function Header() {
           >
             {/* hamburger icon (3 lines only) */}
             <span aria-hidden="true" className="flex flex-col justify-center gap-1.5">
-              <span className="block h-[2px] w-5 rounded-full bg-current" />
-              <span className="block h-[2px] w-5 rounded-full bg-current" />
-              <span className="block h-[2px] w-5 rounded-full bg-current" />
+              <span className="block h-[2px] w-4.5 rounded-full bg-current" />
+              <span className="block h-[2px] w-4.5 rounded-full bg-current" />
+              <span className="block h-[2px] w-4.5 rounded-full bg-current" />
             </span>
           </button>
 
           {/* Logo */}
           <div className="flex-shrink-0 flex items-center">
-            <Link className="flex items-center" href="/map">
-              <Image
-                src="/demo/SimplifyBI2.png"
-                alt="SimplifyBI Logo"
-                width={140}
-                height={46}
-                className="h-9 w-auto"
-                priority
-              />
+            <Link className="flex items-center" href="/map" aria-label="WorkMine home">
+              <WorkMineLogo />
             </Link>
           </div>
 
@@ -264,13 +283,9 @@ export default function Header() {
             aria-modal="true"
           >
             <div className="p-4 border-b border-white/10 flex items-center justify-between">
-              <Image
-                src="/demo/SimplifyBI2.png"
-                alt="SimplifyBI Logo"
-                width={136}
-                height={44}
-                className="h-8 w-auto"
-              />
+              <Link href="/map" className="flex items-center" onClick={closeDrawer} aria-label="WorkMine home">
+                <WorkMineLogo compact />
+              </Link>
               <button
                 type="button"
                 className="h-10 w-10 inline-flex items-center justify-center rounded-full text-slate-100 hover:bg-white/10 transition-base focus-ring"

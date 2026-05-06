@@ -1,10 +1,55 @@
 "use client";
 import { useEffect, useMemo, useState, Fragment, useRef } from "react";
+import { createPortal } from "react-dom";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import toast from "react-hot-toast";
 import CoreTaskPanelHeader from "./CoreTaskPanelHeader";
 import { DEFAULT_TASK_TYPE_DEFS, fetchOrgTaskTypes } from "@/lib/taskTypes";
+
+function MobileFiltersDrawer({ open, onClose, children }) {
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, open]);
+
+  if (!open) return null;
+
+  return (
+    <div className="filter-drawer-backdrop fixed inset-0 z-[88] flex items-end justify-center bg-slate-950/54 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="filter-drawer-panel flex max-h-[82vh] w-full flex-col overflow-hidden rounded-t-[32px] border border-cyan-300/15 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))] shadow-[0_-28px_90px_rgba(2,6,23,0.48)] sm:max-w-4xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex justify-center pt-3">
+          <div className="h-1.5 w-16 rounded-full bg-cyan-200/30 shadow-[0_0_24px_rgba(34,211,238,0.25)]" />
+        </div>
+        <div className="border-b border-white/10 px-4 pb-4 pt-3">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Drilling Logging</div>
+              <div className="mt-1 text-lg font-semibold text-white">Filters</div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1]"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-8">{children}</div>
+      </div>
+    </div>
+  );
+}
 
 // Compute whether a set of planned intervals is fully covered by progress intervals
 function isFullyCovered(plannedIntervals, progressByTask) {
@@ -54,14 +99,13 @@ export default function CorePage({ projectScope = "own", focusedHoleId = "" }) {
   const [savingKey, setSavingKey] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(null);
   const [loggedOn, setLoggedOn] = useState(() => new Date().toISOString().slice(0, 10)); // yyyy-mm-dd
+  const [search, setSearch] = useState("");
   const [selectedProject, setSelectedProject] = useState("");
   // Multi-select status filters; empty or all selected => show all
   const [holeFilters, setHoleFilters] = useState(['complete','in_progress','not_started']);
-  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
-  const statusMenuRef = useRef(null);
-  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
-  const projectMenuRef = useRef(null);
   const [taskMeta, setTaskMeta] = useState(defaultTaskMeta);
+  const [portalMounted, setPortalMounted] = useState(false);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const autoOpenedHoleRef = useRef("");
   const autoScrolledHoleRef = useRef("");
 
@@ -91,9 +135,11 @@ export default function CorePage({ projectScope = "own", focusedHoleId = "" }) {
   const filteredHoles = useMemo(() => {
     const byProject = !selectedProject ? holes : (holes || []).filter(h => h.projects?.name === selectedProject);
     const active = holeFilters || [];
-    if (active.length === 0 || active.length === 3) return byProject; // all
-    return byProject.filter(h => active.includes(classifyHole(h)));
-  }, [holes, selectedProject, holeFilters, holeStatus]);
+    const byStatus = active.length === 0 || active.length === 3 ? byProject : byProject.filter(h => active.includes(classifyHole(h)));
+    const term = search.trim().toLowerCase();
+    if (!term) return byStatus;
+    return byStatus.filter((hole) => String(hole.hole_id || "").toLowerCase().includes(term));
+  }, [holes, search, selectedProject, holeFilters, holeStatus]);
 
   const plannedHoleCount = useMemo(
     () => holes.filter((hole) => holeStatus[hole.id]?.hasPlanned).length,
@@ -108,6 +154,19 @@ export default function CorePage({ projectScope = "own", focusedHoleId = "" }) {
     ],
     [filteredHoles.length, loading, loggedOn, plannedHoleCount]
   );
+
+  useEffect(() => {
+    setPortalMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!portalMounted || !showMobileFilters) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [portalMounted, showMobileFilters]);
 
   useEffect(() => {
     let active = true;
@@ -140,21 +199,6 @@ export default function CorePage({ projectScope = "own", focusedHoleId = "" }) {
     };
   }, [defaultTaskMeta, orgId, supabase]);
 
-  // Click outside to close status menu
-  useEffect(() => {
-    if (!statusMenuOpen && !projectMenuOpen) return;
-    const handler = (e) => {
-      if (statusMenuOpen && statusMenuRef.current && !statusMenuRef.current.contains(e.target)) {
-        setStatusMenuOpen(false);
-      }
-      if (projectMenuOpen && projectMenuRef.current && !projectMenuRef.current.contains(e.target)) {
-        setProjectMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [statusMenuOpen, projectMenuOpen]);
-
   const toggleStatusFilter = (status) => {
     setHoleFilters((prev) => {
       const exists = prev.includes(status);
@@ -166,9 +210,10 @@ export default function CorePage({ projectScope = "own", focusedHoleId = "" }) {
   };
 
   const allSelected = holeFilters.length === 3;
-  const summaryLabel = allSelected ? 'All' : holeFilters
-    .map(s => s === 'complete' ? 'Completed' : s === 'in_progress' ? 'In progress' : 'Not started')
-    .join(', ');
+  const activeFilterCount = useMemo(
+    () => [search.trim(), selectedProject, allSelected ? "" : "status"].filter(Boolean).length,
+    [allSelected, search, selectedProject]
+  );
 
   const getStatusMeta = (holeId) => {
     const s = holeStatus[holeId] || {};
@@ -284,6 +329,11 @@ export default function CorePage({ projectScope = "own", focusedHoleId = "" }) {
 
   const holeKey = (holeId, t) => `${holeId}:${t}`;
   const rowKey = (holeId, t, f, to) => `${holeId}:${t}:${f}-${to}`;
+
+  const renderOverlay = (content) => {
+    if (!portalMounted) return null;
+    return createPortal(content, document.body);
+  };
 
   const initInputsForHole = (holeId, planRows, progRows) => {
     // group progress by task and sort
@@ -488,6 +538,75 @@ export default function CorePage({ projectScope = "own", focusedHoleId = "" }) {
     row.scrollIntoView({ block: "start", behavior: "smooth" });
   }, [expandedHole, focusedHoleId]);
 
+  const filtersPanelContent = (
+    <>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_auto] xl:items-end">
+        <label className="flex flex-col gap-1.5 text-sm text-slate-200">
+          Project
+          <select className="select-gradient-sm h-11" value={selectedProject} onChange={(event) => setSelectedProject(event.target.value)}>
+            <option value="">All projects</option>
+            {projects.map((project) => (
+              <option key={project} value={project}>
+                {project}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="flex flex-col gap-2 text-sm text-slate-200">
+          <span>Status</span>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { key: 'complete', label: 'Completed', color: 'bg-green-500' },
+              { key: 'in_progress', label: 'In progress', color: 'bg-amber-500' },
+              { key: 'not_started', label: 'Not started', color: 'bg-gray-400' },
+            ].map((option) => {
+              const active = holeFilters.includes(option.key);
+              return (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => toggleStatusFilter(option.key)}
+                  className={[
+                    "inline-flex h-11 items-center gap-2 rounded-2xl border px-4 text-sm transition",
+                    active
+                      ? "border-cyan-200/30 bg-cyan-200/12 text-slate-50 shadow-[0_12px_28px_rgba(34,211,238,0.14)]"
+                      : "border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/[0.08] hover:text-slate-100",
+                  ].join(" ")}
+                >
+                  <span className={`inline-block h-2.5 w-2.5 rounded-full ${option.color}`} />
+                  <span>{option.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className="btn btn-3d-glass h-11 px-5"
+          onClick={() => {
+            setSearch("");
+            setSelectedProject("");
+            setHoleFilters(["complete", "in_progress", "not_started"]);
+            setShowMobileFilters(false);
+          }}
+        >
+          Clear
+        </button>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+        <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
+          Showing {filteredHoles.length} of {holes.length} hole{holes.length === 1 ? "" : "s"}
+        </span>
+        <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
+          Status {allSelected ? "all" : `${holeFilters.length} selected`}
+        </span>
+      </div>
+    </>
+  );
+
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-5">
       <CoreTaskPanelHeader
@@ -497,8 +616,43 @@ export default function CorePage({ projectScope = "own", focusedHoleId = "" }) {
       />
 
       <div className="card p-4 md:p-5">
-        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="mb-5 flex flex-col gap-3">
+          <div className="flex items-end justify-between gap-3">
+            <div className="text-sm text-slate-200">Hole name</div>
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+              <button
+                type="button"
+                className={[
+                  "btn text-left sm:text-center",
+                  activeFilterCount > 0
+                    ? "border-cyan-200/30 bg-[linear-gradient(145deg,rgba(8,47,73,0.95),rgba(6,78,59,0.8),rgba(14,116,144,0.78))] text-cyan-50 shadow-[0_18px_50px_rgba(34,211,238,0.22)] hover:border-cyan-200/40 hover:bg-[linear-gradient(145deg,rgba(8,47,73,0.98),rgba(6,95,70,0.84),rgba(8,145,178,0.82))]"
+                    : "btn-3d-glass",
+                ].join(" ")}
+                onClick={() => setShowMobileFilters(true)}
+              >
+                <span className="flex items-center gap-2">
+                  <span>Filters</span>
+                  {activeFilterCount > 0 ? (
+                    <span className="inline-flex min-w-6 items-center justify-center rounded-full border border-cyan-100/25 bg-cyan-200/18 px-2 py-0.5 text-[11px] font-semibold text-cyan-50 shadow-[0_0_18px_rgba(34,211,238,0.18)]">
+                      {activeFilterCount}
+                    </span>
+                  ) : null}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <label className="flex min-w-0 flex-1 flex-col gap-1.5 text-sm text-slate-200 xl:max-w-sm">
+            <input
+              className="input h-11"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Filter by hole name as you type..."
+            />
+          </label>
+
+          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-[22px] border border-white/10 bg-slate-950/35 px-4 py-3">
             <label className="text-sm text-slate-200">Entering actuals for the date of</label>
             <input
               type="date"
@@ -507,121 +661,14 @@ export default function CorePage({ projectScope = "own", focusedHoleId = "" }) {
               onChange={(e) => setLoggedOn(e.target.value)}
             />
           </div>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
-          <div className="relative w-full sm:w-auto" ref={projectMenuRef}>
-            <button
-              type="button"
-              className="input input-sm flex w-full items-center justify-between gap-1 cursor-pointer sm:w-auto"
-              onClick={() => setProjectMenuOpen(o => !o)}
-            >
-              <span className="text-slate-200">Project:</span>
-              {selectedProject ? (
-                <span className="flex items-center gap-1 text-slate-200">
-                  <span className="text-slate-300">{selectedProject}</span>
-                </span>
-              ) : (
-                <span className="text-slate-300">All</span>
-              )}
-              <svg className={`w-3 h-3 ml-1 transition-transform ${projectMenuOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path d="M5.23 7.21a.75.75 0 011.06.02L10 11.189l3.71-3.96a.75.75 0 111.08 1.04l-4.24 4.53a.75.75 0 01-1.08 0l-4.24-4.53a.75.75 0 01.02-1.06z" /></svg>
-            </button>
-            {projectMenuOpen && (
-              <div className="absolute left-1/2 z-30 mt-1 max-h-64 w-[min(22rem,calc(100vw-2rem))] -translate-x-1/2 overflow-auto rounded-xl border border-white/10 bg-slate-950/95 p-2 text-sm shadow-lg backdrop-blur-xl sm:left-auto sm:right-0 sm:w-56 sm:translate-x-0">
-                <button
-                  type="button"
-                  onClick={() => { setSelectedProject(''); setProjectMenuOpen(false); }}
-                  className={`w-full flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-slate-900/60 text-left ${selectedProject === '' ? 'bg-slate-900/60' : ''}`}
-                >
-                  <span className="flex-1">All projects</span>
-                  <span className={`w-4 h-4 inline-flex items-center justify-center text-[10px] rounded ${selectedProject === '' ? 'text-indigo-300' : 'text-transparent'}`}>✓</span>
-                </button>
-                {projects.map(p => {
-                  const active = selectedProject === p;
-                  return (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => { setSelectedProject(p); setProjectMenuOpen(false); }}
-                      className={`w-full flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-slate-900/60 text-left ${active ? 'bg-slate-900/60' : ''}`}
-                    >
-                      <span className="flex-1">{p}</span>
-                      <span className={`w-4 h-4 inline-flex items-center justify-center text-[10px] rounded ${active ? 'text-indigo-300' : 'text-transparent'}`}>✓</span>
-                    </button>
-                  );
-                })}
-                {selectedProject && (
-                  <div className="pt-1 mt-1 border-t border-white/10">
-                    <button
-                      type="button"
-                      className="text-[11px] text-slate-300 hover:underline"
-                      onClick={() => { setSelectedProject(''); setProjectMenuOpen(false); }}
-                    >Clear selection</button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          <div className="relative w-full sm:w-auto" ref={statusMenuRef}>
-            <button
-              type="button"
-              className="input input-sm flex w-full items-center justify-between gap-1 cursor-pointer sm:w-auto"
-              onClick={() => setStatusMenuOpen(o => !o)}
-            >
-              <span className="text-slate-200">Status:</span>
-              <span className="flex items-center gap-1">
-                {allSelected ? (
-                  <span className="text-slate-300">All</span>
-                ) : holeFilters.map(s => {
-                  const color = s === 'complete' ? 'bg-green-500' : s === 'in_progress' ? 'bg-amber-500' : 'bg-gray-400';
-                  return <span key={s} className="flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full bg-slate-900/60 border border-white/10">
-                    <span className={`inline-block w-2 h-2 rounded-full ${color}`}></span>
-                    {s === 'complete' ? 'Done' : s === 'in_progress' ? 'Progress' : 'New'}
-                  </span>;
-                })}
-              </span>
-              <svg className={`w-3 h-3 ml-1 transition-transform ${statusMenuOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path d="M5.23 7.21a.75.75 0 011.06.02L10 11.189l3.71-3.96a.75.75 0 111.08 1.04l-4.24 4.53a.75.75 0 01-1.08 0l-4.24-4.53a.75.75 0 01.02-1.06z" /></svg>
-            </button>
-            {statusMenuOpen && (
-              <div className="absolute left-1/2 z-30 mt-1 w-[min(20rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-white/10 bg-slate-950/95 p-2 text-sm shadow-lg backdrop-blur-xl sm:left-auto sm:right-0 sm:w-48 sm:translate-x-0">
-                {[
-                  { key: 'complete', label: 'Completed', color: 'bg-green-500' },
-                  { key: 'in_progress', label: 'In progress', color: 'bg-amber-500' },
-                  { key: 'not_started', label: 'Not started', color: 'bg-gray-400' },
-                ].map(opt => {
-                  const active = holeFilters.includes(opt.key);
-                  return (
-                    <button
-                      key={opt.key}
-                      type="button"
-                      onClick={() => toggleStatusFilter(opt.key)}
-                      className={`w-full flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-slate-900/60 text-left ${active ? 'bg-slate-900/60' : ''}`}
-                    >
-                      <span className={`inline-block w-2.5 h-2.5 rounded-full ${opt.color}`}></span>
-                      <span className="flex-1">{opt.label}</span>
-                      <span className={`w-4 h-4 inline-flex items-center justify-center text-[10px] rounded ${active ? 'text-indigo-300' : 'text-transparent'}`}>✓</span>
-                    </button>
-                  );
-                })}
-                <div className="pt-1 mt-1 border-t border-white/10 flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="text-[11px] text-indigo-300 hover:underline"
-                    onClick={() => setHoleFilters(['complete','in_progress','not_started'])}
-                  >
-                    All
-                  </button>
-                  <button
-                    type="button"
-                    className="text-[11px] text-slate-300 hover:underline"
-                    onClick={() => setHoleFilters([])}
-                  >
-                    Reset
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
         </div>
-        </div>
+
+        {renderOverlay(
+          <MobileFiltersDrawer open={showMobileFilters} onClose={() => setShowMobileFilters(false)}>
+            {filtersPanelContent}
+          </MobileFiltersDrawer>
+        )}
+
       {loading ? (
         <p>Loading…</p>
       ) : holes.length === 0 ? (

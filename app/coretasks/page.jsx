@@ -6,10 +6,15 @@ import CorePage from "./CorePage";
 import SampleDispatchPage from "./SampleDispatchPage";
 import CoreTasksManagerPage from "./CoreTasksPage";
 import HoleDetailsTab from "./HoleDetailsTab";
-import BulkUploaderTab from "./BulkUploaderTab";
+import AddCoreTab from "./AddCoreTab";
 
 const PROJECT_SCOPE_STORAGE_KEY = "coretasks:projectScope";
-const CORETASKS_TABS = new Set(["coreworkbench", "bulkuploader", "logging", "sampledispatch", "coretasks"]);
+const CORETASKS_TABS = new Set(["coreworkbench", "addcore", "bulkuploader", "logging", "sampledispatch", "coretasks"]);
+
+function normaliseCoreTasksTab(value) {
+  if (value === "bulkuploader") return "addcore";
+  return CORETASKS_TABS.has(value) ? value : "coreworkbench";
+}
 
 function BackToMapIcon(props) {
   return (
@@ -37,17 +42,14 @@ function CoreTasksPageInner() {
   const requestedProjectScope = searchParams.get("scope") || "";
   const requestedHoleId = searchParams.get("holeId") || "";
   const requestedFrom = searchParams.get("from") || "";
-  const initialTab = CORETASKS_TABS.has(requestedTab) ? requestedTab : "coreworkbench";
+  const initialTab = normaliseCoreTasksTab(requestedTab);
   const [tab, setTab] = useState(initialTab);
   const [projectScope, setProjectScope] = useState("own"); // 'own' | 'shared'
   const [isMobileViewport, setIsMobileViewport] = useState(false);
 
   useEffect(() => {
-    if (!CORETASKS_TABS.has(requestedTab)) {
-      setTab("coreworkbench");
-      return;
-    }
-    setTab((current) => (current === requestedTab ? current : requestedTab));
+    const nextTab = normaliseCoreTasksTab(requestedTab);
+    setTab((current) => (current === nextTab ? current : nextTab));
   }, [pathname, requestedTab]);
 
   useEffect(() => {
@@ -85,12 +87,6 @@ function CoreTasksPageInner() {
     };
   }, []);
 
-  useEffect(() => {
-    if (isMobileViewport && tab === "bulkuploader") {
-      setTab("coreworkbench");
-    }
-  }, [isMobileViewport, tab]);
-
   const handleBackToMap = () => {
     const params = new URLSearchParams();
     if (requestedHoleId) {
@@ -105,24 +101,7 @@ function CoreTasksPageInner() {
   return (
     <div className="p-4">
       <div className="max-w-6xl mx-auto">
-        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="inline-flex rounded-lg border border-white/10 bg-slate-900/40 p-1 gap-1">
-            <button
-              type="button"
-              className={`px-3 py-1.5 text-xs rounded-md transition-base ${projectScope === "own" ? "bg-indigo-600 text-white" : "text-slate-200 hover:bg-white/10"}`}
-              onClick={() => setProjectScope("own")}
-            >
-              My projects
-            </button>
-            <button
-              type="button"
-              className={`px-3 py-1.5 text-xs rounded-md transition-base ${projectScope === "shared" ? "bg-indigo-600 text-white" : "text-slate-200 hover:bg-white/10"}`}
-              onClick={() => setProjectScope("shared")}
-            >
-              Client shared
-            </button>
-          </div>
-
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
           {requestedFrom === "map" ? (
             <button
               type="button"
@@ -142,14 +121,12 @@ function CoreTasksPageInner() {
           >
             Core Workbench
           </button>
-          {!isMobileViewport ? (
-            <button
-              className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "bulkuploader" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
-              onClick={() => setTab("bulkuploader")}
-            >
-              Bulk Uploader
-            </button>
-          ) : null}
+          <button
+            className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "addcore" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
+            onClick={() => setTab("addcore")}
+          >
+            Add Core
+          </button>
           <button
             className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "logging" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
             onClick={() => setTab("logging")}
@@ -166,7 +143,7 @@ function CoreTasksPageInner() {
             className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab === "coretasks" ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
             onClick={() => setTab("coretasks")}
           >
-            Core Tasks
+            Setup
           </button>
         </HorizontalScrollTabs>
       </div>
@@ -176,9 +153,9 @@ function CoreTasksPageInner() {
           <div className="card overflow-hidden">
             <HoleDetailsTab projectScope={projectScope} />
           </div>
-        ) : tab === "bulkuploader" ? (
-          <div className="card overflow-hidden">
-            <BulkUploaderTab projectScope={projectScope} />
+        ) : tab === "addcore" ? (
+          <div className="card">
+            <AddCoreTab projectScope={projectScope} />
           </div>
         ) : tab === "coretasks" ? (
           <div className="card overflow-hidden">

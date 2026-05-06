@@ -290,17 +290,15 @@ export default function TeamPage() {
       <h1 className="text-2xl font-semibold mb-4">Team Management</h1>
       {/* Tabs */}
       <HorizontalScrollTabs
-        className="mb-6 border-b border-slate-200/80"
+        className="mb-6 border-b border-white/10"
         hint="Swipe tabs"
-        edgeFadeLeftClassName="from-white via-white/78 to-transparent"
-        edgeFadeRightClassName="from-transparent via-white/78 to-white"
         hintClassName="text-slate-500"
       >
         {[{k:'members',label:'Team Members'},{k:'invites',label:'Invites'},{k:'connections',label:'Connections'},{k:'org',label:'Organisation'}].map(t => (
           <button
             key={t.k}
             onClick={() => setTab(t.k)}
-            className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-colors ${tab===t.k ? 'border-indigo-500 text-indigo-700' : 'border-transparent text-gray-600 hover:text-indigo-600'}`}
+            className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${tab===t.k ? 'border-indigo-400 text-slate-100' : 'border-transparent text-slate-300 hover:text-slate-100'}`}
           >{t.label}</button>
         ))}
       </HorizontalScrollTabs>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import toast from "react-hot-toast";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
@@ -30,6 +31,29 @@ const BULK_COLUMNS = [
   { key: "drilling_diameter", required: false, description: "NQ/HQ/PQ/Other." },
   { key: "drilling_contractor", required: false, description: "Contractor name." },
   { key: "descriptor_keys", required: false, description: "Optional descriptor keys or names separated with | ; or newline." },
+];
+
+const BULK_WORKFLOW_STEPS = [
+  {
+    step: "01",
+    title: "Pick the destination project",
+    detail: "The selected project controls where every imported hole lands and which CRS is used for projected coordinates.",
+  },
+  {
+    step: "02",
+    title: "Paste your sheet data",
+    detail: "Paste directly from Excel, CSV, or TSV. The importer reads the first row as headers and previews up to 200 rows.",
+  },
+  {
+    step: "03",
+    title: "Fix validation before import",
+    detail: "Use the validation panel to catch missing headers, coordinate issues, and unknown descriptor keys before anything is written.",
+  },
+  {
+    step: "04",
+    title: "Import and verify on the map",
+    detail: "After import, check the project in CoreYard or on the map to confirm the new holes and coordinates are correct.",
+  },
 ];
 
 function toNumOrNull(value) {
@@ -65,7 +89,7 @@ function formatProjectCrs(project) {
   return "Not set on project yet";
 }
 
-export default function BulkUploaderTab({ projectScope = "own" }) {
+export default function BulkUploaderTab({ projectScope = "own", showHeader = true }) {
   const supabase = supabaseBrowser();
   const { orgId } = useOrg();
 
@@ -129,6 +153,7 @@ export default function BulkUploaderTab({ projectScope = "own" }) {
   const bulkRequiredHeaders = useMemo(() => BULK_COLUMNS.filter((column) => column.required).map((column) => column.key), []);
   const bulkHeaderCsv = useMemo(() => BULK_COLUMNS.map((column) => column.key).join(","), []);
   const bulkHeaderTsv = useMemo(() => BULK_COLUMNS.map((column) => column.key).join("\t"), []);
+  const bulkRequiredHeaderTsv = useMemo(() => bulkRequiredHeaders.join("\t"), [bulkRequiredHeaders]);
   const bulkHeadersPresent = useMemo(() => Object.keys(parsed?.[0] || {}), [parsed]);
   const bulkInvalidHeaders = useMemo(
     () => bulkHeadersPresent.filter((header) => !bulkAllowedHeaders.includes(header)),
@@ -156,8 +181,7 @@ export default function BulkUploaderTab({ projectScope = "own" }) {
     !!bulkProjectId &&
     bulkValidRowsCount > 0;
 
-  const copyBulkHeaders = async () => {
-    const text = `${bulkHeaderTsv}\n`;
+  const copyToClipboard = async (text) => {
     try {
       if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(text);
@@ -172,10 +196,28 @@ export default function BulkUploaderTab({ projectScope = "own" }) {
         document.execCommand("copy");
         document.body.removeChild(textarea);
       }
-      toast.success("Headers copied. Paste into Excel to create columns.");
+      return true;
     } catch {
-      toast.error("Could not copy headers. Use the sample block as a fallback.");
+      return false;
     }
+  };
+
+  const copyBulkHeaders = async () => {
+    const didCopy = await copyToClipboard(`${bulkHeaderTsv}\n`);
+    if (didCopy) {
+      toast.success("All supported headers copied. Paste into Excel to create the full template.");
+      return;
+    }
+    toast.error("Could not copy headers. Use the sample block as a fallback.");
+  };
+
+  const copyRequiredBulkHeaders = async () => {
+    const didCopy = await copyToClipboard(`${bulkRequiredHeaderTsv}\n`);
+    if (didCopy) {
+      toast.success("Required Excel headers copied. Paste directly into Excel to start the sheet.");
+      return;
+    }
+    toast.error("Could not copy the required headers.");
   };
 
   const downloadBulkSample = () => {
@@ -315,6 +357,7 @@ export default function BulkUploaderTab({ projectScope = "own" }) {
 
   return (
     <div className="p-4 md:p-5 space-y-4">
+      {showHeader ? (
       <CoreTaskPanelHeader
         eyebrow="Bulk Uploader"
         title="Import holes in batches"
@@ -326,6 +369,9 @@ export default function BulkUploaderTab({ projectScope = "own" }) {
         ]}
         actions={
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <Link href="/how-to#bulk-uploading" className="btn btn-3d-glass text-center">
+              Help guide
+            </Link>
             <button type="button" className="btn btn-3d-glass" onClick={copyBulkHeaders} title={bulkHeaderCsv}>
               Copy headers
             </button>
@@ -335,14 +381,50 @@ export default function BulkUploaderTab({ projectScope = "own" }) {
           </div>
         }
       />
+      ) : null}
 
       {projectScope === "shared" ? (
         <div className="rounded-[28px] border border-amber-300/15 bg-amber-400/5 p-5 text-sm text-amber-100 shadow-[0_24px_80px_rgba(2,6,23,0.25)]">
           Bulk upload is only available in My projects. Switch out of Client shared to import holes.
         </div>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-[1.05fr_1.2fr]">
-          <section className="rounded-[28px] border border-white/10 bg-slate-950/50 p-4 shadow-[0_24px_80px_rgba(2,6,23,0.3)] space-y-4 md:p-5">
+        <>
+          <section className="rounded-[28px] border border-white/10 bg-slate-950/45 p-4 shadow-[0_24px_80px_rgba(2,6,23,0.28)] md:p-5">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div className="max-w-3xl">
+                <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Bulk upload workflow</div>
+                <h2 className="mt-1 text-xl font-semibold text-slate-100">A clearer import path from spreadsheet to drillhole register</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-300">
+                  Start on the left with project selection and raw data, then use the right side to review parsed rows before importing.
+                  The preview is horizontally scrollable and no longer clipped by the surrounding layout.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                <Link href="/how-to#bulk-uploading" className="btn btn-3d-glass text-center">
+                  How bulk upload works
+                </Link>
+                <button type="button" className="btn btn-3d-glass" onClick={copyBulkHeaders} title={bulkHeaderCsv}>
+                  Copy headers
+                </button>
+                <button type="button" className="btn btn-3d-glass" onClick={downloadBulkSample}>
+                  Download sample
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {BULK_WORKFLOW_STEPS.map((item) => (
+                <div key={item.step} className="rounded-[22px] border border-white/10 bg-white/[0.04] p-4">
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-100/75">Step {item.step}</div>
+                  <div className="mt-2 text-sm font-semibold text-slate-100">{item.title}</div>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">{item.detail}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+          <section className="min-w-0 rounded-[28px] border border-white/10 bg-slate-950/50 p-4 shadow-[0_24px_80px_rgba(2,6,23,0.3)] space-y-4 md:p-5">
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 space-y-3">
               <label className="block text-sm font-medium text-slate-200">
                 Upload Into Project
@@ -373,6 +455,14 @@ export default function BulkUploaderTab({ projectScope = "own" }) {
                 <label className="text-sm font-medium text-slate-200">Paste CSV/TSV</label>
                 <div className="text-xs text-slate-400">Tabs and commas supported</div>
               </div>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <button type="button" className="btn btn-3d-glass" onClick={copyRequiredBulkHeaders}>
+                  Copy required Excel headers
+                </button>
+                <button type="button" className="btn btn-3d-glass" onClick={copyBulkHeaders} title={bulkHeaderCsv}>
+                  Copy full template headers
+                </button>
+              </div>
               <textarea
                 autoFocus
                 rows={14}
@@ -389,33 +479,43 @@ export default function BulkUploaderTab({ projectScope = "own" }) {
                   }
                 }}
               />
-              <div className="mt-2 text-xs text-slate-400">Tip: paste directly from Excel or Google Sheets. Tab-delimited paste is supported.</div>
+              <div className="mt-2 text-xs text-slate-400">Tip: click Copy required Excel headers, switch to Excel, paste into the first row, then fill the sheet below those columns.</div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 space-y-2">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 space-y-3">
               <div className="text-sm font-medium text-slate-200">Validation</div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="rounded-xl border border-white/10 bg-slate-950/55 px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Required header</div>
+                  <div className="mt-1 text-sm font-medium text-slate-100">hole_id</div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-slate-950/55 px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Optional descriptors</div>
+                  <div className="mt-1 text-sm font-medium text-slate-100">descriptor_keys</div>
+                </div>
+              </div>
               {!bulkProjectId ? <div className="text-xs text-rose-300">Choose a project to enable import.</div> : null}
-              {!availableDescriptors.length ? <div className="text-xs text-slate-400">No active hole descriptors are configured for this org yet. Leave `descriptor_keys` blank or create descriptors first.</div> : null}
+              {!availableDescriptors.length ? <div className="text-xs text-slate-400">No active hole descriptors are configured for this org yet. Leave descriptor_keys blank or create descriptors first.</div> : null}
               {bulkInvalidHeaders.length > 0 ? <div className="text-xs text-amber-300">Unexpected headers: {bulkInvalidHeaders.join(", ")}</div> : null}
               {bulkMissingRequired.length > 0 ? <div className="text-xs text-rose-300">Missing required headers: {bulkMissingRequired.join(", ")}</div> : null}
               {bulkInvalidHeaders.length === 0 && bulkMissingRequired.length === 0 && parsed.length > 0 ? <div className="text-xs text-emerald-300">Headers look good and ready to import.</div> : null}
               {parsed.length === 0 ? <div className="text-xs text-slate-400">Paste records to start validation.</div> : null}
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 min-h-0 overflow-auto">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 min-h-0">
               <div className="text-sm font-medium text-slate-200 mb-2">Column guide</div>
-              <div className="space-y-1">
+              <div className="space-y-2">
                 {BULK_COLUMNS.map((column) => (
-                  <div key={column.key} className="flex items-start justify-between gap-3 text-xs">
-                    <div className="text-slate-200 font-mono">{column.key}</div>
-                    <div className="text-right text-slate-400">{column.description}</div>
+                  <div key={column.key} className="grid gap-1 rounded-xl border border-white/8 bg-slate-950/45 px-3 py-2 text-xs md:grid-cols-[minmax(0,180px)_minmax(0,1fr)] md:gap-3">
+                    <div className="text-slate-200 font-mono">{column.key}{column.required ? " *" : ""}</div>
+                    <div className="text-slate-400 md:text-right">{column.description}</div>
                   </div>
                 ))}
               </div>
             </div>
           </section>
 
-          <section className="rounded-[28px] border border-white/10 bg-slate-950/50 p-4 shadow-[0_24px_80px_rgba(2,6,23,0.3)] flex flex-col gap-4 md:p-5">
+          <section className="min-w-0 rounded-[28px] border border-white/10 bg-slate-950/50 p-4 shadow-[0_24px_80px_rgba(2,6,23,0.3)] flex flex-col gap-4 md:p-5">
             <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
               <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
                 <div className="text-[11px] uppercase tracking-wide text-slate-400">Parsed rows</div>
@@ -437,16 +537,16 @@ export default function BulkUploaderTab({ projectScope = "own" }) {
 
             <div className="flex items-center justify-between">
               <div className="text-sm font-medium text-slate-200">Preview (first 200 rows)</div>
-              <div className="text-xs text-slate-400">Scroll horizontally for all fields</div>
+              <div className="text-xs text-slate-400">Scroll horizontally to review every column</div>
             </div>
 
-            <div className="table-container flex-1 min-h-[420px] overflow-hidden">
-              <div className="h-full w-full overflow-x-auto overflow-y-auto">
-                <table className="table min-w-[2200px]">
+            <div className="rounded-2xl border border-white/10 bg-slate-950/55 p-1">
+              <div className="table-container min-w-0 overflow-x-auto overflow-y-auto" style={{ maxHeight: 560 }}>
+                <table className="table min-w-[1680px]">
                   <thead>
                     <tr>
-                      <th className="left-0 z-20" style={{ left: 0, minWidth: 170 }}>hole_id</th>
-                      <th className="left-0 z-20" style={{ left: 170, minWidth: 110 }}>depth</th>
+                      <th className="sticky left-0 z-20" style={{ left: 0, minWidth: 170 }}>hole_id</th>
+                      <th className="sticky z-20" style={{ left: 170, minWidth: 110 }}>depth</th>
                       {BULK_COLUMNS.filter((column) => !["hole_id", "depth"].includes(column.key)).map((column) => (
                         <th key={column.key}>{column.key}</th>
                       ))}
@@ -456,7 +556,7 @@ export default function BulkUploaderTab({ projectScope = "own" }) {
                     {(parsed || []).slice(0, 200).map((row, index) => (
                       <tr key={index}>
                         <td className="sticky left-0 z-10 bg-slate-900/95" style={{ left: 0, minWidth: 170 }}>{row.hole_id}</td>
-                        <td className="sticky left-0 z-10 bg-slate-900/95" style={{ left: 170, minWidth: 110 }}>{row.depth}</td>
+                        <td className="sticky z-10 bg-slate-900/95" style={{ left: 170, minWidth: 110 }}>{row.depth}</td>
                         {BULK_COLUMNS.filter((column) => !["hole_id", "depth"].includes(column.key)).map((column) => (
                           <td key={column.key}>{row[column.key]}</td>
                         ))}
@@ -488,10 +588,13 @@ export default function BulkUploaderTab({ projectScope = "own" }) {
               >
                 Clear all
               </button>
-              <div className="ml-auto text-xs text-slate-400">Required: <span className="font-mono text-slate-300">hole_id</span> header and project selection</div>
+              <Link href="/how-to#bulk-uploading" className="btn btn-3d-glass sm:ml-auto">
+                Open bulk upload help
+              </Link>
             </div>
           </section>
         </div>
+        </>
       )}
     </div>
   );
