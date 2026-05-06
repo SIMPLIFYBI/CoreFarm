@@ -151,6 +151,16 @@ export default function Header() {
     return m?.organizations?.name || null;
   }, [contextOrgName, orgId, memberships]);
 
+  const handleSignOut = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      return;
+    }
+
+    closeDrawer();
+    router.replace("/");
+  };
+
   const navTabs = [
     { href: "/map", label: "Map", icon: IconMap },
     { href: "/dashboard", label: "Reports", icon: IconReport },
@@ -361,8 +371,20 @@ export default function Header() {
 
               <div className="mt-4 pt-4 border-t border-white/10">
                 {email ? (
-                  <div className="text-[0.6rem] text-slate-300">
-                    Signed in as <span className="font-medium text-slate-100">{email}</span>
+                  <div className="space-y-2">
+                    <div className="px-3 text-[0.6rem] text-slate-300">
+                      Signed in as <span className="font-medium text-slate-100">{email}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSignOut}
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-[0.7rem] text-slate-200 hover:bg-white/5 hover:text-white transition-base"
+                    >
+                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-100">
+                        <IconLogin />
+                      </span>
+                      <span className="font-medium leading-5">Sign out</span>
+                    </button>
                   </div>
                 ) : (
                   <div className="space-y-2">
