@@ -489,7 +489,7 @@ function MapWorkflowStageStrip({ workflowVisual, selectedHole, canManageSelectio
                 </div>
 
                 <div className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.16em] md:px-2.5 md:text-[10px] ${phaseMeta.chipClassName}`}>
-                  Stage Gate {phaseNumber}
+                  Stage {phaseNumber}
                 </div>
                 <div className={[
                   "mt-1.5 text-xs font-semibold leading-tight md:text-sm lg:text-base lg:leading-none",
@@ -1344,7 +1344,7 @@ function HoleAttributesPanel({ selectedHole, canManage = false, onEdit, onDelete
                 onClick={onShowPlods}
                 className="rounded-2xl border border-white/10 bg-white/[0.08] px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-100 transition hover:bg-white/[0.14]"
               >
-                Show Plods
+                Plods
               </button>
               {canManage ? (
               <button
@@ -1424,7 +1424,10 @@ function HoleAttributesPanel({ selectedHole, canManage = false, onEdit, onDelete
             onClick={onShowPlods}
             className="rounded-2xl border border-white/10 bg-white/[0.08] px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-100 transition hover:bg-white/[0.14]"
           >
-            Show Plods
+            <span className="inline-flex items-center gap-2">
+              <PlodsIcon className="h-4 w-4" />
+              <span>Plods</span>
+            </span>
           </button>
           {canManage ? (
           <button
@@ -2182,6 +2185,16 @@ function CoreTasksIcon(props) {
       <path d="m4.8 6.9 1.1 1.1 1.9-2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
       <path d="m4.8 12.15 1.1 1.1 1.9-2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
       <path d="m4.8 17.4 1.1 1.1 1.9-2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function PlodsIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <rect x="5" y="4.5" width="14" height="15" rx="2.5" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M8.5 9h7M8.5 12h7M8.5 15h4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M8 4.5v-1M16 4.5v-1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
@@ -5689,6 +5702,17 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                     </button>
                     <button
                       type="button"
+                      className="inline-flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-slate-500"
+                      onClick={() => {
+                        void openHolePlodsModal(selectedHole);
+                      }}
+                      disabled={!selectedHole}
+                    >
+                      <PlodsIcon className="h-[18px] w-[18px]" />
+                      <span>Plods</span>
+                    </button>
+                    <button
+                      type="button"
                       aria-label="Open filters"
                       title="Open filters"
                       className="relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-slate-100 transition hover:bg-white/[0.1]"
@@ -5745,7 +5769,8 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                     }}
                     disabled={!selectedHole}
                   >
-                    <span>Show Plods</span>
+                    <PlodsIcon className="h-[18px] w-[18px]" />
+                    <span>Plods</span>
                   </button>
                   <button
                     type="button"
