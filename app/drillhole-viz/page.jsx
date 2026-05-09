@@ -2104,27 +2104,6 @@ function DrillholeVizPageInner({ projectScope: externalProjectScope }) {
                   </div>
                 ) : null}
 
-                {!externalProjectScope && (
-                  <div className="rounded-[24px] border border-white/10 bg-slate-900/45 p-2">
-                    <div className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Project Scope</div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${projectScope === "own" ? "bg-amber-400 text-slate-950 shadow-[0_12px_28px_rgba(251,191,36,0.28)]" : "border border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/8"}`}
-                        onClick={() => setLocalProjectScope("own")}
-                      >
-                        My Projects
-                      </button>
-                      <button
-                        type="button"
-                        className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${projectScope === "shared" ? "bg-cyan-300 text-slate-950 shadow-[0_12px_28px_rgba(34,211,238,0.25)]" : "border border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/8"}`}
-                        onClick={() => setLocalProjectScope("shared")}
-                      >
-                        Client Shared
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </div>

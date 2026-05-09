@@ -10,6 +10,7 @@ import { attachHoleDescriptors, fetchHoleDescriptorAssignments, replaceHoleDescr
 import { normalizeWorkflows } from "@/lib/workflows";
 import DepthAxisBar from "@/app/drillhole-viz/components/DepthAxisBar";
 import BoreholeSchematicPreview from "@/app/drillhole-viz/components/BoreholeSchematicPreview";
+import { PlodDetailsModal } from "@/app/plods/components/PlodDetailsModal";
 import { convertProjectedToWgs84 } from "@/lib/coordinateTransforms";
 import { deriveHoleCoordinates } from "@/lib/holeCoordinates";
 import MapCreateEntityPanel from "./MapCreateEntityPanel";
@@ -1321,7 +1322,7 @@ function AssetAccordionList({
   );
 }
 
-function HoleAttributesPanel({ selectedHole, canManage = false, onEdit, onDelete, deleting = false, mobile = false }) {
+function HoleAttributesPanel({ selectedHole, canManage = false, onEdit, onDelete, onShowPlods, deleting = false, mobile = false }) {
   if (mobile) {
     return (
       <div className="space-y-3 p-4">
@@ -1336,8 +1337,16 @@ function HoleAttributesPanel({ selectedHole, canManage = false, onEdit, onDelete
               {selectedHole?.state || "-"}
             </div>
           </div>
-          {canManage && selectedHole ? (
+          {selectedHole ? (
             <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={onShowPlods}
+                className="rounded-2xl border border-white/10 bg-white/[0.08] px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-100 transition hover:bg-white/[0.14]"
+              >
+                Show Plods
+              </button>
+              {canManage ? (
               <button
                 type="button"
                 onClick={onEdit}
@@ -1345,6 +1354,8 @@ function HoleAttributesPanel({ selectedHole, canManage = false, onEdit, onDelete
               >
                 Edit Hole
               </button>
+              ) : null}
+              {canManage ? (
               <button
                 type="button"
                 onClick={onDelete}
@@ -1353,6 +1364,7 @@ function HoleAttributesPanel({ selectedHole, canManage = false, onEdit, onDelete
               >
                 {deleting ? "Deleting..." : "Delete Hole"}
               </button>
+              ) : null}
             </div>
           ) : null}
           {selectedHole?.descriptors?.length ? (
@@ -1405,8 +1417,16 @@ function HoleAttributesPanel({ selectedHole, canManage = false, onEdit, onDelete
 
   return (
     <div className="space-y-3">
-      {canManage && selectedHole ? (
+      {selectedHole ? (
         <div className="flex flex-wrap items-center justify-end gap-2 px-4 pt-4">
+          <button
+            type="button"
+            onClick={onShowPlods}
+            className="rounded-2xl border border-white/10 bg-white/[0.08] px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-100 transition hover:bg-white/[0.14]"
+          >
+            Show Plods
+          </button>
+          {canManage ? (
           <button
             type="button"
             onClick={onEdit}
@@ -1414,6 +1434,8 @@ function HoleAttributesPanel({ selectedHole, canManage = false, onEdit, onDelete
           >
             Edit Hole
           </button>
+          ) : null}
+          {canManage ? (
           <button
             type="button"
             onClick={onDelete}
@@ -1422,6 +1444,7 @@ function HoleAttributesPanel({ selectedHole, canManage = false, onEdit, onDelete
           >
             {deleting ? "Deleting..." : "Delete Hole"}
           </button>
+          ) : null}
         </div>
       ) : null}
       <div className="overflow-x-auto">
@@ -2454,6 +2477,94 @@ function clearMapSelectionState({ setSelectedHoleId, setSelectedAssetId, popupRe
   }
 }
 
+function getMapPlodStatusClassName(status) {
+  const normalizedStatus = String(status || "submitted").toLowerCase();
+  if (normalizedStatus === "approved") return "border-emerald-500/25 bg-emerald-500/15 text-emerald-200";
+  if (normalizedStatus === "rejected") return "border-rose-500/25 bg-rose-500/15 text-rose-200";
+  return "border-amber-500/25 bg-amber-500/15 text-amber-200";
+}
+
+function HolePlodsModal({ hole, plods, loading, error, onClose, onSelectPlod }) {
+  useEffect(() => {
+    if (!hole) return undefined;
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") onClose?.();
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [hole, onClose]);
+
+  if (!hole) return null;
+
+  return (
+    <div className="fixed inset-0 z-[58]">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/55 backdrop-blur-sm"
+        aria-label="Close hole plods"
+        onClick={onClose}
+      />
+      <div className="absolute inset-x-0 top-8 mx-auto w-[min(900px,94vw)] rounded-[28px] border border-white/15 bg-slate-950/95 shadow-2xl shadow-black/50">
+        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Hole plods</div>
+            <h2 className="mt-1 text-lg font-semibold text-white">{hole.hole_id || "Selected hole"}</h2>
+            <p className="mt-1 text-xs text-slate-300">All PLOD entries currently recorded against this hole.</p>
+          </div>
+          <button type="button" className="btn" onClick={onClose}>
+            Close
+          </button>
+        </div>
+
+        <div className="max-h-[74vh] overflow-y-auto p-5">
+          {loading ? (
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-slate-300">Loading plods...</div>
+          ) : error ? (
+            <div className="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-5 text-sm text-rose-100">{error}</div>
+          ) : plods.length === 0 ? (
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-slate-300">No plods have been recorded against this hole yet.</div>
+          ) : (
+            <div className="space-y-3">
+              {plods.map((plod) => {
+                const activityCount = Array.isArray(plod.plod_activities) ? plod.plod_activities.length : 0;
+
+                return (
+                  <button
+                    key={plod.id}
+                    type="button"
+                    onClick={() => onSelectPlod?.(plod)}
+                    className="w-full rounded-[24px] border border-white/10 bg-white/[0.03] p-4 text-left transition hover:bg-white/[0.06]"
+                  >
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-base font-semibold text-white">{plod.plod_types?.name ?? plod.plod_type ?? "PLOD"}</span>
+                          <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize ${getMapPlodStatusClassName(plod.approval_status)}`}>
+                            {String(plod.approval_status || "submitted").replace(/_/g, " ")}
+                          </span>
+                        </div>
+                        <div className="mt-2 text-sm text-slate-300">{plod.vendors?.name || "Unassigned vendor"}</div>
+                        <div className="mt-1 text-xs text-slate-400">
+                          {plod.shift_date || "No shift date"} · {activityCount} activit{activityCount === 1 ? "y" : "ies"}
+                        </div>
+                      </div>
+                      <div className="max-w-[360px] text-sm text-slate-300 md:text-right">
+                        {plod.notes || "No notes recorded."}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DockIconButton({ label, onClick, tone = "default", active = false, children }) {
   const toneClassName = {
     default: "border-white/10 bg-white/[0.05] text-slate-100 hover:bg-white/[0.11]",
@@ -2894,6 +3005,11 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   const [schematicHole, setSchematicHole] = useState(null);
   const [schematicLoading, setSchematicLoading] = useState(false);
   const [schematicError, setSchematicError] = useState("");
+  const [holePlodsHole, setHolePlodsHole] = useState(null);
+  const [holePlods, setHolePlods] = useState([]);
+  const [holePlodsLoading, setHolePlodsLoading] = useState(false);
+  const [holePlodsError, setHolePlodsError] = useState("");
+  const [selectedHolePlod, setSelectedHolePlod] = useState(null);
   const [schematicGeologyRows, setSchematicGeologyRows] = useState([]);
   const [schematicConstructionRows, setSchematicConstructionRows] = useState([]);
   const [schematicAnnulusRows, setSchematicAnnulusRows] = useState([]);
@@ -3143,7 +3259,6 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
             zoom: DEFAULT_ZOOM,
             pitch: DEFAULT_PITCH,
             bearing: DEFAULT_BEARING,
-            cooperativeGestures: true,
           });
 
           mapRef.current = map;
@@ -4478,6 +4593,97 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
     router.push(`/coretasks?${params.toString()}`);
   };
 
+  const closeHolePlodsModal = useCallback(() => {
+    setHolePlodsHole(null);
+    setHolePlods([]);
+    setHolePlodsError("");
+    setHolePlodsLoading(false);
+    setSelectedHolePlod(null);
+  }, []);
+
+  const openHolePlodsModal = useCallback(async (hole) => {
+    if (!hole?.id) return;
+
+    setHolePlodsHole(hole);
+    setHolePlods([]);
+    setHolePlodsError("");
+    setHolePlodsLoading(true);
+    setSelectedHolePlod(null);
+
+    try {
+      const sb = supabaseBrowser();
+      const baseSelect = `
+        id,
+        shift_date,
+        plod_type_id,
+        plod_type,
+        started_at,
+        finished_at,
+        notes,
+        approval_status,
+        submitted_at,
+        submitted_by,
+        decision_at,
+        decision_by,
+        decision_comment,
+        vendors:vendor_id(name),
+        plod_types:plod_type_id(name),
+        plod_activities(
+          id,
+          activity_type_id,
+          project_id,
+          hole_id,
+          started_at,
+          finished_at,
+          machine_hours,
+          unit_quantity,
+          notes,
+          activity_types:activity_type_id(activity_type, rate_mode, rate_unit_name, rate_unit_interval),
+          projects:project_id(name),
+          holes:hole_id(hole_id)
+        )
+      `;
+
+      const { data, error } = await sb
+        .from("plods")
+        .select(baseSelect)
+        .eq("hole_id", hole.id)
+        .order("shift_date", { ascending: false })
+        .order("started_at", { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+
+      const rows = data || [];
+      const userIds = Array.from(new Set(rows.flatMap((row) => [row.submitted_by, row.decision_by]).filter(Boolean)));
+
+      let profileById = {};
+      if (userIds.length > 0) {
+        const { data: profiles } = await sb
+          .from("user_profiles")
+          .select("user_id,display_name,email")
+          .in("user_id", userIds);
+
+        profileById = (profiles || []).reduce((accumulator, profile) => {
+          accumulator[profile.user_id] = profile;
+          return accumulator;
+        }, {});
+      }
+
+      setHolePlods(
+        rows.map((row) => ({
+          ...row,
+          submitted_by_profile: row.submitted_by ? profileById[row.submitted_by] ?? null : null,
+          decision_by_profile: row.decision_by ? profileById[row.decision_by] ?? null : null,
+        }))
+      );
+    } catch (error) {
+      setHolePlodsError(error?.message || "Failed to load plods for this hole.");
+    } finally {
+      setHolePlodsLoading(false);
+    }
+  }, []);
+
   const renderPopupHtml = (hole) => {
     if (!hole) return "";
     const stateTone = getHoleStateTone(hole.state);
@@ -5533,6 +5739,16 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   </button>
                   <button
                     type="button"
+                    className="inline-flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-slate-500"
+                    onClick={() => {
+                      void openHolePlodsModal(selectedHole);
+                    }}
+                    disabled={!selectedHole}
+                  >
+                    <span>Show Plods</span>
+                  </button>
+                  <button
+                    type="button"
                     aria-label="Open filters"
                     title="Open filters"
                     className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-slate-100 shadow-[0_12px_28px_rgba(2,6,23,0.22)] transition hover:bg-white/[0.1]"
@@ -5747,6 +5963,9 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
             canManage={canManageSelections}
             onEdit={openHoleEditor}
             onDelete={deleteSelectedHole}
+            onShowPlods={() => {
+              void openHolePlodsModal(selectedHole);
+            }}
             deleting={deletingAdminAction && navigatorTab === "holes"}
             mobile={isMobileViewport}
           />
@@ -5791,6 +6010,22 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
         constructionById={schematicConstructionById}
         annulusById={schematicAnnulusById}
         onClose={closeSchematicModal}
+      />
+
+      <HolePlodsModal
+        hole={holePlodsHole}
+        plods={holePlods}
+        loading={holePlodsLoading}
+        error={holePlodsError}
+        onClose={closeHolePlodsModal}
+        onSelectPlod={setSelectedHolePlod}
+      />
+
+      <PlodDetailsModal
+        plod={selectedHolePlod}
+        onClose={() => setSelectedHolePlod(null)}
+        onDecision={null}
+        decisionSaving={false}
       />
 
       <MapEntityDuplicateModal

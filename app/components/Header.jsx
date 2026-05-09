@@ -15,6 +15,7 @@ import {
   IconClipboard,
   IconCoreTasks,
   IconMap,
+  IconWorkflow,
   AssetIcon,
   IconPlods,
 } from "./icons";
@@ -195,6 +196,7 @@ export default function Header() {
     { href: "/drillhole-viz", label: "Drillhole Viz", icon: IconCore },
     { href: "/consumables", label: "Consumables", icon: IconCore },
     { href: "/projects", label: "Projects", icon: IconClipboard },
+    { href: "/workflows", label: "Workflow Studio", icon: IconWorkflow },
     { href: "/assets", label: "Assets", icon: AssetIcon },
     { href: "/plods", label: "Plods", icon: IconPlods },
     ...(!isAnonymousDemo ? [{ href: "/team", label: "Team", icon: IconTeam }] : []),

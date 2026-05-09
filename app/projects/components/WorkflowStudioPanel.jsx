@@ -172,6 +172,24 @@ function WorkflowBadge({ color, children }) {
   return <span className="inline-flex items-center rounded-full border px-2 py-1 text-[11px] font-medium" style={getWorkflowBadgeStyle(color)}>{children}</span>;
 }
 
+function IconMoveUp(props) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="M10 15V5" />
+      <path d="m5.5 9.5 4.5-4.5 4.5 4.5" />
+    </svg>
+  );
+}
+
+function IconMoveDown(props) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="M10 5v10" />
+      <path d="m5.5 10.5 4.5 4.5 4.5-4.5" />
+    </svg>
+  );
+}
+
 function PhaseSlotCard({ phase, selected, onSelect, onEdit }) {
   const named = String(phase?.name || "").trim().length > 0;
   return (
@@ -200,14 +218,14 @@ function PhaseSlotCard({ phase, selected, onSelect, onEdit }) {
   );
 }
 
-function SubstageList({ substages, onEdit, onDelete }) {
+function SubstageList({ substages, onMove, movingSubstageId, onEdit, onDelete }) {
   if (!substages.length) {
     return <div className="rounded-[24px] border border-dashed border-white/10 bg-white/[0.03] p-5 text-sm text-slate-400">No substages configured for this phase.</div>;
   }
 
   return (
     <div className="space-y-3">
-      {substages.map((substage) => (
+      {substages.map((substage, index) => (
         <div key={substage.id} className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
@@ -216,6 +234,26 @@ function SubstageList({ substages, onEdit, onDelete }) {
               <div className="mt-2 text-sm text-slate-300/80">{substage.description || "No description yet."}</div>
             </div>
             <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn btn-3d-glass px-3 py-1.5 text-xs"
+                onClick={() => onMove(substage.id, -1)}
+                disabled={movingSubstageId === substage.id || index === 0}
+                aria-label="Move substage up"
+                title="Move up"
+              >
+                <IconMoveUp className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                className="btn btn-3d-glass px-3 py-1.5 text-xs"
+                onClick={() => onMove(substage.id, 1)}
+                disabled={movingSubstageId === substage.id || index === substages.length - 1}
+                aria-label="Move substage down"
+                title="Move down"
+              >
+                <IconMoveDown className="h-4 w-4" />
+              </button>
               <button type="button" className="btn btn-3d-glass px-3 py-1.5 text-xs" onClick={() => onEdit(substage)}>Edit</button>
               <button type="button" className="btn btn-danger px-3 py-1.5 text-xs" onClick={() => onDelete(substage)}>Delete</button>
             </div>
@@ -242,6 +280,7 @@ export default function WorkflowStudioPanel({ orgId, onChange }) {
   const [savingWorkflow, setSavingWorkflow] = useState(false);
   const [savingPhase, setSavingPhase] = useState(false);
   const [savingSubstage, setSavingSubstage] = useState(false);
+  const [movingSubstageId, setMovingSubstageId] = useState("");
   const [workflowForm, setWorkflowForm] = useState(EMPTY_WORKFLOW_FORM);
   const [phaseForm, setPhaseForm] = useState(EMPTY_PHASE_FORM);
   const [substageForm, setSubstageForm] = useState(EMPTY_SUBSTAGE_FORM);
@@ -518,6 +557,43 @@ export default function WorkflowStudioPanel({ orgId, onChange }) {
     await onChange?.();
   };
 
+  const moveSubstage = async (substageId, direction) => {
+    if (!selectedPhase) return;
+
+    const orderedSubstages = [...(selectedPhase.substages || [])].sort((left, right) => (Number(left?.substage_index) || 0) - (Number(right?.substage_index) || 0));
+    const currentIndex = orderedSubstages.findIndex((substage) => substage.id === substageId);
+    const nextIndex = currentIndex + direction;
+
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= orderedSubstages.length) {
+      return;
+    }
+
+    const reorderedSubstages = [...orderedSubstages];
+    const [movedSubstage] = reorderedSubstages.splice(currentIndex, 1);
+    reorderedSubstages.splice(nextIndex, 0, movedSubstage);
+
+    setMovingSubstageId(substageId);
+
+    const updates = reorderedSubstages.map((substage, index) => ({
+      id: substage.id,
+      substage_index: index + 1,
+      updated_at: new Date().toISOString(),
+    }));
+
+    const { error } = await supabase.from("workflow_substage_definitions").upsert(updates, { onConflict: "id" });
+
+    setMovingSubstageId("");
+
+    if (error) {
+      toast.error(error.message || "Failed to reorder substages");
+      return;
+    }
+
+    toast.success("Substage order updated");
+    await loadWorkflows();
+    await onChange?.();
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -640,41 +716,21 @@ export default function WorkflowStudioPanel({ orgId, onChange }) {
           </div>
 
           {selectedPhase ? (
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-              <div className="card rounded-[28px] p-5 md:p-6">
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Selected phase</div>
-                    <h3 className="mt-2 text-xl font-semibold text-white">{String(selectedPhase.name || "").trim() ? formatWorkflowPhaseLabel(selectedPhase) : `Phase ${selectedPhase.phase_index} is currently unused`}</h3>
-                    <p className="mt-3 text-sm leading-7 text-slate-300/85">{selectedPhase.description || "Name this phase if your organisation needs it. Unnamed phases stay hidden outside the workflow studio."}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button type="button" className="btn btn-3d-glass" onClick={() => openEditPhase(selectedPhase)}>{String(selectedPhase.name || "").trim() ? "Edit phase" : "Name phase"}</button>
-                    <button type="button" className="btn btn-primary" onClick={openCreateSubstage} disabled={!String(selectedPhase.name || "").trim() || (selectedPhase.substages?.length || 0) >= 5}>Add substage</button>
-                  </div>
+            <div className="card rounded-[28px] p-5 md:p-6">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Selected phase</div>
+                  <h3 className="mt-2 text-xl font-semibold text-white">{String(selectedPhase.name || "").trim() ? formatWorkflowPhaseLabel(selectedPhase) : `Phase ${selectedPhase.phase_index} is currently unused`}</h3>
+                  <p className="mt-3 text-sm leading-7 text-slate-300/85">{selectedPhase.description || "Name this phase if your organisation needs it. Unnamed phases stay hidden outside the workflow studio."}</p>
                 </div>
-
-                <div className="mt-5">
-                  <SubstageList substages={selectedPhase.substages || []} onEdit={openEditSubstage} onDelete={(substage) => void deleteSubstage(substage)} />
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" className="btn btn-3d-glass" onClick={() => openEditPhase(selectedPhase)}>{String(selectedPhase.name || "").trim() ? "Edit phase" : "Name phase"}</button>
+                  <button type="button" className="btn btn-primary" onClick={openCreateSubstage} disabled={!String(selectedPhase.name || "").trim() || (selectedPhase.substages?.length || 0) >= 5}>Add substage</button>
                 </div>
               </div>
 
-              <div className="card rounded-[28px] p-5 md:p-6">
-                <div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Phase summary</div>
-                <dl className="mt-4 space-y-4 text-sm">
-                  <div className="rounded-[20px] border border-white/8 bg-white/[0.03] p-4">
-                    <dt className="text-slate-400">Phase slot</dt>
-                    <dd className="mt-1 text-lg font-semibold text-white">{selectedPhase.phase_index}</dd>
-                  </div>
-                  <div className="rounded-[20px] border border-white/8 bg-white/[0.03] p-4">
-                    <dt className="text-slate-400">Visibility</dt>
-                    <dd className="mt-1 text-lg font-semibold text-white">{String(selectedPhase.name || "").trim() ? "Shown in app" : "Hidden in app"}</dd>
-                  </div>
-                  <div className="rounded-[20px] border border-white/8 bg-white/[0.03] p-4">
-                    <dt className="text-slate-400">Substage slots used</dt>
-                    <dd className="mt-1 text-lg font-semibold text-white">{selectedPhase.substages?.length || 0} / 5</dd>
-                  </div>
-                </dl>
+              <div className="mt-5">
+                <SubstageList substages={selectedPhase.substages || []} onMove={(substageId, direction) => void moveSubstage(substageId, direction)} movingSubstageId={movingSubstageId} onEdit={openEditSubstage} onDelete={(substage) => void deleteSubstage(substage)} />
               </div>
             </div>
           ) : null}

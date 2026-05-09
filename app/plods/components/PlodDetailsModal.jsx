@@ -59,7 +59,8 @@ export function PlodDetailsModal({ plod, onClose, onDecision, decisionSaving = f
 
   const activities = Array.isArray(plod.plod_activities) ? plod.plod_activities : [];
   const status = (plod.approval_status || "submitted").toLowerCase();
-  const canDecide = status === "submitted";
+  const readOnly = typeof onDecision !== "function";
+  const canDecide = !readOnly && status === "submitted";
 
   const submitDecision = async (action) => {
     await onDecision?.(plod.id, action, comment);
@@ -119,16 +120,18 @@ export function PlodDetailsModal({ plod, onClose, onDecision, decisionSaving = f
               </div>
             </div>
 
-            <div className="mt-3 space-y-2">
-              <label className="text-[11px] uppercase tracking-wide text-slate-400">Approval Comment</label>
-              <textarea
-                className="input min-h-[84px]"
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="Add a comment for approval/rejection"
-                disabled={!canDecide || decisionSaving}
-              />
-            </div>
+            {!readOnly ? (
+              <div className="mt-3 space-y-2">
+                <label className="text-[11px] uppercase tracking-wide text-slate-400">Approval Comment</label>
+                <textarea
+                  className="input min-h-[84px]"
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  placeholder="Add a comment for approval/rejection"
+                  disabled={!canDecide || decisionSaving}
+                />
+              </div>
+            ) : null}
 
             {canDecide && (
               <div className="mt-3 flex flex-wrap gap-2">
@@ -151,9 +154,11 @@ export function PlodDetailsModal({ plod, onClose, onDecision, decisionSaving = f
               </div>
             )}
 
-            {!canDecide && (
-              <p className="mt-3 text-xs text-slate-300">This plod has already been finalized.</p>
-            )}
+            {!canDecide ? (
+              <p className="mt-3 text-xs text-slate-300">
+                {readOnly ? "This plod is shown in read-only mode." : "This plod has already been finalized."}
+              </p>
+            ) : null}
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

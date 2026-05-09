@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import HorizontalScrollTabs from "@/app/components/HorizontalScrollTabs";
 
 const SETUP_ORDER = [
   {
@@ -253,6 +255,59 @@ const BULK_UPLOAD_NOTES = [
   "The importer writes holes into the selected project only; it does not guess the destination from the pasted data.",
 ];
 
+const CONSUMABLES_GUIDE = [
+  {
+    title: "Start with the inventory register",
+    detail: "Define stocked items, reorder values, unit sizing, and cost per unit before trying to use purchasing flows or stock-level alerts.",
+  },
+  {
+    title: "Use locations when stock lives in different places",
+    detail: "If consumables are split between sheds, depots, or field locations, configure locations first so counts stay operationally accurate.",
+  },
+  {
+    title: "Move requests through order status",
+    detail: "Use the requests and orders workflow to move items from outstanding need to ordered and then received, instead of only changing counts manually.",
+  },
+  {
+    title: "Keep counts current",
+    detail: "Reorder thresholds only help when inventory numbers are maintained consistently. Treat the page as a live stock register, not a one-off setup screen.",
+  },
+];
+
+const ASSETS_GUIDE = [
+  {
+    title: "Set up locations and types first",
+    detail: "Assets become easier to manage when the org already has asset locations and asset types configured before records are added in volume.",
+  },
+  {
+    title: "Attach assets to the right project",
+    detail: "Project-linked assets behave better in the map, filters, and field workflows. Clean project assignment matters as much as the asset record itself.",
+  },
+  {
+    title: "Use the map to verify coordinates",
+    detail: "Once an asset has coordinates, confirm it visually on the map and use move or proposal actions when the position needs correction.",
+  },
+  {
+    title: "Keep status meaningful",
+    detail: "Status fields and asset type filters are most useful when teams use a small, consistent set of operational states rather than ad hoc values.",
+  },
+];
+
+const HOW_TO_TABS = [
+  { id: "setup", label: "Basic setup", hash: "setup" },
+  { id: "import", label: "Data import", hash: "bulk-uploading" },
+  { id: "map", label: "Map basics", hash: "map-basics" },
+  { id: "coreyard", label: "CoreYard", hash: "coreyard" },
+  { id: "consumables", label: "Consumables", hash: "consumables" },
+  { id: "assets", label: "Assets", hash: "assets" },
+];
+
+function resolveHowToTabFromHash(hashValue) {
+  const normalized = String(hashValue || "").replace(/^#/, "").toLowerCase();
+  const match = HOW_TO_TABS.find((tab) => tab.hash === normalized);
+  return match?.id || "setup";
+}
+
 function SectionBadge({ children }) {
   return (
     <div className="inline-flex items-center rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
@@ -270,6 +325,25 @@ function OpenAreaButton({ href, children }) {
 }
 
 export default function HowToPage() {
+  const [activeTab, setActiveTab] = useState("setup");
+
+  useEffect(() => {
+    const syncTabFromHash = () => {
+      setActiveTab(resolveHowToTabFromHash(window.location.hash));
+    };
+
+    syncTabFromHash();
+    window.addEventListener("hashchange", syncTabFromHash);
+    return () => window.removeEventListener("hashchange", syncTabFromHash);
+  }, []);
+
+  const selectTab = (tabId) => {
+    setActiveTab(tabId);
+    const nextHash = HOW_TO_TABS.find((tab) => tab.id === tabId)?.hash;
+    const nextUrl = `${window.location.pathname}${nextHash ? `#${nextHash}` : ""}`;
+    window.history.replaceState(null, "", nextUrl);
+  };
+
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 md:px-6 lg:py-8">
       <section className="card p-6 md:p-7">
@@ -284,221 +358,310 @@ export default function HowToPage() {
         </div>
       </section>
 
-      <section className="card p-5 md:p-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-100">Recommended setup order</h2>
-            <p className="mt-1 text-sm text-slate-400">Follow this sequence to avoid rework and missing links between records.</p>
-          </div>
-          <OpenAreaButton href="/team">Start with Team</OpenAreaButton>
-        </div>
+      <section className="card overflow-hidden p-0">
+        <HorizontalScrollTabs className="border-b border-white/10 px-4 pt-4 md:px-6" hint="Swipe sections" hintClassName="text-slate-500">
+          {HOW_TO_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => selectTab(tab.id)}
+              className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-base ${activeTab === tab.id ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-300 hover:text-slate-100"}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </HorizontalScrollTabs>
 
-        <div className="mt-5 grid gap-4 xl:grid-cols-2">
-          {SETUP_ORDER.map((item) => (
-            <div key={item.id} className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
-              <div className="flex items-start justify-between gap-3">
+        <div id={HOW_TO_TABS.find((tab) => tab.id === activeTab)?.hash} className="space-y-6 p-5 md:p-6">
+          {activeTab === "setup" ? (
+            <>
+              <section className="rounded-[28px] border border-white/10 bg-white/[0.03] p-5 md:p-6">
+                <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-100">Recommended setup order</h2>
+                    <p className="mt-1 text-sm text-slate-400">Follow this sequence to avoid rework and missing links between records.</p>
+                  </div>
+                  <OpenAreaButton href="/team">Start with Team</OpenAreaButton>
+                </div>
+
+                <div className="mt-5 grid gap-4 xl:grid-cols-2">
+                  {SETUP_ORDER.map((item) => (
+                    <div key={item.id} className="rounded-[24px] border border-white/10 bg-black/10 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Step {item.step}</div>
+                          <h3 className="mt-1 text-base font-semibold text-slate-100">{item.title}</h3>
+                          <div className="mt-1 text-xs text-cyan-100/80">{item.area}</div>
+                        </div>
+                        <Link href={item.href} className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/[0.06]">
+                          Open
+                        </Link>
+                      </div>
+
+                      <p className="mt-3 text-sm leading-6 text-slate-300">{item.summary}</p>
+
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        <div className="rounded-2xl border border-white/8 bg-black/10 p-3">
+                          <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Required first</div>
+                          <div className="mt-2 space-y-1.5 text-sm text-slate-300">
+                            {item.required.map((entry) => (
+                              <div key={entry}>{entry}</div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-white/8 bg-black/10 p-3">
+                          <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Creates</div>
+                          <div className="mt-2 space-y-1.5 text-sm text-slate-300">
+                            {item.outputs.map((entry) => (
+                              <div key={entry}>{entry}</div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="rounded-[28px] border border-white/10 bg-white/[0.03] p-5 md:p-6">
+                <div className="max-w-3xl">
+                  <h2 className="text-lg font-semibold text-slate-100">What data needs to exist, and in what order</h2>
+                  <p className="mt-1 text-sm leading-6 text-slate-400">
+                    This is the practical dependency chain taken from how the app loads records today. If users populate data out of order, they usually feel it first in the map, CoreYard, and scheduling flows.
+                  </p>
+                </div>
+
+                <div className="mt-5 grid gap-3 lg:grid-cols-2">
+                  {DATA_ORDER.map((item) => (
+                    <div key={item.title} className="rounded-[22px] border border-white/10 bg-black/10 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="text-sm font-semibold text-slate-100">{item.title}</h3>
+                        <span className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-slate-300">{item.where}</span>
+                      </div>
+                      <div className="mt-3 space-y-2 text-sm leading-6 text-slate-300">
+                        <div><span className="text-slate-500">Why:</span> {item.why}</div>
+                        <div><span className="text-slate-500">Needed before:</span> {item.before}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="rounded-[28px] border border-white/10 bg-white/[0.03] p-5 md:p-6">
+                <h2 className="text-lg font-semibold text-slate-100">Fast path for a new real-world rollout</h2>
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <Link href="/team" className="rounded-[22px] border border-white/10 bg-black/10 p-4 transition hover:bg-white/[0.05]">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Step 1</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-100">Create the organization</div>
+                  </Link>
+                  <Link href="/projects" className="rounded-[22px] border border-white/10 bg-black/10 p-4 transition hover:bg-white/[0.05]">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Step 2</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-100">Create the project and set CRS</div>
+                  </Link>
+                  <Link href="/coretasks" className="rounded-[22px] border border-white/10 bg-black/10 p-4 transition hover:bg-white/[0.05]">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Step 3</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-100">Load holes into CoreYard</div>
+                  </Link>
+                  <Link href="/map" className="rounded-[22px] border border-white/10 bg-black/10 p-4 transition hover:bg-white/[0.05]">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Step 4</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-100">Verify spatial data on the map</div>
+                  </Link>
+                </div>
+              </section>
+            </>
+          ) : null}
+
+          {activeTab === "import" ? (
+            <section className="rounded-[28px] border border-white/10 bg-white/[0.03] p-5 md:p-6">
+              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div className="max-w-3xl">
+                  <h2 className="text-lg font-semibold text-slate-100">Bulk uploading chapter</h2>
+                  <p className="mt-1 text-sm leading-6 text-slate-400">
+                    This is the clearest path for loading a new hole register from a spreadsheet. Use it when a project already exists and you want to create many holes in one pass.
+                  </p>
+                </div>
+                <OpenAreaButton href="/coretasks?tab=addcore">Open Add Core</OpenAreaButton>
+              </div>
+
+              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                {BULK_UPLOAD_CHAPTER.map((item) => (
+                  <div key={item.step} className="rounded-[22px] border border-white/10 bg-black/10 p-4">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-100/75">Step {item.step}</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-100">{item.title}</div>
+                    <p className="mt-2 text-sm leading-6 text-slate-300">{item.detail}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="rounded-[24px] border border-white/10 bg-black/10 p-4">
+                  <h3 className="text-base font-semibold text-slate-100">What the importer validates</h3>
+                  <div className="mt-3 space-y-3 text-sm leading-6 text-slate-300">
+                    <div>Headers must be recognized. Extra unexpected column names are rejected.</div>
+                    <div>Numeric fields like azimuth, dip, and depths are checked before import.</div>
+                    <div>Coordinate pairs must be complete. Longitude and latitude belong together, and projected coordinates require a project CRS.</div>
+                    <div>Descriptor tokens are resolved against the org’s configured hole descriptors.</div>
+                  </div>
+                </div>
+
+                <div className="rounded-[24px] border border-cyan-300/14 bg-cyan-400/[0.04] p-4">
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-100/80">Key reminders</div>
+                  <div className="mt-3 space-y-2 text-sm leading-6 text-slate-200">
+                    {BULK_UPLOAD_NOTES.map((item) => (
+                      <div key={item}>{item}</div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          {activeTab === "map" ? (
+            <section className="rounded-[28px] border border-white/10 bg-white/[0.03] p-5 md:p-6">
+              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div className="max-w-3xl">
+                  <h2 className="text-lg font-semibold text-slate-100">Map page explained</h2>
+                  <p className="mt-1 text-sm leading-6 text-slate-400">
+                    The map is the spatial workspace for holes and assets. It is most useful after records already exist and have valid coordinates saved against them.
+                  </p>
+                </div>
+                <OpenAreaButton href="/map">Open Map</OpenAreaButton>
+              </div>
+
+              <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <div>
-                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Step {item.step}</div>
-                  <h3 className="mt-1 text-base font-semibold text-slate-100">{item.title}</h3>
-                  <div className="mt-1 text-xs text-cyan-100/80">{item.area}</div>
-                </div>
-                <Link href={item.href} className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/[0.06]">
-                  Open
-                </Link>
-              </div>
-
-              <p className="mt-3 text-sm leading-6 text-slate-300">{item.summary}</p>
-
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <div className="rounded-2xl border border-white/8 bg-black/10 p-3">
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Required first</div>
-                  <div className="mt-2 space-y-1.5 text-sm text-slate-300">
-                    {item.required.map((entry) => (
-                      <div key={entry}>{entry}</div>
+                  <h3 className="text-base font-semibold text-slate-100">How to work on the map</h3>
+                  <div className="mt-3 space-y-3">
+                    {MAP_WORKFLOW.map((step, index) => (
+                      <div key={step} className="rounded-2xl border border-white/10 bg-black/10 p-4">
+                        <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Map step {index + 1}</div>
+                        <p className="mt-2 text-sm leading-6 text-slate-300">{step}</p>
+                      </div>
                     ))}
                   </div>
                 </div>
-                <div className="rounded-2xl border border-white/8 bg-black/10 p-3">
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Creates</div>
-                  <div className="mt-2 space-y-1.5 text-sm text-slate-300">
-                    {item.outputs.map((entry) => (
-                      <div key={entry}>{entry}</div>
-                    ))}
+
+                <div className="rounded-[24px] border border-white/10 bg-black/10 p-4">
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Prerequisites</div>
+                  <div className="mt-3 space-y-2 text-sm leading-6 text-slate-300">
+                    <div>Holes need collar longitude and latitude to appear reliably on the map.</div>
+                    <div>Assets need longitude and latitude to appear in the mapped asset view.</div>
+                    <div>Both holes and assets should already belong to the correct project so filters and navigators behave as expected.</div>
+                    <div>If using projected coordinates in upstream workflows, the project CRS should already be set.</div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      </section>
 
-      <section className="card p-5 md:p-6">
-        <div className="max-w-3xl">
-          <h2 className="text-lg font-semibold text-slate-100">What data needs to exist, and in what order</h2>
-          <p className="mt-1 text-sm leading-6 text-slate-400">
-            This is the practical dependency chain taken from how the app loads records today. If users populate data out of order, they usually feel it first in the map, CoreYard, and scheduling flows.
-          </p>
-        </div>
-
-        <div className="mt-5 grid gap-3 lg:grid-cols-2">
-          {DATA_ORDER.map((item) => (
-            <div key={item.title} className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold text-slate-100">{item.title}</h3>
-                <span className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-slate-300">{item.where}</span>
-              </div>
-              <div className="mt-3 space-y-2 text-sm leading-6 text-slate-300">
-                <div><span className="text-slate-500">Why:</span> {item.why}</div>
-                <div><span className="text-slate-500">Needed before:</span> {item.before}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="card p-5 md:p-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div className="max-w-3xl">
-            <h2 className="text-lg font-semibold text-slate-100">Map page explained</h2>
-            <p className="mt-1 text-sm leading-6 text-slate-400">
-              The map is the spatial workspace for holes and assets. It is most useful after records already exist and have valid coordinates saved against them.
-            </p>
-          </div>
-          <OpenAreaButton href="/map">Open Map</OpenAreaButton>
-        </div>
-
-        <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div>
-            <h3 className="text-base font-semibold text-slate-100">How to work on the map</h3>
-            <div className="mt-3 space-y-3">
-              {MAP_WORKFLOW.map((step, index) => (
-                <div key={step} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Map step {index + 1}</div>
-                  <p className="mt-2 text-sm leading-6 text-slate-300">{step}</p>
+              <div className="mt-6">
+                <h3 className="text-base font-semibold text-slate-100">Map controls and toolbar actions</h3>
+                <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {MAP_TOOLS.map((tool) => (
+                    <div key={tool.name} className="rounded-[22px] border border-white/10 bg-black/10 p-4">
+                      <div className="text-sm font-semibold text-slate-100">{tool.name}</div>
+                      <p className="mt-2 text-sm leading-6 text-slate-300">{tool.description}</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
-            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Prerequisites</div>
-            <div className="mt-3 space-y-2 text-sm leading-6 text-slate-300">
-              <div>Holes need collar longitude and latitude to appear reliably on the map.</div>
-              <div>Assets need longitude and latitude to appear in the mapped asset view.</div>
-              <div>Both holes and assets should already belong to the correct project so filters and navigators behave as expected.</div>
-              <div>If using projected coordinates in upstream workflows, the project CRS should already be set.</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-6">
-          <h3 className="text-base font-semibold text-slate-100">Map controls and toolbar actions</h3>
-          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {MAP_TOOLS.map((tool) => (
-              <div key={tool.name} className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
-                <div className="text-sm font-semibold text-slate-100">{tool.name}</div>
-                <p className="mt-2 text-sm leading-6 text-slate-300">{tool.description}</p>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
+            </section>
+          ) : null}
 
-      <section className="card p-5 md:p-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div className="max-w-3xl">
-            <h2 className="text-lg font-semibold text-slate-100">CoreYard guide</h2>
-            <p className="mt-1 text-sm leading-6 text-slate-400">
-              CoreYard is the place to work once the project exists and the hole register is in place. This is where users maintain holes, log progress, prepare dispatches, and manage core task definitions.
-            </p>
-          </div>
-          <OpenAreaButton href="/coretasks">Open CoreYard</OpenAreaButton>
-        </div>
-
-        <div className="mt-5 grid gap-3 lg:grid-cols-2">
-          {COREYARD_SECTIONS.map((section) => (
-            <div key={section.title} className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
-              <div className="text-sm font-semibold text-slate-100">{section.title}</div>
-              <p className="mt-2 text-sm leading-6 text-slate-300">{section.description}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-6 rounded-[24px] border border-cyan-300/14 bg-cyan-400/[0.04] p-4">
-          <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-100/80">CoreYard rules of thumb</div>
-          <div className="mt-3 grid gap-3 lg:grid-cols-2">
-            {COREYARD_RULES.map((rule, index) => (
-              <div key={rule} className="rounded-2xl border border-white/10 bg-black/10 p-4 text-sm leading-6 text-slate-200">
-                <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-100/70">Rule {index + 1}</div>
-                <div className="mt-2">{rule}</div>
+          {activeTab === "coreyard" ? (
+            <section className="rounded-[28px] border border-white/10 bg-white/[0.03] p-5 md:p-6">
+              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div className="max-w-3xl">
+                  <h2 className="text-lg font-semibold text-slate-100">CoreYard guide</h2>
+                  <p className="mt-1 text-sm leading-6 text-slate-400">
+                    CoreYard is the place to work once the project exists and the hole register is in place. This is where users maintain holes, log progress, prepare dispatches, and manage core task definitions.
+                  </p>
+                </div>
+                <OpenAreaButton href="/coretasks">Open CoreYard</OpenAreaButton>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
-      <section id="bulk-uploading" className="card scroll-mt-24 p-5 md:p-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div className="max-w-3xl">
-            <h2 className="text-lg font-semibold text-slate-100">Bulk uploading chapter</h2>
-            <p className="mt-1 text-sm leading-6 text-slate-400">
-              This is the clearest path for loading a new hole register from a spreadsheet. Use it when a project already exists and you want to create many holes in one pass.
-            </p>
-          </div>
-          <OpenAreaButton href="/coretasks?tab=addcore">Open Add Core</OpenAreaButton>
-        </div>
+              <div className="mt-5 grid gap-3 lg:grid-cols-2">
+                {COREYARD_SECTIONS.map((section) => (
+                  <div key={section.title} className="rounded-[22px] border border-white/10 bg-black/10 p-4">
+                    <div className="text-sm font-semibold text-slate-100">{section.title}</div>
+                    <p className="mt-2 text-sm leading-6 text-slate-300">{section.description}</p>
+                  </div>
+                ))}
+              </div>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          {BULK_UPLOAD_CHAPTER.map((item) => (
-            <div key={item.step} className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
-              <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-100/75">Step {item.step}</div>
-              <div className="mt-2 text-sm font-semibold text-slate-100">{item.title}</div>
-              <p className="mt-2 text-sm leading-6 text-slate-300">{item.detail}</p>
-            </div>
-          ))}
-        </div>
+              <div className="mt-6 rounded-[24px] border border-cyan-300/14 bg-cyan-400/[0.04] p-4">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-100/80">CoreYard rules of thumb</div>
+                <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                  {COREYARD_RULES.map((rule, index) => (
+                    <div key={rule} className="rounded-2xl border border-white/10 bg-black/10 p-4 text-sm leading-6 text-slate-200">
+                      <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-100/70">Rule {index + 1}</div>
+                      <div className="mt-2">{rule}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          ) : null}
 
-        <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
-            <h3 className="text-base font-semibold text-slate-100">What the importer validates</h3>
-            <div className="mt-3 space-y-3 text-sm leading-6 text-slate-300">
-              <div>Headers must be recognized. Extra unexpected column names are rejected.</div>
-              <div>Numeric fields like azimuth, dip, and depths are checked before import.</div>
-              <div>Coordinate pairs must be complete. Longitude and latitude belong together, and projected coordinates require a project CRS.</div>
-              <div>Descriptor tokens are resolved against the org’s configured hole descriptors.</div>
-            </div>
-          </div>
+          {activeTab === "consumables" ? (
+            <section className="rounded-[28px] border border-white/10 bg-white/[0.03] p-5 md:p-6">
+              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div className="max-w-3xl">
+                  <h2 className="text-lg font-semibold text-slate-100">Consumables basics</h2>
+                  <p className="mt-1 text-sm leading-6 text-slate-400">
+                    Consumables works best as an operational stock register. Configure the inventory properly first, then use requests and order states to reflect real purchasing flow.
+                  </p>
+                </div>
+                <OpenAreaButton href="/consumables">Open Consumables</OpenAreaButton>
+              </div>
 
-          <div className="rounded-[24px] border border-cyan-300/14 bg-cyan-400/[0.04] p-4">
-            <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-100/80">Key reminders</div>
-            <div className="mt-3 space-y-2 text-sm leading-6 text-slate-200">
-              {BULK_UPLOAD_NOTES.map((item) => (
-                <div key={item}>{item}</div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+              <div className="mt-5 grid gap-3 lg:grid-cols-2">
+                {CONSUMABLES_GUIDE.map((item, index) => (
+                  <div key={item.title} className="rounded-[22px] border border-white/10 bg-black/10 p-4">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Consumables step {index + 1}</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-100">{item.title}</div>
+                    <p className="mt-2 text-sm leading-6 text-slate-300">{item.detail}</p>
+                  </div>
+                ))}
+              </div>
 
-      <section className="card p-5 md:p-6">
-        <h2 className="text-lg font-semibold text-slate-100">Fast path for a new real-world rollout</h2>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <Link href="/team" className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4 transition hover:bg-white/[0.05]">
-            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Step 1</div>
-            <div className="mt-2 text-sm font-semibold text-slate-100">Create the organization</div>
-          </Link>
-          <Link href="/projects" className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4 transition hover:bg-white/[0.05]">
-            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Step 2</div>
-            <div className="mt-2 text-sm font-semibold text-slate-100">Create the project and set CRS</div>
-          </Link>
-          <Link href="/coretasks" className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4 transition hover:bg-white/[0.05]">
-            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Step 3</div>
-            <div className="mt-2 text-sm font-semibold text-slate-100">Load holes into CoreYard</div>
-          </Link>
-          <Link href="/map" className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4 transition hover:bg-white/[0.05]">
-            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Step 4</div>
-            <div className="mt-2 text-sm font-semibold text-slate-100">Verify spatial data on the map</div>
-          </Link>
+              <div className="mt-6 rounded-[24px] border border-white/10 bg-black/10 p-4">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Useful prerequisite</div>
+                <div className="mt-3 text-sm leading-6 text-slate-300">
+                  If the org wants location-based inventory, asset locations should already exist before teams begin tracking stock by location.
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          {activeTab === "assets" ? (
+            <section className="rounded-[28px] border border-white/10 bg-white/[0.03] p-5 md:p-6">
+              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div className="max-w-3xl">
+                  <h2 className="text-lg font-semibold text-slate-100">Assets basics</h2>
+                  <p className="mt-1 text-sm leading-6 text-slate-400">
+                    Assets should be treated as project-linked field records with clear type, status, and location context. The map becomes the fastest validation tool once they are saved correctly.
+                  </p>
+                </div>
+                <OpenAreaButton href="/assets">Open Assets</OpenAreaButton>
+              </div>
+
+              <div className="mt-5 grid gap-3 lg:grid-cols-2">
+                {ASSETS_GUIDE.map((item, index) => (
+                  <div key={item.title} className="rounded-[22px] border border-white/10 bg-black/10 p-4">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Assets step {index + 1}</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-100">{item.title}</div>
+                    <p className="mt-2 text-sm leading-6 text-slate-300">{item.detail}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-6 rounded-[24px] border border-white/10 bg-black/10 p-4">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Operational note</div>
+                <div className="mt-3 text-sm leading-6 text-slate-300">
+                  Assets become much more useful across the app once they are attached to the correct project and have reliable coordinates for map filtering and field context.
+                </div>
+              </div>
+            </section>
+          ) : null}
         </div>
       </section>
     </div>

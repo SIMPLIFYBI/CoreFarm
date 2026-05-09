@@ -246,53 +246,97 @@ function HomePageInner() {
 
   const existingName = session?.user?.user_metadata?.name || session?.user?.raw_user_meta_data?.name || "";
   const showSetupForm = requestedFlow === "setup" && !!session?.user && !recoveryMode;
+  const inputClassName =
+    "w-full rounded-2xl border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-cyan-300/35 focus:bg-slate-950/80";
+  const secondaryButtonClassName =
+    "rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:bg-white/[0.09] hover:text-white disabled:cursor-not-allowed disabled:opacity-60";
+  const primaryButtonClassName =
+    "w-full rounded-2xl bg-[linear-gradient(135deg,rgba(34,211,238,0.92),rgba(14,116,144,0.92))] px-4 py-3 text-sm font-semibold text-slate-950 shadow-[0_20px_50px_rgba(34,211,238,0.18)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70";
 
   return (
-    <div className="max-w-6xl mx-auto p-6 grid md:grid-cols-2 gap-8">
-      <div className="space-y-3">
-        <h1 className="text-3xl font-semibold">WorkMine</h1>
-        <p className="text-gray-600">
-          Plan, Manage and track your mining operations with ease. WorkMine is designed to help you stay organized, collaborate with your team, and keep your projects on track. With WorkMine, you can:
-        </p>
-        <ul className="list-disc ml-5 text-gray-700 text-sm space-y-1">
-          <li>Record Plods for any mining activity</li>
-          <li>Track progress and performance metrics</li>
-          <li>Track consumables and resources</li>
-          <li>Invite teammates and manage roles</li>
-        </ul>
-      </div>
+    <div className="mx-auto max-w-6xl px-4 pb-6 pt-2 md:px-6 md:pb-8 md:pt-3">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.08fr)_420px] lg:items-start">
+        <section className="space-y-5">
+          <div className="overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(135deg,rgba(15,23,42,0.96),rgba(8,47,73,0.82)_48%,rgba(6,78,59,0.74))] p-6 shadow-[0_30px_120px_rgba(2,6,23,0.38)] md:p-8">
+            <div className="max-w-3xl">
+              <div className="inline-flex items-center rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-100">
+                Mining operations workspace
+              </div>
+              <h1 className="mt-4 text-4xl font-black tracking-[-0.06em] text-white md:text-5xl">WorkMine</h1>
+              <p className="mt-4 max-w-2xl text-base leading-7 text-slate-200 md:text-lg">
+                The operating system for modern mining teams.
+              </p>
+              <p className="mt-3 max-w-xl text-sm leading-6 text-slate-300 md:text-base">
+                Map drillholes, run drilling workflows, and keep field operations connected in one place.
+              </p>
+            </div>
+          </div>
+        </section>
 
-      <div className="border rounded p-5">
+        <section className="overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.95),rgba(2,6,23,0.96))] p-5 shadow-[0_30px_120px_rgba(2,6,23,0.34)] md:p-6">
+          <div className="mb-5 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">Account access</div>
+              <div className="mt-1 text-xl font-semibold text-white">
+                {showSetupForm ? "Finish setup" : recoveryMode ? "Reset password" : mode === "signin" ? "Sign in" : "Create account"}
+              </div>
+            </div>
+            {!showSetupForm && !recoveryMode ? (
+              <div className="inline-flex rounded-2xl border border-white/10 bg-white/[0.04] p-1">
+                <button
+                  className={[
+                    "rounded-xl px-3 py-2 text-sm font-medium transition",
+                    mode === "signin" ? "bg-white/[0.08] text-white" : "text-slate-400 hover:text-white",
+                  ].join(" ")}
+                  onClick={() => switchMode("signin")}
+                  disabled={showSetupForm}
+                >
+                  Sign in
+                </button>
+                <button
+                  className={[
+                    "rounded-xl px-3 py-2 text-sm font-medium transition",
+                    mode === "signup" ? "bg-white/[0.08] text-white" : "text-slate-400 hover:text-white",
+                  ].join(" ")}
+                  onClick={() => switchMode("signup")}
+                  disabled={showSetupForm}
+                >
+                  Create account
+                </button>
+              </div>
+            ) : null}
+          </div>
+
         {recoveryMode && (
-          <div className="mb-5 bg-blue-50 border border-blue-200 rounded p-3 text-sm">
-            <div className="font-medium mb-2">Set a new password</div>
-            <form onSubmit={updatePassword} className="flex gap-2 items-center">
+          <div className="mb-5 rounded-[24px] border border-cyan-300/16 bg-cyan-400/[0.06] p-4 text-sm text-slate-200">
+            <div className="mb-2 font-medium text-white">Set a new password</div>
+            <form onSubmit={updatePassword} className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <input
                 type="password"
-                className="flex-1 border rounded px-3 py-2"
+                className={`${inputClassName} flex-1`}
                 placeholder="New password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 minLength={6}
                 required
               />
-              <button className="btn btn-primary" disabled={updatingPassword}>
+              <button className={primaryButtonClassName} disabled={updatingPassword}>
                 {updatingPassword ? "Updating…" : "Update"}
               </button>
             </form>
           </div>
         )}
         {showSetupForm && (
-          <div className="mb-5 rounded border border-emerald-200 bg-emerald-50 p-4 text-sm">
-            <div className="font-medium mb-2">Finish setting up your account</div>
-            <p className="mb-4 text-gray-600">
+          <div className="mb-5 rounded-[24px] border border-emerald-300/16 bg-emerald-400/[0.06] p-4 text-sm">
+            <div className="mb-2 font-medium text-white">Finish setting up your account</div>
+            <p className="mb-4 text-slate-300">
               Signed in as {session.user.email}
             </p>
             <form onSubmit={finishAccountSetup} className="space-y-3">
               {!existingName && (
                 <input
                   type="text"
-                  className="w-full border rounded px-3 py-2"
+                  className={inputClassName}
                   placeholder="Your display name (≤ 10 chars)"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -302,7 +346,7 @@ function HomePageInner() {
               )}
               <input
                 type="password"
-                className="w-full border rounded px-3 py-2"
+                className={inputClassName}
                 placeholder="Choose a password"
                 value={setupPassword}
                 onChange={(e) => setSetupPassword(e.target.value)}
@@ -311,35 +355,35 @@ function HomePageInner() {
               />
               <input
                 type="password"
-                className="w-full border rounded px-3 py-2"
+                className={inputClassName}
                 placeholder="Confirm password"
                 value={setupConfirm}
                 onChange={(e) => setSetupConfirm(e.target.value)}
                 minLength={6}
                 required
               />
-              <button disabled={savingSetup} className="w-full btn btn-primary">
+              <button disabled={savingSetup} className={primaryButtonClassName}>
                 {savingSetup ? "Saving…" : "Save and continue"}
               </button>
             </form>
           </div>
         )}
         {session?.user && invites.length > 0 && (
-          <div className="mb-5 rounded p-4 text-sm bg-gradient-to-r from-indigo-50 via-white to-purple-50 border border-indigo-100 shadow-sm">
-            <div className="font-medium mb-3 flex items-center gap-2">
-              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 text-white text-[10px] font-semibold">INV</span>
+          <div className="mb-5 rounded-[24px] border border-indigo-300/18 bg-[linear-gradient(135deg,rgba(99,102,241,0.12),rgba(15,23,42,0.2),rgba(168,85,247,0.12))] p-4 text-sm shadow-[0_18px_50px_rgba(2,6,23,0.16)]">
+            <div className="mb-3 flex items-center gap-2 font-medium text-white">
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[linear-gradient(135deg,rgba(99,102,241,0.95),rgba(168,85,247,0.95))] text-[10px] font-semibold text-white">INV</span>
               <span>You have pending invites</span>
             </div>
             <ul className="space-y-2">
               {invites.map((inv) => {
                 const inviterEmail = inv.inviter?.email || inv.invited_by || '';
                 return (
-                  <li key={inv.id} className="flex items-center justify-between gap-3 bg-white/60 rounded px-3 py-2 border border-indigo-100">
+                  <li key={inv.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/45 px-3 py-3">
                     <div className="flex flex-col truncate">
-                      <span className="font-medium truncate">{inv.organizations?.name || inv.organization_id}</span>
-                      <span className="text-[11px] text-gray-600 truncate">Role: {inv.role}{inviterEmail && ` • Invited by ${inviterEmail}`}</span>
+                      <span className="truncate font-medium text-white">{inv.organizations?.name || inv.organization_id}</span>
+                      <span className="truncate text-[11px] text-slate-400">Role: {inv.role}{inviterEmail && ` • Invited by ${inviterEmail}`}</span>
                     </div>
-                    <button className="btn btn-primary btn-gradient text-xs" onClick={() => acceptInvite(inv)}>
+                    <button className="rounded-xl bg-[linear-gradient(135deg,rgba(99,102,241,0.94),rgba(168,85,247,0.94))] px-3 py-2 text-xs font-semibold text-white transition hover:brightness-110" onClick={() => acceptInvite(inv)}>
                       Accept
                     </button>
                   </li>
@@ -347,37 +391,21 @@ function HomePageInner() {
               })}
             </ul>
             <div className="mt-4 flex gap-2">
-              <button className="btn text-xs" onClick={goTeam}>Manage in Team</button>
-              <button className="btn text-xs" onClick={() => router.replace('/map')}>Skip for now</button>
+              <button className={secondaryButtonClassName} onClick={goTeam}>Manage in Team</button>
+              <button className={secondaryButtonClassName} onClick={() => router.replace('/map')}>Skip for now</button>
             </div>
           </div>
         )}
         {session?.user && checkingInvites && invites.length === 0 && (
-          <div className="mb-4 text-xs text-gray-500">Checking for team invites…</div>
+          <div className="mb-4 text-xs text-slate-500">Checking for team invites…</div>
         )}
-        <div className="flex gap-4 mb-4">
-          <button
-            className={`btn text-sm ${mode === "signin" ? "bg-gray-100" : ""}`}
-            onClick={() => switchMode("signin")}
-            disabled={showSetupForm}
-          >
-            Sign in
-          </button>
-          <button
-            className={`btn text-sm ${mode === "signup" ? "bg-gray-100" : ""}`}
-            onClick={() => switchMode("signup")}
-            disabled={showSetupForm}
-          >
-            Create account
-          </button>
-        </div>
 
         {!showSetupForm && (
           <form onSubmit={mode === "signin" ? signIn : signUp} className="space-y-3">
           {mode === "signup" && (
             <input
               type="text"
-              className="w-full border rounded px-3 py-2"
+              className={inputClassName}
               placeholder="Your display name (≤ 10 chars)"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -386,7 +414,7 @@ function HomePageInner() {
           )}
           <input
             type="email"
-            className="w-full border rounded px-3 py-2"
+            className={inputClassName}
             placeholder="you@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -394,7 +422,7 @@ function HomePageInner() {
           />
           <input
             type="password"
-            className="w-full border rounded px-3 py-2"
+            className={inputClassName}
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -402,21 +430,26 @@ function HomePageInner() {
             minLength={6}
           />
           <div className="text-right">
-            <button type="button" className="text-xs text-blue-600 hover:underline" onClick={sendReset}>
+            <button type="button" className="text-xs font-medium text-cyan-300 transition hover:text-cyan-200" onClick={sendReset}>
               Forgot password?
             </button>
           </div>
-          <button disabled={loading} className="w-full btn btn-primary">
+          <button disabled={loading} className={primaryButtonClassName}>
             {loading ? "Please wait…" : mode === "signin" ? "Sign in" : "Create account"}
           </button>
           </form>
         )}
 
         {!session?.user && !showSetupForm && !recoveryMode && (
-          <div className="mt-4 border-t pt-4">
+          <div className="mt-5 rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-100/80">Prefer to look around first?</div>
+            <div className="mt-1 text-base font-semibold text-white">Continue as a guest</div>
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              Guest access opens the public demo immediately. Use it if you want to explore the product before signing in or creating an account.
+            </p>
             <button
               type="button"
-              className="w-full btn"
+              className="mt-4 w-full rounded-2xl border border-cyan-300/18 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/16"
               onClick={() => router.push("/map")}
             >
               Continue as guest
@@ -424,12 +457,13 @@ function HomePageInner() {
           </div>
         )}
 
-        <div className="mt-4 text-sm text-gray-600 space-y-2">
-          <p>
+        <div className="mt-5 space-y-2 text-sm text-slate-400">
+          <p className="leading-6">
             After creating an account and verifying your email, you’ll be able to join your existing company or start a new one.
           </p>
           {/* Removed legacy quick navigation buttons (Go to Team / Use magic link) to streamline onboarding */}
         </div>
+        </section>
       </div>
     </div>
   );

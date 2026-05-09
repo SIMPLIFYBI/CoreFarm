@@ -31,6 +31,20 @@ export default function Page() {
     to: new Date().toISOString().split("T")[0],
   });
 
+  const historyMetrics = useMemo(() => {
+    const total = plods.length;
+    let pending = 0;
+    let approved = 0;
+
+    for (const plod of plods) {
+      const status = String(plod?.approval_status || "submitted").toLowerCase();
+      if (status === "approved") approved += 1;
+      else if (status !== "rejected") pending += 1;
+    }
+
+    return { total, pending, approved };
+  }, [plods]);
+
   const loadPlods = async () => {
     if (!orgIdCtx) return;
 
@@ -303,50 +317,65 @@ export default function Page() {
   }, [orgIdCtx, plodScope, dateRange.from, dateRange.to]);
 
   return (
-    <div className="mx-auto max-w-6xl p-6">
-      <header className="mb-6 flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold flex items-center gap-3">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 text-white">
-              <IconPlods />
-            </span>
-            Plods
-          </h1>
-          <p className="text-sm text-slate-300 mt-2">
-            Record a shift. Choose plod type, fill header fields, then add activities.
-          </p>
+    <div className="mx-auto max-w-6xl p-4 md:p-6 space-y-5">
+      <section className="card p-4 md:p-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-100 flex items-center gap-3">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[linear-gradient(135deg,#22d3ee,#0f766e)] text-slate-950 shadow-[0_12px_28px_rgba(34,211,238,0.2)]">
+                <IconPlods />
+              </span>
+              Plods
+            </h1>
+            <p className="text-sm text-slate-300 mt-1">
+              Record, review, and approve shift-level PLOD submissions in the same operational style as Activity.
+            </p>
+          </div>
+
+          <button type="button" onClick={() => setShowCreatePlod(true)} className="btn btn-primary whitespace-nowrap">
+            New Plod
+          </button>
         </div>
+      </section>
 
-        <button type="button" onClick={() => setShowCreatePlod(true)} className="btn btn-primary whitespace-nowrap">
-          New Plod
-        </button>
-      </header>
-
-      <div className="card overflow-hidden">
-        <section className="p-6">
-          {message && (
-            <div
-              className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
-                message.type === "error"
-                  ? "bg-red-500/10 text-red-200 border-red-500/20"
-                  : "bg-emerald-500/10 text-emerald-200 border-emerald-500/20"
-              }`}
-            >
-              {message.text}
-            </div>
-          )}
-
-          <HistoryTable
-            plods={plods}
-            plodsLoading={plodsLoading}
-            plodScope={plodScope}
-            onPlodScopeChange={setPlodScope}
-            dateRange={dateRange}
-            onDateChange={(k, v) => setDateRange((s) => ({ ...s, [k]: v }))}
-            onSelectPlod={setSelectedPlod}
-          />
+      {message ? (
+        <section className="card p-4">
+          <div
+            className={`rounded-lg border px-4 py-3 text-sm ${
+              message.type === "error"
+                ? "bg-red-500/10 text-red-200 border-red-500/20"
+                : "bg-emerald-500/10 text-emerald-200 border-emerald-500/20"
+            }`}
+          >
+            {message.text}
+          </div>
         </section>
-      </div>
+      ) : null}
+
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="glass rounded-xl border border-white/10 p-4">
+          <div className="text-xs text-slate-300">Plods In Range</div>
+          <div className="text-2xl font-semibold text-slate-100">{historyMetrics.total}</div>
+        </div>
+        <div className="glass rounded-xl border border-white/10 p-4">
+          <div className="text-xs text-slate-300">Pending Review</div>
+          <div className="text-2xl font-semibold text-slate-100">{historyMetrics.pending}</div>
+        </div>
+        <div className="glass rounded-xl border border-white/10 p-4">
+          <div className="text-xs text-slate-300">Approved</div>
+          <div className="text-2xl font-semibold text-slate-100">{historyMetrics.approved}</div>
+        </div>
+      </section>
+
+      <HistoryTable
+        plods={plods}
+        plodsLoading={plodsLoading}
+        plodScope={plodScope}
+        onPlodScopeChange={setPlodScope}
+        dateRange={dateRange}
+        onDateChange={(k, v) => setDateRange((s) => ({ ...s, [k]: v }))}
+        onSelectPlod={setSelectedPlod}
+      />
 
       <PlodCreateSheet
         open={showCreatePlod}

@@ -44,39 +44,52 @@ export function HistoryTable({
 }) {
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="inline-flex rounded-lg border border-white/10 bg-slate-900/40 p-1 gap-1">
-          <button
-            type="button"
-            className={`px-3 py-1.5 text-xs rounded-md transition-base ${plodScope === "my" ? "bg-indigo-600 text-white" : "text-slate-200 hover:bg-white/10"}`}
-            onClick={() => onPlodScopeChange?.("my")}
-          >
-            My Plods
-          </button>
-          <button
-            type="button"
-            className={`px-3 py-1.5 text-xs rounded-md transition-base ${plodScope === "client" ? "bg-indigo-600 text-white" : "text-slate-200 hover:bg-white/10"}`}
-            onClick={() => onPlodScopeChange?.("client")}
-          >
-            Client Plods
-          </button>
+      <section className="glass rounded-2xl border border-white/10 p-4 md:p-5 space-y-4 overflow-hidden">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[auto_repeat(2,minmax(180px,220px))] md:items-end">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">History scope</div>
+            <div className="mt-2 inline-flex rounded-full border border-white/10 bg-slate-900/40 p-1 gap-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <button
+                type="button"
+                className={`rounded-full px-4 py-2 text-xs font-medium transition-base ${plodScope === "my" ? "bg-[linear-gradient(135deg,#22d3ee,#0f766e)] text-slate-950 shadow-[0_12px_24px_rgba(34,211,238,0.22)]" : "text-slate-200 hover:bg-white/10"}`}
+                onClick={() => onPlodScopeChange?.("my")}
+              >
+                My Plods
+              </button>
+              <button
+                type="button"
+                className={`rounded-full px-4 py-2 text-xs font-medium transition-base ${plodScope === "client" ? "bg-[linear-gradient(135deg,#22d3ee,#0f766e)] text-slate-950 shadow-[0_12px_24px_rgba(34,211,238,0.22)]" : "text-slate-200 hover:bg-white/10"}`}
+                onClick={() => onPlodScopeChange?.("client")}
+              >
+                Client Plods
+              </button>
+            </div>
+          </div>
+
+          <label className="block text-xs text-slate-300">
+            Date From
+            <input
+              type="date"
+              className="input mt-1 h-10 text-[11px]"
+              value={dateRange?.from || ""}
+              onChange={(e) => onDateChange?.("from", e.target.value)}
+            />
+          </label>
+
+          <label className="block text-xs text-slate-300">
+            Date To
+            <input
+              type="date"
+              className="input mt-1 h-10 text-[11px]"
+              value={dateRange?.to || ""}
+              onChange={(e) => onDateChange?.("to", e.target.value)}
+            />
+          </label>
         </div>
+      </section>
 
-        <input
-          type="date"
-          className="input input-sm !w-auto"
-          value={dateRange?.from || ""}
-          onChange={(e) => onDateChange?.("from", e.target.value)}
-        />
-        <input
-          type="date"
-          className="input input-sm !w-auto"
-          value={dateRange?.to || ""}
-          onChange={(e) => onDateChange?.("to", e.target.value)}
-        />
-      </div>
-
-      <div className="table-container p-3">
+      <section className="card overflow-hidden">
+        <div className="table-container p-3">
         {plodsLoading ? (
           <div className="flex items-center gap-2 text-sm text-slate-300">
             <Spinner size={16} /> Loading…
@@ -117,7 +130,8 @@ export function HistoryTable({
             </table>
           </div>
         )}
-      </div>
+        </div>
+      </section>
     </div>
   );
 }
