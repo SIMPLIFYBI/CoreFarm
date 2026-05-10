@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import {
@@ -262,175 +263,177 @@ export default function Header() {
       </div>
 
       {/* Drawer + overlay (fresh rebuild) */}
-      {drawerMounted && (
-        <div className="fixed inset-0 z-[999]">
-          <div
-            className={[
-              "fixed inset-0 bg-black/70 transition-opacity duration-300",
-              drawerOpen ? "opacity-100" : "opacity-0 pointer-events-none",
-            ].join(" ")}
-            onClick={closeDrawer}
-            aria-hidden="true"
-          />
-
-          <aside
-            id="app-nav-drawer"
-            className={[
-              "fixed left-0 top-0 z-10 flex h-dvh w-[272px] max-w-[72vw] flex-col border-r border-white/10 shadow-2xl bg-slate-950",
-              "transform transition-transform duration-300 ease-out will-change-transform",
-              drawerOpen ? "translate-x-0" : "-translate-x-full",
-            ].join(" ")}
-            style={{ backgroundColor: "#020617" }}
-            role="dialog"
-            aria-modal="true"
-          >
-            <div className="p-4 border-b border-white/10 flex items-center justify-between">
-              <Link href="/map" className="flex items-center" onClick={closeDrawer} aria-label="WorkMine home">
-                <WorkMineLogo compact />
-              </Link>
-              <button
-                type="button"
-                className="h-10 w-10 inline-flex items-center justify-center rounded-full text-slate-100 hover:bg-white/10 transition-base focus-ring"
-                aria-label="Close menu"
+      {drawerMounted && typeof document !== "undefined"
+        ? createPortal(
+            <div className="fixed inset-0 z-[999]">
+              <div
+                className={[
+                  "fixed inset-0 bg-black/70 transition-opacity duration-300",
+                  drawerOpen ? "opacity-100" : "opacity-0 pointer-events-none",
+                ].join(" ")}
                 onClick={closeDrawer}
+                aria-hidden="true"
+              />
+
+              <aside
+                id="app-nav-drawer"
+                className={[
+                  "fixed left-0 top-0 z-10 flex h-dvh w-[272px] max-w-[72vw] flex-col border-r border-white/10 shadow-2xl bg-slate-950",
+                  "transform transition-transform duration-300 ease-out will-change-transform",
+                  drawerOpen ? "translate-x-0" : "-translate-x-full",
+                ].join(" ")}
+                style={{ backgroundColor: "#020617" }}
+                role="dialog"
+                aria-modal="true"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                </svg>
-              </button>
-            </div>
+                <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                  <Link href="/map" className="flex items-center" onClick={closeDrawer} aria-label="WorkMine home">
+                    <WorkMineLogo compact />
+                  </Link>
+                  <button
+                    type="button"
+                    className="h-10 w-10 inline-flex items-center justify-center rounded-full text-slate-100 hover:bg-white/10 transition-base focus-ring"
+                    aria-label="Close menu"
+                    onClick={closeDrawer}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                </div>
 
-            <nav className="min-h-0 flex-1 overflow-y-auto p-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:w-0">
-              <div className="space-y-1">
-                {navTabs.map((t) => {
-                  const isProjects = t.href === "/projects";
-                  const active = pathname === t.href || pathname?.startsWith(t.href + "/");
-                  const Icon = t.icon;
+                <nav className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-3 pb-[calc(env(safe-area-inset-bottom)+6.5rem)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:w-0">
+                  <div className="space-y-1">
+                    {navTabs.map((t) => {
+                      const isProjects = t.href === "/projects";
+                      const active = pathname === t.href || pathname?.startsWith(t.href + "/");
+                      const Icon = t.icon;
 
-                  if (!isProjects) {
-                    return (
-                      <Link
-                        key={t.href}
-                        href={t.href}
-                        className={[
-                          "flex items-center gap-3 px-3 py-2 rounded-xl text-[0.7rem] transition-base",
-                          active ? "bg-white/10 text-white" : "text-slate-200 hover:bg-white/5 hover:text-white",
-                        ].join(" ")}
-                      >
-                        <span
-                          className={[
-                            "inline-flex h-9 w-9 items-center justify-center rounded-full",
-                            "border border-white/10",
-                            active ? "bg-white/15 text-white" : "bg-white/5 text-slate-100",
-                          ].join(" ")}
-                        >
-                          <Icon />
-                        </span>
-                        <span className="font-medium leading-5">{t.label}</span>
-                      </Link>
-                    );
-                  }
+                      if (!isProjects) {
+                        return (
+                          <Link
+                            key={t.href}
+                            href={t.href}
+                            className={[
+                              "flex items-center gap-3 px-3 py-2 rounded-xl text-[0.7rem] transition-base",
+                              active ? "bg-white/10 text-white" : "text-slate-200 hover:bg-white/5 hover:text-white",
+                            ].join(" ")}
+                          >
+                            <span
+                              className={[
+                                "inline-flex h-9 w-9 items-center justify-center rounded-full",
+                                "border border-white/10",
+                                active ? "bg-white/15 text-white" : "bg-white/5 text-slate-100",
+                              ].join(" ")}
+                            >
+                              <Icon />
+                            </span>
+                            <span className="font-medium leading-5">{t.label}</span>
+                          </Link>
+                        );
+                      }
 
-                  // Projects accordion item (in-place; no duplicate item)
-                  return (
-                    <div key={t.href} className="rounded-xl">
-                      <button
-                        type="button"
-                        onClick={() => setProjectsExpanded((v) => !v)}
-                        className={[
-                          "w-full flex items-center gap-3 px-3 py-2 rounded-xl text-[0.7rem] transition-base",
-                          active ? "bg-white/10 text-white" : "text-slate-200 hover:bg-white/5 hover:text-white",
-                        ].join(" ")}
-                        aria-expanded={projectsExpanded}
-                        aria-controls="projects-submenu"
-                      >
-                        <span
-                          className={[
-                            "inline-flex h-9 w-9 items-center justify-center rounded-full",
-                            "border border-white/10",
-                            active ? "bg-white/15 text-white" : "bg-white/5 text-slate-100",
-                          ].join(" ")}
-                        >
-                          <Icon />
-                        </span>
+                      return (
+                        <div key={t.href} className="rounded-xl">
+                          <button
+                            type="button"
+                            onClick={() => setProjectsExpanded((v) => !v)}
+                            className={[
+                              "w-full flex items-center gap-3 px-3 py-2 rounded-xl text-[0.7rem] transition-base",
+                              active ? "bg-white/10 text-white" : "text-slate-200 hover:bg-white/5 hover:text-white",
+                            ].join(" ")}
+                            aria-expanded={projectsExpanded}
+                            aria-controls="projects-submenu"
+                          >
+                            <span
+                              className={[
+                                "inline-flex h-9 w-9 items-center justify-center rounded-full",
+                                "border border-white/10",
+                                active ? "bg-white/15 text-white" : "bg-white/5 text-slate-100",
+                              ].join(" ")}
+                            >
+                              <Icon />
+                            </span>
 
-                        <span className="font-medium flex-1 text-left leading-5">{t.label}</span>
+                            <span className="font-medium flex-1 text-left leading-5">{t.label}</span>
 
-                        <span className="text-slate-300/70 text-[0.7rem]">{projectsExpanded ? "▾" : "▸"}</span>
-                      </button>
+                            <span className="text-slate-300/70 text-[0.7rem]">{projectsExpanded ? "▾" : "▸"}</span>
+                          </button>
 
-                      {projectsExpanded && (
-                        <div id="projects-submenu" className="mt-1 ml-[52px] space-y-1">
-                          {projectsChildren.map((c) => {
-                            const childActive = activeProjectsChildHref === c.href;
-                            return (
-                              <Link
-                                key={c.href}
-                                href={c.href}
-                                className={[
-                                  "block px-3 py-2 rounded-lg text-[0.7rem] transition-base",
-                                  childActive
-                                    ? "bg-white/10 text-white"
-                                    : "text-slate-200 hover:bg-white/5 hover:text-white",
-                                ].join(" ")}
-                                onClick={closeDrawer}
-                              >
-                                {c.label}
-                              </Link>
-                            );
-                          })}
+                          {projectsExpanded && (
+                            <div id="projects-submenu" className="mt-1 ml-[52px] space-y-1">
+                              {projectsChildren.map((c) => {
+                                const childActive = activeProjectsChildHref === c.href;
+                                return (
+                                  <Link
+                                    key={c.href}
+                                    href={c.href}
+                                    className={[
+                                      "block px-3 py-2 rounded-lg text-[0.7rem] transition-base",
+                                      childActive
+                                        ? "bg-white/10 text-white"
+                                        : "text-slate-200 hover:bg-white/5 hover:text-white",
+                                    ].join(" ")}
+                                    onClick={closeDrawer}
+                                  >
+                                    {c.label}
+                                  </Link>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                      );
+                    })}
+                  </div>
 
-              <div className="mt-4 pt-4 border-t border-white/10">
-                {email ? (
-                  <div className="space-y-2">
-                    <div className="px-3 text-[0.6rem] text-slate-300">
-                      Signed in as <span className="font-medium text-slate-100">{email}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleSignOut}
-                      className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-[0.7rem] text-slate-200 hover:bg-white/5 hover:text-white transition-base"
-                    >
-                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-100">
-                        <IconLogin />
-                      </span>
-                      <span className="font-medium leading-5">Sign out</span>
-                    </button>
+                  <div className="mt-4 pt-4 border-t border-white/10">
+                    {email ? (
+                      <div className="space-y-2">
+                        <div className="px-3 text-[0.6rem] text-slate-300">
+                          Signed in as <span className="font-medium text-slate-100">{email}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleSignOut}
+                          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-[0.7rem] text-slate-200 hover:bg-white/5 hover:text-white transition-base"
+                        >
+                          <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-100">
+                            <IconLogin />
+                          </span>
+                          <span className="font-medium leading-5">Sign out</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {isAnonymousDemo ? <div className="px-3 text-[0.55rem] uppercase tracking-[0.18em] text-amber-200/80">Browsing public demo</div> : null}
+                        <Link
+                          href="/?mode=signin"
+                          className="flex items-center gap-3 px-3 py-2 rounded-xl text-[0.7rem] text-slate-200 hover:bg-white/5 hover:text-white transition-base"
+                        >
+                          <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-100">
+                            <IconLogin />
+                          </span>
+                          <span className="font-medium leading-5">Sign in</span>
+                        </Link>
+                        <Link
+                          href="/?mode=signup"
+                          className="flex items-center gap-3 px-3 py-2 rounded-xl text-[0.7rem] text-slate-200 hover:bg-white/5 hover:text-white transition-base"
+                        >
+                          <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-100">
+                            <IconUser />
+                          </span>
+                          <span className="font-medium leading-5">Create account</span>
+                        </Link>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="space-y-2">
-                    {isAnonymousDemo ? <div className="px-3 text-[0.55rem] uppercase tracking-[0.18em] text-amber-200/80">Browsing public demo</div> : null}
-                    <Link
-                      href="/?mode=signin"
-                      className="flex items-center gap-3 px-3 py-2 rounded-xl text-[0.7rem] text-slate-200 hover:bg-white/5 hover:text-white transition-base"
-                    >
-                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-100">
-                        <IconLogin />
-                      </span>
-                      <span className="font-medium leading-5">Sign in</span>
-                    </Link>
-                    <Link
-                      href="/?mode=signup"
-                      className="flex items-center gap-3 px-3 py-2 rounded-xl text-[0.7rem] text-slate-200 hover:bg-white/5 hover:text-white transition-base"
-                    >
-                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-100">
-                        <IconUser />
-                      </span>
-                      <span className="font-medium leading-5">Create account</span>
-                    </Link>
-                  </div>
-                )}
-              </div>
-            </nav>
-          </aside>
-        </div>
-      )}
+                </nav>
+              </aside>
+            </div>,
+            document.body
+          )
+        : null}
     </header>
   );
 }

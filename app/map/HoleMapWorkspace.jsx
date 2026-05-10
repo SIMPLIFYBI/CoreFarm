@@ -5679,8 +5679,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
               <div className="relative border-b border-white/10 px-4 py-4 md:hidden">
                 <div className="flex flex-col items-start gap-3 min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
                   <div>
-                    <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Mobile Map View</div>
-                    <div className="mt-1 text-lg font-semibold text-white">{mobileSelectionTitle}</div>
+                    <div className="text-lg font-semibold text-white">{mobileSelectionTitle}</div>
                   </div>
                   <div className="flex w-full flex-wrap items-center gap-2 min-[360px]:w-auto">
                     <button

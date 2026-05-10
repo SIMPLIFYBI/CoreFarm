@@ -2068,7 +2068,7 @@ function DrillholeVizPageInner({ projectScope: externalProjectScope }) {
                       ) : null}
                     </div>
 
-                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="hidden gap-2 sm:grid-cols-2 xl:grid xl:grid-cols-4">
                       <div className="rounded-2xl border border-white/10 bg-white/[0.045] px-3 py-3">
                         <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Project</div>
                         <div className="mt-1 truncate text-sm font-medium text-slate-100">{selectedProjectName}</div>

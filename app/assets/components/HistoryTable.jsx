@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 
-export default function HistoryTable({ TABLE_HEAD_ROW, TABLE_ROW }) {
+export default function HistoryTable({ TABLE_HEAD_ROW, TABLE_ROW, embedded = false }) {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -22,7 +22,7 @@ export default function HistoryTable({ TABLE_HEAD_ROW, TABLE_ROW }) {
   }, []);
 
   return (
-    <div className="card p-4">
+    <div className={embedded ? "" : "card p-4"}>
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-lg font-semibold text-slate-100">Asset History</h2>
       </div>

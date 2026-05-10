@@ -2079,7 +2079,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
         <div className="space-y-4">
           {groupedFilteredHoles.map((group) => {
             const projectSelectedCount = group.holes.filter((hole) => selectedHoleIds.includes(hole.id)).length;
-            const isExpanded = expandedProjectIds[group.id] ?? true;
+            const isExpanded = expandedProjectIds[group.id] ?? false;
 
             return (
               <section key={group.id} className="overflow-hidden rounded-[30px] border border-white/10 bg-slate-950/40 shadow-[0_24px_80px_rgba(2,6,23,0.28)]">

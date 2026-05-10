@@ -43,6 +43,7 @@ function CoreTasksPageInner() {
   const requestedHoleId = searchParams.get("holeId") || "";
   const requestedFrom = searchParams.get("from") || "";
   const initialTab = normaliseCoreTasksTab(requestedTab);
+  const requestedAddCoreMode = requestedTab === "bulkuploader" ? "bulk" : "quick";
   const [tab, setTab] = useState(initialTab);
   const [projectScope, setProjectScope] = useState("own"); // 'own' | 'shared'
   const [isMobileViewport, setIsMobileViewport] = useState(false);
@@ -155,7 +156,7 @@ function CoreTasksPageInner() {
           </div>
         ) : tab === "addcore" ? (
           <div className="card">
-            <AddCoreTab projectScope={projectScope} />
+            <AddCoreTab projectScope={projectScope} requestedMode={requestedAddCoreMode} />
           </div>
         ) : tab === "coretasks" ? (
           <div className="card overflow-hidden">
