@@ -2137,25 +2137,36 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
                   </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  {!isCreateMode ? (
-                    <span className={`rounded-full border px-3 py-1.5 text-xs font-medium ${getWorkflowMeta(classifyHole(selectedHole)).className}`}>
-                      {getWorkflowMeta(classifyHole(selectedHole)).label}
+                <div className="flex items-start justify-between gap-3 lg:min-w-[280px] lg:justify-end">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {!isCreateMode ? (
+                      <span className={`rounded-full border px-3 py-1.5 text-xs font-medium ${getWorkflowMeta(classifyHole(selectedHole)).className}`}>
+                        {getWorkflowMeta(classifyHole(selectedHole)).label}
+                      </span>
+                    ) : null}
+                    {!isCreateMode && selectedHole?.current_workflow_id ? (
+                      <span
+                        className="rounded-full border px-3 py-1.5 text-xs font-medium"
+                        style={getWorkflowBadgeStyle(getWorkflowStatusMeta(selectedHole.current_workflow_status_key).color)}
+                      >
+                        {getWorkflowAssignmentLabel(selectedHole)}
+                      </span>
+                    ) : null}
+                    <span className={`rounded-full border px-3 py-1.5 text-xs font-medium ${getStateMeta(form.state).className}`}>
+                      {getStateMeta(form.state).label}
                     </span>
-                  ) : null}
-                  {!isCreateMode && selectedHole?.current_workflow_id ? (
-                    <span
-                      className="rounded-full border px-3 py-1.5 text-xs font-medium"
-                      style={getWorkflowBadgeStyle(getWorkflowStatusMeta(selectedHole.current_workflow_status_key).color)}
-                    >
-                      {getWorkflowAssignmentLabel(selectedHole)}
-                    </span>
-                  ) : null}
-                  <span className={`rounded-full border px-3 py-1.5 text-xs font-medium ${getStateMeta(form.state).className}`}>
-                    {getStateMeta(form.state).label}
-                  </span>
-                  <button type="button" className="btn btn-3d-glass" onClick={closeHole} disabled={saving || deleting}>
-                    Close
+                  </div>
+                  <button
+                    type="button"
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-slate-200 transition-base hover:bg-white/[0.1] hover:text-white focus-ring disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={closeHole}
+                    disabled={saving || deleting}
+                    aria-label="Close hole details"
+                    title="Close"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                    </svg>
                   </button>
                 </div>
               </div>
