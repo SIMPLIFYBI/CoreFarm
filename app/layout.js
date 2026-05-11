@@ -20,8 +20,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "CoreFarm",
-  description: "CoreFarm — plan intervals, log actuals, and track progress across your drilling program.",
+  title: "WorkMine",
+  description: "WorkMine — plan intervals, log actuals, and track progress across your drilling program.",
   icons: {
     icon: "/icon.svg",
     shortcut: "/icon.svg",

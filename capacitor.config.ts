@@ -2,10 +2,10 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.careyard.app',
-  appName: 'corefarm',
+  appName: 'WorkMine',
   webDir: 'public',
   server: {
-    url: 'https://core-farm.vercel.app',
+    url: 'https://workmine.simplifybi.com',
     cleartext: false
   }
 };
