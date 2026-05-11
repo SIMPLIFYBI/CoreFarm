@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
-import { IconCore, IconAdmin, IconTeam, IconUser, IconReport, IconClipboard, IconCoreTasks, IconMap, AssetIcon, IconPlods } from "./icons";
+import { IconCore, IconDrillholeViz, IconAdmin, IconTeam, IconUser, IconReport, IconClipboard, IconCoreTasks, IconMap, AssetIcon, IconPlods } from "./icons";
 
 const tabs = [
   { href: "/map", label: "Map", icon: IconMap },
@@ -12,7 +12,7 @@ const tabs = [
   { href: "/activity", label: "Activity", icon: IconClipboard },
   { href: "/plods", label: "Plods", icon: IconPlods },
   { href: "/coretasks", label: "Drilling", icon: IconCoreTasks },
-  { href: "/drillhole-viz", label: "Drillhole Viz", icon: IconCore },
+  { href: "/drillhole-viz", label: "Drillhole Viz", icon: IconDrillholeViz },
   { href: "/consumables", label: "Consumables", icon: IconCore },
   { href: "/projects", label: "Projects", icon: IconClipboard },
   { href: "/assets", label: "Assets", icon: AssetIcon },

@@ -96,7 +96,7 @@ export function HistoryTable({
           </div>
         ) : plods.length === 0 ? (
           <div className="text-sm text-slate-300">
-            {plodScope === "client" ? "No client plods in range." : "No plods in range."}
+            {plodScope === "client" ? "No client plods match the current filters." : "No plods match the current filters."}
           </div>
         ) : (
           <div className="overflow-x-auto">

@@ -310,13 +310,47 @@ export default function TeamPage() {
 
       {tab === 'org' && (
         <div className="space-y-6">
+          <section className="overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.94),rgba(2,6,23,0.96))] shadow-[0_24px_80px_rgba(2,6,23,0.34)] backdrop-blur-xl">
+            <div className="border-b border-white/10 px-5 py-4 md:px-6">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-100/75">Organisation</div>
+              <div className="mt-2 text-xl font-semibold text-white">Manage workspace identity and billing defaults</div>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+                Switch between organisations, create a new workspace, and keep your default commercial settings aligned with the rest of the platform.
+              </p>
+            </div>
+            <div className="grid gap-4 px-5 py-5 md:px-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
+              <div className="rounded-[26px] border border-white/10 bg-white/[0.04] p-4">
+                <div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Current workspace</div>
+                <div className="mt-3 text-lg font-semibold text-white">
+                  {currentOrg?.organizations?.name || "No organisation selected"}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-300">
+                  <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5">
+                    Role: {myRole || '—'}
+                  </span>
+                  {selectedOrgIsDemo ? (
+                    <span className="rounded-full border border-amber-300/30 bg-amber-400/10 px-3 py-1.5 text-amber-100">
+                      Demo workspace
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+              <div className="rounded-[26px] border border-cyan-300/16 bg-cyan-400/[0.05] p-4">
+                <div className="text-[11px] uppercase tracking-[0.2em] text-cyan-100/80">Quick note</div>
+                <p className="mt-3 text-sm leading-6 text-slate-200">
+                  Organisation settings affect invitations, billing defaults, and which connected workspaces your team is operating inside.
+                </p>
+              </div>
+            </div>
+          </section>
+
           {memberships.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-end gap-3">
-                <label className="flex min-w-[180px] flex-col gap-1.5 text-sm text-gray-700">
-                  <span>Organization</span>
+            <section className="rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(2,6,23,0.94))] p-5 shadow-[0_24px_80px_rgba(2,6,23,0.28)] backdrop-blur-xl md:p-6">
+              <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <label className="flex min-w-0 flex-1 flex-col gap-2 text-sm text-slate-200">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Organisation switcher</span>
                   <select
-                    className="select-gradient-sm w-auto"
+                    className="select-gradient-sm w-full min-w-0"
                     value={selectedOrgId}
                     onChange={(e) => {
                       const val = e.target.value;
@@ -337,37 +371,61 @@ export default function TeamPage() {
                     {myRole === 'admin' && <option value="__create__">+ Create New...</option>}
                   </select>
                 </label>
-                <span className="ml-2 text-xs text-gray-600">Your role: {myRole || '—'}</span>
+                <div className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs text-slate-300">
+                  Your role: {myRole || '—'}
+                </div>
               </div>
 
               {selectedOrgIsDemo ? (
-                <div className="rounded-2xl border border-amber-300/30 bg-amber-50/90 px-4 py-3 text-sm text-amber-900 shadow-sm">
-                  <div className="font-semibold uppercase tracking-[0.18em] text-[10px] text-amber-700">Demo Org Active</div>
+                <div className="mt-4 rounded-[24px] border border-amber-300/24 bg-amber-400/10 px-4 py-3 text-sm text-amber-100 shadow-[0_18px_42px_rgba(120,53,15,0.16)]">
+                  <div className="font-semibold uppercase tracking-[0.18em] text-[10px] text-amber-200/85">Demo Org Active</div>
                   <p className="mt-1 leading-6">
                     You are currently in the shared demo workspace. When you create or join a real organization, the app will switch you there automatically the first time.
                   </p>
                 </div>
               ) : null}
-            </div>
+            </section>
           )}
 
-          <form onSubmit={createOrg} className="card p-4">
-            <h2 className="font-medium mb-2">Create organization</h2>
-            <div className="flex gap-2 items-center">
-              <input type="text" className="input w-80" placeholder="Organization name" value={orgName} onChange={(e)=>setOrgName(e.target.value)} />
-              <button type="submit" className="btn btn-primary">Create</button>
+          <form
+            onSubmit={createOrg}
+            className="rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(2,6,23,0.94))] p-5 shadow-[0_24px_80px_rgba(2,6,23,0.28)] backdrop-blur-xl md:p-6"
+          >
+            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-white">Create organisation</h2>
+                <p className="mt-1 text-sm text-slate-300">Create a new workspace and become its initial admin.</p>
+              </div>
             </div>
-            <p className="text-xs text-gray-500 mt-2">You become the admin and can invite your team.</p>
+            <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center">
+              <input
+                type="text"
+                className="input w-full md:max-w-[360px]"
+                placeholder="Organization name"
+                value={orgName}
+                onChange={(e)=>setOrgName(e.target.value)}
+              />
+              <button type="submit" className="btn btn-primary md:self-end">Create</button>
+            </div>
+            <p className="mt-3 text-xs text-slate-400">You become the admin and can invite your team immediately.</p>
           </form>
 
           {selectedOrgId && (
-            <form onSubmit={saveOrgBillingDefaults} className="card p-4">
-              <h2 className="font-medium mb-2">Billing defaults (optional)</h2>
+            <form
+              onSubmit={saveOrgBillingDefaults}
+              className="rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(2,6,23,0.94))] p-5 shadow-[0_24px_80px_rgba(2,6,23,0.28)] backdrop-blur-xl md:p-6"
+            >
+              <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-white">Billing defaults</h2>
+                  <p className="text-sm text-slate-300">Optional commercial settings used across the organisation.</p>
+                </div>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <label className="text-sm">
-                  Currency
+                <label className="text-sm text-slate-200">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Currency</span>
                   <select
-                    className="select-gradient-sm mt-1"
+                    className="select-gradient-sm mt-2"
                     value={orgCurrency}
                     onChange={(e) => setOrgCurrency(e.target.value)}
                     disabled={myRole !== "admin"}
@@ -382,14 +440,14 @@ export default function TeamPage() {
                   </select>
                 </label>
 
-                <label className="text-sm">
-                  Tax rate (%)
+                <label className="text-sm text-slate-200">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Tax rate (%)</span>
                   <input
                     type="number"
                     step="0.01"
                     min="0"
                     max="100"
-                    className="input mt-1"
+                    className="input mt-2"
                     placeholder="e.g. 10"
                     value={orgTaxRate}
                     onChange={(e) => setOrgTaxRate(e.target.value)}
@@ -399,7 +457,7 @@ export default function TeamPage() {
               </div>
 
               <div className="mt-3 flex items-center justify-between">
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-slate-400">
                   Applied as default costing settings. Leave blank to keep unset.
                 </p>
                 <button

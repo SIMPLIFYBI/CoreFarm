@@ -106,6 +106,15 @@ export function IconCoreTasks(props) {
     </svg>
   );
 }
+
+export function IconDrillholeViz(props) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" {...props}>
+      <rect x="8" y="3.5" width="8" height="17" rx="2" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M10.5 8h3M10.5 12h3M10.5 16h3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
   export const VehicleIcon = (props) => (
     <svg
       viewBox="0 0 24 24"

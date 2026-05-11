@@ -8,6 +8,7 @@ import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import {
   IconCore,
+  IconDrillholeViz,
   IconAdmin,
   IconTeam,
   IconUser,
@@ -194,7 +195,7 @@ export default function Header() {
     { href: "/dashboard", label: "Reports", icon: IconReport },
     { href: "/activity", label: "Activity", icon: IconClipboard },
     { href: "/coretasks", label: "Drilling", icon: IconCoreTasks },
-    { href: "/drillhole-viz", label: "Drillhole Viz", icon: IconCore },
+    { href: "/drillhole-viz", label: "Drillhole Viz", icon: IconDrillholeViz },
     { href: "/consumables", label: "Consumables", icon: IconCore },
     { href: "/projects", label: "Projects", icon: IconClipboard },
     { href: "/workflows", label: "Workflow Studio", icon: IconWorkflow },
