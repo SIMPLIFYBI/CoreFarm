@@ -820,19 +820,19 @@ function FilterMultiSelect({ label, values, onChange, emptyLabel, options }) {
   };
 
   return (
-    <div className="flex flex-col gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+    <div className="min-w-0 flex flex-col gap-2 text-[10px] uppercase tracking-[0.16em] text-slate-400 md:text-[11px] md:tracking-[0.18em]">
       <div>{label}</div>
-      <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-2">
+      <div className="min-w-0 rounded-2xl border border-white/10 bg-slate-950/45 p-2">
         <button
           type="button"
           onClick={() => setOpen((current) => !current)}
-          className="flex w-full items-center justify-between gap-3 rounded-xl px-2 py-1.5 text-left transition hover:bg-white/[0.04]"
+          className="flex w-full min-w-0 items-center justify-between gap-2 rounded-xl px-1.5 py-1.5 text-left transition hover:bg-white/[0.04] md:gap-3 md:px-2"
         >
-          <div className="min-w-0">
-            <div className="truncate text-sm font-medium normal-case tracking-normal text-slate-100">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[13px] font-medium normal-case tracking-normal text-slate-100 md:text-sm">
               {selectedLabels.length ? selectedLabels.join(", ") : emptyLabel}
             </div>
-            <div className="mt-1 text-[11px] normal-case tracking-normal text-slate-400">
+            <div className="mt-1 text-[10px] normal-case tracking-normal text-slate-400 md:text-[11px]">
               {selectedLabels.length ? `${selectedLabels.length} selected` : "No filters applied"}
             </div>
           </div>
@@ -2280,30 +2280,30 @@ function AdvancedFilterPanel({
 }) {
   return (
     <div className={[
-      "mt-3 rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(2,6,23,0.94))] p-4 shadow-[0_24px_80px_rgba(2,6,23,0.36)] backdrop-blur-xl md:p-5",
+      "mt-3 rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(2,6,23,0.94))] p-3 shadow-[0_24px_80px_rgba(2,6,23,0.36)] backdrop-blur-xl md:p-5",
       containerClassName,
     ].join(" ")}>
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div>
+        <div className="min-w-0">
           <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-100/75">Detailed Filters</div>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+          <p className="mt-2 max-w-2xl text-[13px] leading-5 text-slate-300 md:text-sm md:leading-6">
             Narrow the map by drilling type, hole progress, asset status, and mapped locations without leaving the workspace.
           </p>
         </div>
-        <div className="flex items-center gap-2 self-start">
-          <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-medium text-slate-200">
+        <div className="flex flex-wrap items-center gap-2 self-start">
+          <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1.5 text-[11px] font-medium text-slate-200 md:px-3 md:text-xs">
             {activeFilterCount} active filter{activeFilterCount === 1 ? "" : "s"}
           </span>
           <button
             type="button"
-            className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-medium text-slate-100 transition hover:bg-white/[0.1]"
+            className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1.5 text-[11px] font-medium text-slate-100 transition hover:bg-white/[0.1] md:px-3 md:text-xs"
             onClick={onClear}
           >
             Clear all
           </button>
           <button
             type="button"
-            className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-medium text-slate-100 transition hover:bg-white/[0.1]"
+            className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1.5 text-[11px] font-medium text-slate-100 transition hover:bg-white/[0.1] md:px-3 md:text-xs"
             onClick={onClose}
           >
             Close
@@ -2312,20 +2312,20 @@ function AdvancedFilterPanel({
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
-        <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4 xl:col-span-2">
+        <div className="min-w-0 rounded-[24px] border border-white/10 bg-white/[0.03] p-3 md:p-4 xl:col-span-2">
           <div className="text-[11px] uppercase tracking-[0.2em] text-slate-300">Project Scope</div>
           <div className="mt-3 grid gap-3">
-            <div className="inline-flex w-full flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-slate-900/45 p-1.5 xl:w-auto">
+            <div className="grid w-full grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-slate-900/45 p-1.5 xl:inline-flex xl:w-auto xl:flex-wrap xl:items-center">
               <button
                 type="button"
-                className={`rounded-xl px-4 py-2.5 text-sm font-medium transition ${projectScope === "own" ? "bg-amber-400 text-slate-950 shadow-[0_12px_28px_rgba(251,191,36,0.28)]" : "text-slate-200 hover:bg-white/8"}`}
+                className={`min-w-0 rounded-xl px-3 py-2.5 text-xs font-medium transition md:px-4 md:text-sm ${projectScope === "own" ? "bg-amber-400 text-slate-950 shadow-[0_12px_28px_rgba(251,191,36,0.28)]" : "text-slate-200 hover:bg-white/8"}`}
                 onClick={() => onProjectScopeChange("own")}
               >
                 My Projects
               </button>
               <button
                 type="button"
-                className={`rounded-xl px-4 py-2.5 text-sm font-medium transition ${projectScope === "shared" ? "bg-cyan-300 text-slate-950 shadow-[0_12px_28px_rgba(34,211,238,0.25)]" : "text-slate-200 hover:bg-white/8"}`}
+                className={`min-w-0 rounded-xl px-3 py-2.5 text-xs font-medium transition md:px-4 md:text-sm ${projectScope === "shared" ? "bg-cyan-300 text-slate-950 shadow-[0_12px_28px_rgba(34,211,238,0.25)]" : "text-slate-200 hover:bg-white/8"}`}
                 onClick={() => onProjectScopeChange("shared")}
               >
                 Client Shared
@@ -2333,12 +2333,12 @@ function AdvancedFilterPanel({
             </div>
 
             <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-            <label className="flex flex-col gap-2 text-xs uppercase tracking-[0.18em] text-slate-400">
+            <label className="min-w-0 flex flex-col gap-2 text-xs uppercase tracking-[0.18em] text-slate-400">
               Project Filter
               <select
                 value={projectFilter}
                 onChange={(event) => onProjectFilterChange(event.target.value)}
-                className="h-12 rounded-2xl border border-white/10 bg-slate-950/55 px-4 text-sm font-medium normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40"
+                className="h-12 w-full min-w-0 rounded-2xl border border-white/10 bg-slate-950/55 px-3 text-[13px] font-medium normal-case tracking-normal text-slate-100 outline-none transition focus:border-cyan-300/40 md:px-4 md:text-sm"
               >
                 <option value="">All visible projects ({totalProjects})</option>
                 {projectOptions.map((project) => (
@@ -2352,7 +2352,7 @@ function AdvancedFilterPanel({
             {projectFilter ? (
               <button
                 type="button"
-                className="inline-flex h-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1]"
+                className="inline-flex h-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] px-3 text-[13px] font-medium text-slate-100 transition hover:bg-white/[0.1] md:px-4 md:text-sm"
                 onClick={() => onProjectFilterChange("")}
               >
                 Clear project
@@ -2362,7 +2362,7 @@ function AdvancedFilterPanel({
           </div>
         </div>
 
-        <div className="rounded-[24px] border border-cyan-300/14 bg-cyan-400/[0.04] p-4">
+        <div className="min-w-0 rounded-[24px] border border-cyan-300/14 bg-cyan-400/[0.04] p-3 md:p-4">
           <div className="text-[11px] uppercase tracking-[0.2em] text-cyan-100/80">Drillholes</div>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <FilterMultiSelect
@@ -2391,7 +2391,7 @@ function AdvancedFilterPanel({
           </div>
         </div>
 
-        <div className="rounded-[24px] border border-rose-300/14 bg-rose-400/[0.04] p-4">
+        <div className="min-w-0 rounded-[24px] border border-rose-300/14 bg-rose-400/[0.04] p-3 md:p-4">
           <div className="text-[11px] uppercase tracking-[0.2em] text-rose-100/80">Assets</div>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <FilterMultiSelect
@@ -2461,8 +2461,7 @@ function AdvancedFilterDrawer({ open, onClose, children }) {
     >
       <div
         className={[
-          "w-full rounded-t-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.99))] shadow-[0_-24px_80px_rgba(2,6,23,0.48)] transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.18,0.9,0.22,1)]",
-          "max-h-[88vh] overflow-hidden",
+          "flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.99))] shadow-[0_-24px_80px_rgba(2,6,23,0.48)] transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.18,0.9,0.22,1)]",
           visible ? "translate-y-0 opacity-100" : "translate-y-[18vh] opacity-0",
         ].join(" ")}
         onClick={(event) => event.stopPropagation()}
@@ -2470,7 +2469,7 @@ function AdvancedFilterDrawer({ open, onClose, children }) {
         aria-modal="true"
         aria-labelledby="map-advanced-filters-title"
       >
-        <div className="mx-auto max-w-5xl overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] pt-3 md:px-6">
+        <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col overflow-y-auto overscroll-y-contain px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] pt-3 md:px-6">
           <div className="mx-auto h-1.5 w-12 rounded-full bg-white/15" />
           {children}
         </div>
@@ -5579,7 +5578,7 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   };
 
   const mobileSelectionTitle = mobilePanelTab === "holes"
-    ? selectedHole?.hole_id || "Hole attributes"
+    ? (selectedHole?.hole_id ? `Hole ID : ${selectedHole.hole_id}` : "")
     : selectedAsset?.name || "Mapped assets";
 
   const attributesTab = isMobileViewport ? mobilePanelTab : navigatorTab;
@@ -5597,6 +5596,40 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
   return (
     <div className="min-h-screen overflow-x-hidden bg-transparent px-3 pb-24 pt-0 md:px-5 md:pb-8 md:pt-0">
       <div className="mx-auto max-w-[1600px] space-y-4 overflow-x-hidden">
+        <div
+          className={[
+            "fixed right-3 z-30 flex flex-col gap-2 md:right-4",
+            isMapFullscreen ? "top-3 md:top-4" : "top-[calc(env(safe-area-inset-top,0px)+5.25rem)] md:top-[calc(env(safe-area-inset-top,0px)+5.75rem)]",
+          ].join(" ")}
+        >
+          <button
+            type="button"
+            aria-label="Open filters"
+            title="Open filters"
+            className="relative inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-slate-950/88 text-slate-100 shadow-[0_18px_42px_rgba(2,6,23,0.3)] backdrop-blur-xl transition hover:bg-slate-900/92"
+            onClick={() => setShowAdvancedFilters(true)}
+          >
+            <FilterIcon className="h-[18px] w-[18px] text-cyan-200" />
+            {activeAdvancedFilterCount ? (
+              <span className="absolute -right-1.5 -top-1.5 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-100">
+                {activeAdvancedFilterCount}
+              </span>
+            ) : null}
+          </button>
+
+          <button
+            type="button"
+            aria-label={isMapFullscreen ? "Exit full screen map" : "Open full screen map"}
+            title={isMapFullscreen ? "Exit full screen map" : "Open full screen map"}
+            className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-slate-950/88 text-slate-100 shadow-[0_18px_42px_rgba(2,6,23,0.3)] backdrop-blur-xl transition hover:bg-slate-900/92"
+            onClick={() => {
+              void toggleMapFullscreen();
+            }}
+          >
+            {isMapFullscreen ? <FullscreenExitIcon className="h-[18px] w-[18px]" /> : <FullscreenEnterIcon className="h-[18px] w-[18px]" />}
+          </button>
+        </div>
+
         <section className="hidden overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/40 shadow-[0_30px_120px_rgba(2,6,23,0.45)] backdrop-blur-xl lg:block">
           <div className="px-4 py-4 md:px-6 md:py-5">
             <MapWorkflowStageStrip
@@ -5677,53 +5710,41 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
             >
               <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(180deg,rgba(8,47,73,0.28),transparent)]" />
               <div className="relative border-b border-white/10 px-4 py-4 md:hidden">
-                <div className="flex flex-col items-start gap-3 min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
+                <div className="space-y-3">
                   <div>
-                    <div className="text-lg font-semibold text-white">{mobileSelectionTitle}</div>
+                    <div className="text-[12px] font-semibold text-white">{mobileSelectionTitle}</div>
                   </div>
-                  <div className="flex w-full flex-wrap items-center gap-2 min-[360px]:w-auto">
-                    <button
-                      type="button"
-                      className="inline-flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1]"
-                      onClick={() => setShowAttributesDrawer(true)}
-                    >
-                      <AttributesIcon className="h-[18px] w-[18px]" />
-                      <span>Attributes</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex h-11 items-center gap-2 rounded-2xl border border-emerald-300/18 bg-emerald-400/10 px-4 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/16 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-slate-500"
-                      onClick={() => openCoreTasksPage(selectedHole)}
-                      disabled={!selectedHole}
-                    >
-                      <CoreTasksIcon className="h-[18px] w-[18px]" />
-                      <span>Core tasks</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-slate-500"
-                      onClick={() => {
-                        void openHolePlodsModal(selectedHole);
-                      }}
-                      disabled={!selectedHole}
-                    >
-                      <PlodsIcon className="h-[18px] w-[18px]" />
-                      <span>Plods</span>
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Open filters"
-                      title="Open filters"
-                      className="relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-slate-100 transition hover:bg-white/[0.1]"
-                      onClick={() => setShowAdvancedFilters(true)}
-                    >
-                      <FilterIcon className="h-[18px] w-[18px] text-cyan-200" />
-                      {activeAdvancedFilterCount ? (
-                        <span className="absolute -right-1.5 -top-1.5 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-100">
-                          {activeAdvancedFilterCount}
-                        </span>
-                      ) : null}
-                    </button>
+                  <div className="w-full">
+                    <div className="grid w-full grid-cols-3 gap-2 rounded-[22px] border border-white/10 bg-slate-950/55 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                      <button
+                        type="button"
+                        className="inline-flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-[18px] border border-white/10 bg-white/[0.05] px-2 text-[12px] font-semibold text-slate-100 transition hover:bg-white/[0.1]"
+                        onClick={() => setShowAttributesDrawer(true)}
+                      >
+                        <AttributesIcon className="h-4 w-4 shrink-0" />
+                        <span className="truncate">Attributes</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-[18px] border border-emerald-300/18 bg-emerald-400/10 px-2 text-[12px] font-semibold text-emerald-100 transition hover:bg-emerald-400/16 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-slate-500"
+                        onClick={() => openCoreTasksPage(selectedHole)}
+                        disabled={!selectedHole}
+                      >
+                        <CoreTasksIcon className="h-4 w-4 shrink-0" />
+                        <span className="truncate">Core Tasks</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-[18px] border border-white/10 bg-white/[0.05] px-2 text-[12px] font-semibold text-slate-100 transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-slate-500"
+                        onClick={() => {
+                          void openHolePlodsModal(selectedHole);
+                        }}
+                        disabled={!selectedHole}
+                      >
+                        <PlodsIcon className="h-4 w-4 shrink-0" />
+                        <span className="truncate">Plods</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div className="mt-4">
@@ -5771,31 +5792,6 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                     <PlodsIcon className="h-[18px] w-[18px]" />
                     <span>Plods</span>
                   </button>
-                  <button
-                    type="button"
-                    aria-label="Open filters"
-                    title="Open filters"
-                    className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-slate-100 shadow-[0_12px_28px_rgba(2,6,23,0.22)] transition hover:bg-white/[0.1]"
-                    onClick={() => setShowAdvancedFilters(true)}
-                  >
-                    <FilterIcon className="h-[18px] w-[18px] text-cyan-200" />
-                    {activeAdvancedFilterCount ? (
-                      <span className="absolute -right-1.5 -top-1.5 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-100">
-                        {activeAdvancedFilterCount}
-                      </span>
-                    ) : null}
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={isMapFullscreen ? "Exit full screen map" : "Open full screen map"}
-                    title={isMapFullscreen ? "Exit full screen map" : "Open full screen map"}
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-slate-100 shadow-[0_12px_28px_rgba(2,6,23,0.22)] transition hover:bg-white/[0.1]"
-                    onClick={() => {
-                      void toggleMapFullscreen();
-                    }}
-                  >
-                    {isMapFullscreen ? <FullscreenExitIcon className="h-[18px] w-[18px]" /> : <FullscreenEnterIcon className="h-[18px] w-[18px]" />}
-                  </button>
                   {activeAdvancedFilterCount ? (
                     <span className="rounded-full border border-cyan-300/18 bg-cyan-400/10 px-3 py-1.5 text-cyan-100">
                       {activeAdvancedFilterCount} filter{activeAdvancedFilterCount === 1 ? "" : "s"} active
@@ -5824,17 +5820,6 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                   </div>
                 </div>
               ) : null}
-              <button
-                type="button"
-                aria-label={isMapFullscreen ? "Exit full screen map" : "Open full screen map"}
-                title={isMapFullscreen ? "Exit full screen map" : "Open full screen map"}
-                className="absolute right-3 top-3 z-20 inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-slate-950/82 text-slate-100 shadow-[0_18px_42px_rgba(2,6,23,0.3)] transition hover:bg-slate-900/92 md:hidden"
-                onClick={() => {
-                  void toggleMapFullscreen();
-                }}
-              >
-                {isMapFullscreen ? <FullscreenExitIcon className="h-[18px] w-[18px]" /> : <FullscreenEnterIcon className="h-[18px] w-[18px]" />}
-              </button>
               {createPlacementActive && !showCreatePanel ? (
                 <div className="pointer-events-none absolute inset-x-3 top-20 z-20 flex justify-center md:inset-x-4 md:top-24">
                   <div className="rounded-full border border-cyan-300/20 bg-slate-950/82 px-4 py-2 text-xs font-medium tracking-[0.16em] text-cyan-100 shadow-[0_18px_48px_rgba(2,6,23,0.42)] backdrop-blur-xl">
@@ -5917,24 +5902,10 @@ export default function HoleMapWorkspace({ publicToken = "" }) {
                 <div className="flex flex-col items-start gap-3 min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
                   <div>
                     <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Mobile Navigator</div>
-                    <div className="mt-1 text-lg font-semibold text-white">{mobileSelectionTitle}</div>
+                    <div className="mt-1 text-[12px] font-semibold text-white">{mobileSelectionTitle}</div>
                   </div>
                 </div>
                 <div className="mt-4 flex flex-col gap-3">
-                  <button
-                    type="button"
-                    aria-label="Open filters"
-                    title="Open filters"
-                    className="relative inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-slate-950/55 text-sm font-medium text-slate-100 transition hover:bg-slate-900/70"
-                    onClick={() => setShowAdvancedFilters(true)}
-                  >
-                    <FilterIcon className="h-[18px] w-[18px] text-cyan-200" />
-                    {activeAdvancedFilterCount ? (
-                      <span className="absolute -right-1.5 -top-1.5 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-100">
-                        {activeAdvancedFilterCount}
-                      </span>
-                    ) : null}
-                  </button>
                 </div>
               </div>
 

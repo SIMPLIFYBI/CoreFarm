@@ -262,7 +262,11 @@ function HomePageInner() {
               <div className="inline-flex items-center rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-100">
                 Mining operations workspace
               </div>
-              <h1 className="mt-4 text-4xl font-black tracking-[-0.06em] text-white md:text-5xl">WorkMine</h1>
+              <h1
+                className="mt-4 bg-[linear-gradient(135deg,#f8fafc_0%,#e2e8f0_48%,#67e8f9_100%)] bg-clip-text text-4xl font-black uppercase tracking-[-0.065em] text-transparent md:text-5xl"
+              >
+                WorkMine
+              </h1>
               <p className="mt-4 max-w-2xl text-base leading-7 text-slate-200 md:text-lg">
                 The operating system for modern mining teams.
               </p>
