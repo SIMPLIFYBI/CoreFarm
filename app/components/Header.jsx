@@ -22,7 +22,7 @@ import {
   IconPlods,
 } from "./icons";
 
-function WorkMineLogo({ compact = false }) {
+export function WorkMineLogo({ compact = false }) {
   return (
     <span className="inline-flex items-center">
       <span className="flex min-w-0 flex-col leading-none">

@@ -3,6 +3,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { redirectTo } from "@/lib/siteUrl";
+import { WorkMineLogo } from "./components/Header";
 import toast from "react-hot-toast";
 
 export default function HomePage() {
@@ -17,6 +18,17 @@ function HomePageInner() {
   const supabase = supabaseBrowser();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const featureCarouselItems = [
+    "Map drillholes",
+    "Run drilling workflows",
+    "Keep field operations connected",
+    "Drillhole visualization",
+    "Plods",
+    "Consumable tracking",
+    "Asset tracking",
+    "Cost tracking",
+  ];
+  const featureMarqueeItems = [...featureCarouselItems, ...featureCarouselItems];
   const requestedMode = searchParams.get("mode") === "signup" ? "signup" : "signin";
   const requestedFlow = searchParams.get("flow") === "setup" ? "setup" : null;
   const [mode, setMode] = useState(requestedMode); // signin | signup
@@ -257,22 +269,60 @@ function HomePageInner() {
     <div className="mx-auto max-w-6xl px-4 pb-6 pt-2 md:px-6 md:pb-8 md:pt-3">
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.08fr)_420px] lg:items-start">
         <section className="space-y-5">
-          <div className="overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(135deg,rgba(15,23,42,0.96),rgba(8,47,73,0.82)_48%,rgba(6,78,59,0.74))] p-6 shadow-[0_30px_120px_rgba(2,6,23,0.38)] md:p-8">
-            <div className="max-w-3xl">
-              <div className="inline-flex items-center rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-100">
-                Mining operations workspace
+          <div className="relative overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(145deg,rgba(15,23,42,0.98),rgba(8,47,73,0.9)_42%,rgba(6,78,59,0.78))] p-6 shadow-[0_30px_120px_rgba(2,6,23,0.38)] md:p-8">
+            <div className="pointer-events-none absolute inset-0">
+              <div className="absolute -left-24 top-[-88px] h-56 w-56 rounded-full bg-cyan-400/14 blur-3xl" />
+              <div className="absolute right-[-72px] top-12 h-48 w-48 rounded-full bg-emerald-300/12 blur-3xl" />
+              <div className="absolute bottom-[-120px] left-1/3 h-56 w-56 rounded-full bg-sky-200/8 blur-3xl" />
+            </div>
+
+            <div className="relative">
+              <div className="min-w-0 max-w-4xl">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-cyan-100/72">
+                  Connected mine operations
+                </div>
+                <div className="mt-3 inline-flex">
+                  <WorkMineLogo />
+                </div>
+                <h2 className="mt-6 max-w-2xl text-3xl font-semibold tracking-[-0.04em] text-white md:text-[2.6rem] md:leading-[1.05]">
+                  One workspace for planning, tracking, and executing the daily rhythm of site operations.
+                </h2>
+                <p className="mt-4 max-w-2xl text-base leading-7 text-slate-200 md:text-lg">
+                  WorkMine brings together spatial context, operational workflows, and field reporting so teams can move from hole-by-hole decisions to shift-level accountability without jumping between disconnected tools.
+                </p>
+                <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-[22px] border border-white/10 bg-white/[0.05] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-100/72">Plan</div>
+                    <div className="mt-2 text-sm leading-6 text-slate-200">Coordinate drillholes, field tasks, and work areas from a shared operational view.</div>
+                  </div>
+                  <div className="rounded-[22px] border border-white/10 bg-white/[0.05] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-100/72">Track</div>
+                    <div className="mt-2 text-sm leading-6 text-slate-200">Capture consumables, assets, plods, and costs in the same system your crews already use.</div>
+                  </div>
+                  <div className="rounded-[22px] border border-white/10 bg-white/[0.05] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-100/72">Review</div>
+                    <div className="mt-2 text-sm leading-6 text-slate-200">Move from live field activity to cleaner handovers, approvals, and follow-up decisions.</div>
+                  </div>
+                </div>
               </div>
-              <h1
-                className="mt-4 bg-[linear-gradient(135deg,#f8fafc_0%,#e2e8f0_48%,#67e8f9_100%)] bg-clip-text text-4xl font-black uppercase tracking-[-0.065em] text-transparent md:text-5xl"
-              >
-                WorkMine
-              </h1>
-              <p className="mt-4 max-w-2xl text-base leading-7 text-slate-200 md:text-lg">
-                The operating system for modern mining teams.
-              </p>
-              <p className="mt-3 max-w-xl text-sm leading-6 text-slate-300 md:text-base">
-                Map drillholes, run drilling workflows, and keep field operations connected in one place.
-              </p>
+            </div>
+
+            <div className="relative mt-6 max-w-[52rem] overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/24 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] md:px-5">
+              <div className="overflow-hidden">
+                <div
+                  className="workmine-feature-marquee flex w-max items-center gap-3 will-change-transform motion-reduce:animate-none"
+                  style={{ animation: "workmineFeatureMarquee 18s linear infinite" }}
+                >
+                  {featureMarqueeItems.map((item, index) => (
+                    <div
+                      key={`${item}-${index}`}
+                      className="shrink-0 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-sm font-medium leading-6 text-slate-200 md:px-4 md:text-base"
+                    >
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -330,6 +380,18 @@ function HomePageInner() {
             </form>
           </div>
         )}
+
+        <style jsx global>{`
+          @keyframes workmineFeatureMarquee {
+            from {
+              transform: translateX(0);
+            }
+
+            to {
+              transform: translateX(-50%);
+            }
+          }
+        `}</style>
         {showSetupForm && (
           <div className="mb-5 rounded-[24px] border border-emerald-300/16 bg-emerald-400/[0.06] p-4 text-sm">
             <div className="mb-2 font-medium text-white">Finish setting up your account</div>
