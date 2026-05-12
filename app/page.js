@@ -284,13 +284,13 @@ function HomePageInner() {
                 <div className="mt-3 inline-flex">
                   <WorkMineLogo />
                 </div>
-                <h2 className="mt-6 max-w-2xl text-3xl font-semibold tracking-[-0.04em] text-white md:text-[2.6rem] md:leading-[1.05]">
+                <h2 className="mt-6 hidden max-w-2xl text-3xl font-semibold tracking-[-0.04em] text-white sm:block md:text-[2.6rem] md:leading-[1.05]">
                   One workspace for planning, tracking, and executing the daily rhythm of site operations.
                 </h2>
                 <p className="mt-4 max-w-2xl text-base leading-7 text-slate-200 md:text-lg">
                   WorkMine brings together spatial context, operational workflows, and field reporting so teams can move from hole-by-hole decisions to shift-level accountability without jumping between disconnected tools.
                 </p>
-                <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                <div className="mt-6 hidden gap-3 sm:grid sm:grid-cols-3">
                   <div className="rounded-[22px] border border-white/10 bg-white/[0.05] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
                     <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-100/72">Plan</div>
                     <div className="mt-2 text-sm leading-6 text-slate-200">Coordinate drillholes, field tasks, and work areas from a shared operational view.</div>
@@ -307,7 +307,7 @@ function HomePageInner() {
               </div>
             </div>
 
-            <div className="relative mt-6 max-w-[52rem] overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/24 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] md:px-5">
+            <div className="relative mt-6 hidden max-w-[52rem] overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/24 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] md:block md:px-5">
               <div className="overflow-hidden">
                 <div
                   className="workmine-feature-marquee flex w-max items-center gap-3 will-change-transform motion-reduce:animate-none"
