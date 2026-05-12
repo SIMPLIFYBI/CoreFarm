@@ -55,6 +55,18 @@ export default function Header() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  const headerGlassStyle = useMemo(
+    () => ({
+      background:
+        "linear-gradient(180deg, rgba(2, 6, 23, 0.68) 0%, rgba(2, 6, 23, 0.52) 100%)",
+      borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+      backdropFilter: "blur(22px) saturate(150%)",
+      WebkitBackdropFilter: "blur(22px) saturate(150%)",
+      boxShadow: "0 12px 32px rgba(2, 6, 23, 0.18)",
+    }),
+    []
+  );
+
   const [email, setEmail] = useState(null);
   const [displayName, setDisplayName] = useState(null);
   const [userId, setUserId] = useState(null);
@@ -213,7 +225,7 @@ export default function Header() {
   }, [pathname, searchParams]);
 
   return (
-    <header className="frosted-header sticky top-0 z-40 pt-[env(safe-area-inset-top)]">
+    <header className="frosted-header sticky top-0 z-40 pt-[env(safe-area-inset-top)]" style={headerGlassStyle}>
       <div className="mx-auto max-w-6xl flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3">
           {/* Burger */}

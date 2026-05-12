@@ -17,6 +17,10 @@ function getLithologyPatternId(uid, typeId, patternKey) {
   return `lith-pattern-${makeSvgIdFragment(uid)}-${makeSvgIdFragment(typeId)}-${patternKey}`;
 }
 
+function getIntervalRenderKey(prefix, interval, index) {
+  return interval?.id || `${prefix}-${interval?.typeId || "type"}-${interval?.from}-${interval?.to}-${index}`;
+}
+
 function LithologyPatternDefs({ uid, types }) {
   return (types || []).map((type) => {
     const patternKey = normalizeLithologyPatternKey(type?.pattern_key);
@@ -310,6 +314,92 @@ export default function BoreholeSchematicPreview({
     return `${raw.slice(0, Math.max(0, maxChars - 1))}…`;
   };
 
+  const geologyLabels = useMemo(() => {
+    const labelFontSize = compact ? 10 : 11;
+    const labelHeight = compact ? 14 : 16;
+    const minGap = compact ? 4 : 6;
+    const leftState = { nextY: padTop + 4 };
+    const rightState = { nextY: padTop + 4 };
+
+    return normGeology
+      .map((it, index) => {
+        const key = getIntervalRenderKey("g", it, index);
+        const type = lithById?.get?.(it.typeId);
+        const rawLabel = type?.name || "Geology";
+        const y1 = yForDepth(it.from);
+        const y2 = yForDepth(it.to);
+        const height = Math.max(0, y2 - y1);
+        if (height < 18) return [key, null];
+
+        const candidates = [
+          {
+            side: "left",
+            state: leftState,
+            boxX: geologyLeftX + 6,
+            textX: geologyLeftX + 13,
+            panelWidth: geologyLeftW,
+          },
+        ];
+
+        if (showRightGeology && geologyRightW > 28) {
+          candidates.push({
+            side: "right",
+            state: rightState,
+            boxX: geologyRightX + 6,
+            textX: geologyRightX + 13,
+            panelWidth: geologyRightW,
+          });
+        }
+
+        const viablePlacements = candidates
+          .map((candidate) => {
+            const fittedLabel = fitLabel(rawLabel, candidate.panelWidth, compact);
+            const labelWidth = Math.min(
+              candidate.panelWidth - 12,
+              Math.max(48, fittedLabel.length * (compact ? 5.8 : 6.4) + 14)
+            );
+            const minY = y1 + 4;
+            const maxY = y2 - labelHeight - 2;
+            if (maxY < minY) return null;
+
+            const boxY = Math.max(minY, candidate.state.nextY);
+            if (boxY > maxY) return null;
+
+            return {
+              ...candidate,
+              fittedLabel,
+              labelWidth,
+              boxY,
+            };
+          })
+          .filter(Boolean)
+          .sort((a, b) => a.boxY - b.boxY || (a.side === "left" ? -1 : 1));
+
+        const placement = viablePlacements[0];
+        if (!placement) return [key, null];
+
+        placement.state.nextY = placement.boxY + labelHeight + minGap;
+
+        return [
+          key,
+          {
+            boxX: placement.boxX,
+            boxY: placement.boxY,
+            textX: placement.textX,
+            textY: placement.boxY + labelHeight - (compact ? 3.5 : 4),
+            labelWidth: placement.labelWidth,
+            labelHeight,
+            labelFontSize,
+            fittedLabel: placement.fittedLabel,
+          },
+        ];
+      })
+      .reduce((map, [key, placement]) => {
+        map.set(key, placement);
+        return map;
+      }, new Map());
+  }, [compact, geologyLeftW, geologyLeftX, geologyRightW, geologyRightX, lithById, normGeology, padTop, showRightGeology]);
+
   const constructionCallouts = useMemo(() => {
     const leftMinX = Math.max(sidePad + 8, geologyLeftX + 8);
     const leftMaxW = Math.max(76, geologyLeftW - 16);
@@ -517,12 +607,13 @@ export default function BoreholeSchematicPreview({
         <g clipPath={`url(#${clipId})`}>
           {/* geology (both sides) */}
           {normGeology.map((it, i) => {
+            const renderKey = getIntervalRenderKey("g", it, i);
             const t = lithById?.get?.(it.typeId);
             const color = t?.color || "#64748b";
             const label = t?.name || "Geology";
             const patternKey = normalizeLithologyPatternKey(t?.pattern_key);
             const fill = patternKey === "solid" ? color : `url(#${getLithologyPatternId(uid, it.typeId, patternKey)})`;
-            const fittedLabel = fitLabel(label, geologyLeftW, compact);
+            const labelPlacement = geologyLabels.get(renderKey);
 
             const y1 = yForDepth(it.from);
             const y2 = yForDepth(it.to);
@@ -530,23 +621,38 @@ export default function BoreholeSchematicPreview({
             if (h <= 0.5) return null;
 
             return (
-              <g key={it.id || `g-${it.typeId}-${it.from}-${it.to}-${i}`}>
+              <g key={renderKey}>
                 <rect x={geologyLeftX + 2} y={y1} width={geologyLeftW - 4} height={h} fill={fill} fillOpacity={patternKey === "solid" ? "0.75" : undefined}>
                   <title>
                     {label} · {it.from.toFixed(1)}–{it.to.toFixed(1)}m{it.notes ? ` · ${it.notes}` : ""}
                   </title>
                 </rect>
                 {showRightGeology && <rect x={geologyRightX + 2} y={y1} width={geologyRightW - 4} height={h} fill={fill} fillOpacity={patternKey === "solid" ? "0.75" : undefined} />}
-                {h >= 18 && (
-                  <text
-                    x={geologyLeftX + 8}
-                    y={y1 + Math.min(h - 6, 16)}
-                    textAnchor="start"
-                    fontSize={compact ? "10" : "11"}
-                    fill="rgba(15,23,42,0.95)"
-                  >
-                    {fittedLabel}
-                  </text>
+                {labelPlacement && (
+                  <g>
+                    <rect
+                      x={labelPlacement.boxX}
+                      y={labelPlacement.boxY}
+                      width={labelPlacement.labelWidth}
+                      height={labelPlacement.labelHeight}
+                      rx={compact ? 5 : 6}
+                      fill="rgba(2,6,23,0.58)"
+                      stroke="rgba(255,255,255,0.14)"
+                    />
+                    <text
+                      x={labelPlacement.textX}
+                      y={labelPlacement.textY}
+                      textAnchor="start"
+                      fontSize={String(labelPlacement.labelFontSize)}
+                      fontWeight="600"
+                      fill="rgba(248,250,252,0.98)"
+                      stroke="rgba(2,6,23,0.4)"
+                      strokeWidth="0.45"
+                      paintOrder="stroke"
+                    >
+                      {labelPlacement.fittedLabel}
+                    </text>
+                  </g>
                 )}
               </g>
             );
@@ -1144,8 +1250,17 @@ export default function BoreholeSchematicPreview({
         {hasWater && (
           <g>
             <line x1={sidePad} y1={waterY} x2={W - sidePad} y2={waterY} stroke="rgba(59,130,246,0.75)" strokeWidth="2" />
-            <rect x={holeX + 10} y={waterY - 16} width={holeW - 20} height={22} rx="8" fill="rgba(255,255,255,0.92)" stroke="rgba(15,23,42,0.15)" />
-            <text x={holeX + holeW / 2} y={waterY - 1} textAnchor="middle" fontSize={compact ? "10" : "11"} fill="rgba(15,23,42,0.95)">
+            <text
+              x={holeX + holeW / 2}
+              y={waterY - 1}
+              textAnchor="middle"
+              fontSize={compact ? "10" : "11"}
+              fontWeight="700"
+              fill="rgba(239,246,255,0.98)"
+              stroke="rgba(2,6,23,0.5)"
+              strokeWidth="0.35"
+              paintOrder="stroke"
+            >
               Water level {water.toFixed(1)}m
             </text>
           </g>

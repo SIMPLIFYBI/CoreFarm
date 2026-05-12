@@ -1,9 +1,9 @@
-/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { exportMarkedupSchematicPdf } from "../utils/exportMarkedupSchematicPdf";
+import SchematicStage, { getSchematicStageMetrics } from "./SchematicStage";
 
 const COLOR_OPTIONS = ["#f8fafc", "#ef4444", "#f59e0b", "#22c55e", "#38bdf8", "#a855f7"];
 const SIZE_OPTIONS = [6, 12];
@@ -19,15 +19,15 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-function getPointFromEvent(svgEl, event, imageWidth, imageHeight) {
+function getPointFromEvent(svgEl, event, stageWidth, stageHeight) {
   if (!svgEl) return null;
   const rect = svgEl.getBoundingClientRect();
   if (!rect.width || !rect.height) return null;
-  const x = ((event.clientX - rect.left) / rect.width) * imageWidth;
-  const y = ((event.clientY - rect.top) / rect.height) * imageHeight;
+  const x = ((event.clientX - rect.left) / rect.width) * stageWidth;
+  const y = ((event.clientY - rect.top) / rect.height) * stageHeight;
   return {
-    x: clamp(x, 0, imageWidth),
-    y: clamp(y, 0, imageHeight),
+    x: clamp(x, 0, stageWidth),
+    y: clamp(y, 0, stageHeight),
   };
 }
 
@@ -109,7 +109,19 @@ function AnnotationPreview({ annotation }) {
   return <>{renderAnnotation(annotation)}</>;
 }
 
-export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) {
+export default function SchematicMarkupModal({
+  open,
+  hole,
+  geoRows,
+  lithById,
+  componentRows,
+  componentById,
+  constructionRows,
+  constructionById,
+  annulusRows,
+  annulusById,
+  onClose,
+}) {
   const svgRef = useRef(null);
   const stageRef = useRef(null);
   const stageHostRef = useRef(null);
@@ -198,30 +210,35 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
     };
   }, [open]);
 
+	const stageMetrics = useMemo(() => getSchematicStageMetrics({ selectedHole: hole, compact: isMobileViewport }), [hole, isMobileViewport]);
+	const stageFitScale = useMemo(() => {
+		if (!stageMetrics?.baseWidth) return 1;
+		const maxWidth = Math.max(240, availableStageWidth - (isMobileViewport ? 16 : 28));
+		return Math.min(maxWidth / stageMetrics.baseWidth, 1);
+	}, [availableStageWidth, isMobileViewport, stageMetrics?.baseWidth]);
+
   const stageStyle = useMemo(() => {
-    if (!snapshot?.width || !snapshot?.height) return { width: "100%", aspectRatio: "1 / 1" };
-    const maxWidth = Math.max(260, availableStageWidth - 2);
-    const scale = Math.min(maxWidth / snapshot.width, 1);
+    if (!stageMetrics?.baseWidth || !stageMetrics?.height) return { width: "100%", aspectRatio: "1 / 1" };
     return {
-      width: `${snapshot.width * scale}px`,
-      height: `${snapshot.height * scale}px`,
+      width: `${stageMetrics.baseWidth * stageFitScale}px`,
+      height: `${stageMetrics.height * stageFitScale}px`,
       maxWidth: "100%",
     };
-  }, [availableStageWidth, snapshot?.height, snapshot?.width]);
+  }, [stageFitScale, stageMetrics?.baseWidth, stageMetrics?.height]);
 
   const annotationCount = annotations.length + (draft ? 1 : 0);
   const interactionMessage = usesCoarsePointer
     ? touchDrawingEnabled
       ? "Drawing is active inside the schematic viewport. Switch back to scroll when you need to move around."
       : "Scroll stays active on mobile. Turn drawing on only when you want to annotate the schematic."
-    : "Use your mouse or stylus directly on the schematic canvas to mark up the snapshot.";
+    : "Use your mouse or stylus directly on the live schematic canvas to mark up the view.";
 
-  if (!open || !snapshot?.src) return null;
+  if (!open || !hole) return null;
 
   const beginDraw = (event) => {
     if (!drawingEnabled) return;
-    if (!snapshot?.width || !snapshot?.height) return;
-    const point = getPointFromEvent(svgRef.current, event, snapshot.width, snapshot.height);
+    if (!stageMetrics?.baseWidth || !stageMetrics?.height) return;
+    const point = getPointFromEvent(svgRef.current, event, stageMetrics.baseWidth, stageMetrics.height);
     if (!point) return;
 
     if (tool === "text") {
@@ -245,8 +262,8 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
 
   const moveDraw = (event) => {
     if (!drawingEnabled) return;
-    if (!isDrawing || !draft || !snapshot?.width || !snapshot?.height) return;
-    const point = getPointFromEvent(svgRef.current, event, snapshot.width, snapshot.height);
+    if (!isDrawing || !draft || !stageMetrics?.baseWidth || !stageMetrics?.height) return;
+    const point = getPointFromEvent(svgRef.current, event, stageMetrics.baseWidth, stageMetrics.height);
     if (!point) return;
 
     if (draft.type === "pen" || draft.type === "highlighter") {
@@ -358,10 +375,23 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
                         className="relative overflow-hidden rounded-[16px] border border-white/10 bg-[#08111d] shadow-[0_24px_80px_rgba(2,6,23,0.35)]"
                         style={stageStyle}
                       >
-                        <img src={snapshot.src} alt="Schematic snapshot for markup" className="block h-full w-full select-none object-contain" draggable={false} />
+            <SchematicStage
+              selectedHole={hole}
+              geoRows={geoRows}
+              lithById={lithById}
+              componentRows={componentRows}
+              componentById={componentById}
+              constructionRows={constructionRows}
+              constructionById={constructionById}
+              annulusRows={annulusRows}
+              annulusById={annulusById}
+              compact
+              scale={stageFitScale}
+              onSelectComponent={() => {}}
+            />
                         <svg
                           ref={svgRef}
-                          viewBox={`0 0 ${snapshot.width} ${snapshot.height}`}
+              viewBox={`0 0 ${stageMetrics.baseWidth} ${stageMetrics.height}`}
                           className={`absolute inset-0 h-full w-full ${drawingEnabled ? "pointer-events-auto touch-none" : "pointer-events-none"}`}
                           onPointerDown={beginDraw}
                           onPointerMove={moveDraw}
@@ -452,7 +482,7 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
   }
 
   return (
-    <div className="fixed inset-0 z-[120] overflow-y-auto bg-[rgba(2,6,23,0.86)] backdrop-blur-md">
+    <div className="fixed inset-0 z-[120] overflow-x-hidden overflow-y-auto bg-[rgba(2,6,23,0.86)] backdrop-blur-md">
       <div className="mx-auto min-h-[100dvh] w-full max-w-[1600px] px-3 py-3 md:px-6 md:py-6">
         <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,0.98))] shadow-[0_30px_120px_rgba(2,6,23,0.55)]">
           <div className="rounded-t-[30px] border-b border-white/10 bg-[rgba(2,6,23,0.84)] px-4 py-4 backdrop-blur-xl md:px-6 md:py-5">
@@ -570,23 +600,35 @@ export default function SchematicMarkupModal({ open, snapshot, hole, onClose }) 
               <section className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4 shadow-[0_20px_60px_rgba(2,6,23,0.24)]">
                 <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Export</div>
                 <p className="mt-3 text-sm leading-6 text-slate-300">
-                  Export captures the frozen schematic image with all current markup layers into a PDF, ready for sharing or review.
+                  Export captures the live schematic view with all current markup layers into a PDF, ready for sharing or review.
                 </p>
               </section>
             </aside>
 
             <main className="space-y-4">
-              <section ref={stageHostRef} className="rounded-[28px] border border-white/10 bg-slate-950/55 p-3 shadow-[0_24px_80px_rgba(2,6,23,0.28)] md:p-5">
-                <div className="flex items-start justify-center p-2 md:p-4">
+              <section ref={stageHostRef} className="overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/55 p-3 shadow-[0_24px_80px_rgba(2,6,23,0.28)] md:p-5">
+                <div className="flex max-w-full items-start justify-center overflow-x-hidden p-2 md:p-4">
                   <div
                     ref={stageRef}
                     className="relative overflow-hidden rounded-[20px] border border-white/10 bg-[#08111d] shadow-[0_24px_80px_rgba(2,6,23,0.35)]"
                     style={stageStyle}
                   >
-                    <img src={snapshot.src} alt="Schematic snapshot for markup" className="block h-full w-full select-none object-contain" draggable={false} />
+          <SchematicStage
+            selectedHole={hole}
+            geoRows={geoRows}
+            lithById={lithById}
+            componentRows={componentRows}
+            componentById={componentById}
+            constructionRows={constructionRows}
+            constructionById={constructionById}
+            annulusRows={annulusRows}
+            annulusById={annulusById}
+            scale={stageFitScale}
+            onSelectComponent={() => {}}
+          />
                     <svg
                       ref={svgRef}
-                      viewBox={`0 0 ${snapshot.width} ${snapshot.height}`}
+            viewBox={`0 0 ${stageMetrics.baseWidth} ${stageMetrics.height}`}
                       className={`absolute inset-0 h-full w-full ${drawingEnabled ? "pointer-events-auto touch-none" : "pointer-events-none"}`}
                       onPointerDown={beginDraw}
                       onPointerMove={moveDraw}

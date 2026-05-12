@@ -1,12 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import toast from "react-hot-toast";
-import DepthAxisBar from "./DepthAxisBar";
-import BoreholeSchematicPreview from "./BoreholeSchematicPreview";
 import SchematicMarkupModal from "./SchematicMarkupModal";
-import { computeMaxDepth } from "../utils/computeMaxDepth";
-import { svgHeightForMaxDepth } from "../utils/depthScaleConfig";
+import SchematicStage from "./SchematicStage";
 
 export default function SchematicArea({
   selectedHole,
@@ -23,8 +19,6 @@ export default function SchematicArea({
 }) {
   const [selectedComponentId, setSelectedComponentId] = useState("");
   const [schematicZoom, setSchematicZoom] = useState(1);
-  const [openingMarkup, setOpeningMarkup] = useState(false);
-  const [markupSnapshot, setMarkupSnapshot] = useState(null);
   const [markupOpen, setMarkupOpen] = useState(false);
 
   const zoomPct = Math.round(schematicZoom * 100);
@@ -35,14 +29,6 @@ export default function SchematicArea({
   useEffect(() => {
     setSelectedComponentId("");
   }, [selectedHole?.id]);
-
-  const maxDepth = useMemo(() => {
-    return computeMaxDepth({ plannedDepth: selectedHole?.planned_depth, actualDepth: selectedHole?.depth, minDepth: 30, step: 10 });
-  }, [selectedHole?.depth, selectedHole?.planned_depth]);
-
-  const schematicHeight = useMemo(() => svgHeightForMaxDepth(maxDepth), [maxDepth]);
-  const mobileBaseWidth = 58 + 8 + 258;
-  const desktopBaseWidth = 90 + 12 + 980;
 
   const selectedComponent = useMemo(() => {
     return (componentRows || []).find((row) => row.id === selectedComponentId) || null;
@@ -63,43 +49,12 @@ export default function SchematicArea({
   }, [componentById, componentRows]);
 
   const openMarkupMode = async () => {
-    if (!selectedHole || openingMarkup) return;
-
-    const element = document.getElementById("schematic-export-root");
-    if (!element) {
-      toast.error("Could not find the schematic snapshot.");
-      return;
-    }
-
-    try {
-      setOpeningMarkup(true);
-      const { toPng } = await import("html-to-image");
-      const src = await toPng(element, {
-        cacheBust: true,
-        pixelRatio: 3,
-        backgroundColor: "#0b1220",
-      });
-
-      const probe = new Image();
-      await new Promise((resolve, reject) => {
-        probe.onload = resolve;
-        probe.onerror = reject;
-        probe.src = src;
-      });
-
-      setMarkupSnapshot({ src, width: probe.width, height: probe.height });
-      setMarkupOpen(true);
-    } catch (error) {
-      console.error(error);
-      toast.error(error?.message || "Failed to open markup mode.");
-    } finally {
-      setOpeningMarkup(false);
-    }
+    if (!selectedHole) return;
+    setMarkupOpen(true);
   };
 
   const closeMarkupMode = () => {
     setMarkupOpen(false);
-    setMarkupSnapshot(null);
   };
 
   return (
@@ -143,7 +98,7 @@ export default function SchematicArea({
                         type="button"
                         className="btn btn-xs"
                         onClick={openMarkupMode}
-                        disabled={!selectedHole || openingMarkup}
+                        disabled={!selectedHole}
                       >
                         Markup mode
                       </button>
@@ -165,61 +120,40 @@ export default function SchematicArea({
 
                   <div className="overflow-x-auto rounded-[24px] border border-white/10 bg-slate-950/40 p-3 pb-1 md:p-5">
                     <div className="w-full min-w-max">
-                      <div className="md:hidden" style={{ width: `${mobileBaseWidth * schematicZoom}px`, height: `${schematicHeight * schematicZoom}px` }}>
-                        <div className="flex gap-2 items-start origin-top-left" style={{ transform: `scale(${schematicZoom})` }}>
-                          <DepthAxisBar
-                            plannedDepth={selectedHole.planned_depth}
-                            actualDepth={selectedHole.depth}
-                            waterLevel={selectedHole.water_level_m}
-                            compact
-                          />
+            <div className="md:hidden">
+            <SchematicStage
+              selectedHole={selectedHole}
+              geoRows={geoRows}
+              lithById={lithById}
+              componentRows={componentRows}
+              componentById={componentById}
+              constructionRows={constructionRows}
+              constructionById={constructionById}
+              annulusRows={annulusRows}
+              annulusById={annulusById}
+              selectedComponentId={selectedComponentId}
+              onSelectComponent={(component) => setSelectedComponentId(component?.id || "")}
+              compact
+              scale={schematicZoom}
+            />
+            </div>
 
-                          <BoreholeSchematicPreview
-                            holeState={selectedHole.state}
-                            plannedDepth={selectedHole.planned_depth}
-                            actualDepth={selectedHole.depth}
-                            waterLevel={selectedHole.water_level_m}
-                            geologyIntervals={geoRows}
-                            lithById={lithById}
-                            componentRows={componentRows}
-                            componentById={componentById}
-                            annulusIntervals={annulusRows}
-                            annulusById={annulusById}
-                            constructionIntervals={constructionRows}
-                            constructionById={constructionById}
-                            compact
-                            selectedComponentId={selectedComponentId}
-                            onSelectComponent={(component) => setSelectedComponentId(component?.id || "")}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="hidden md:block" style={{ width: `${desktopBaseWidth * schematicZoom}px`, height: `${schematicHeight * schematicZoom}px` }}>
-                        <div className="inline-flex gap-3 items-start origin-top-left" style={{ transform: `scale(${schematicZoom})` }}>
-                          <DepthAxisBar
-                            plannedDepth={selectedHole.planned_depth}
-                            actualDepth={selectedHole.depth}
-                            waterLevel={selectedHole.water_level_m}
-                          />
-
-                          <BoreholeSchematicPreview
-                            holeState={selectedHole.state}
-                            plannedDepth={selectedHole.planned_depth}
-                            actualDepth={selectedHole.depth}
-                            waterLevel={selectedHole.water_level_m}
-                            geologyIntervals={geoRows}
-                            lithById={lithById}
-                            componentRows={componentRows}
-                            componentById={componentById}
-                            annulusIntervals={annulusRows}
-                            annulusById={annulusById}
-                            constructionIntervals={constructionRows}
-                            constructionById={constructionById}
-                            selectedComponentId={selectedComponentId}
-                            onSelectComponent={(component) => setSelectedComponentId(component?.id || "")}
-                          />
-                        </div>
-                      </div>
+            <div className="hidden md:block">
+            <SchematicStage
+              selectedHole={selectedHole}
+              geoRows={geoRows}
+              lithById={lithById}
+              componentRows={componentRows}
+              componentById={componentById}
+              constructionRows={constructionRows}
+              constructionById={constructionById}
+              annulusRows={annulusRows}
+              annulusById={annulusById}
+              selectedComponentId={selectedComponentId}
+              onSelectComponent={(component) => setSelectedComponentId(component?.id || "")}
+              scale={schematicZoom}
+            />
+            </div>
                     </div>
                   </div>
                 </div>
@@ -278,7 +212,19 @@ export default function SchematicArea({
         <div className="mt-4 text-xs text-slate-500">Orientation is shown as a companion overlay, not a trajectory deformation of the schematic.</div>
       </div>
     </div>
-    <SchematicMarkupModal open={markupOpen} snapshot={markupSnapshot} hole={selectedHole} onClose={closeMarkupMode} />
+  <SchematicMarkupModal
+    open={markupOpen}
+    hole={selectedHole}
+    geoRows={geoRows}
+    lithById={lithById}
+    componentRows={componentRows}
+    componentById={componentById}
+    constructionRows={constructionRows}
+    constructionById={constructionById}
+    annulusRows={annulusRows}
+    annulusById={annulusById}
+    onClose={closeMarkupMode}
+  />
     </>
   );
 }
