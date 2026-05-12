@@ -2,6 +2,25 @@
 
 // Simple, zero-dependency charts for quick insights
 import { useState, useEffect, useRef, useId } from "react";
+import { ACCENT_CHART_COLOR, PRIMARY_CHART_COLOR } from "@/lib/chartPalette";
+
+function shade(hex, factor = 0.8) {
+  if (!hex || typeof hex !== "string" || !hex.startsWith("#") || (hex.length !== 7 && hex.length !== 4)) return hex;
+  let r, g, b;
+  if (hex.length === 7) {
+    r = parseInt(hex.slice(1, 3), 16);
+    g = parseInt(hex.slice(3, 5), 16);
+    b = parseInt(hex.slice(5, 7), 16);
+  } else {
+    r = parseInt(hex[1] + hex[1], 16);
+    g = parseInt(hex[2] + hex[2], 16);
+    b = parseInt(hex[3] + hex[3], 16);
+  }
+  r = Math.max(0, Math.min(255, Math.round(r * factor)));
+  g = Math.max(0, Math.min(255, Math.round(g * factor)));
+  b = Math.max(0, Math.min(255, Math.round(b * factor)));
+  return `rgb(${r} ${g} ${b})`;
+}
 
 // Modern BarChart implementation
 export function BarChart({ data = [], valueSuffix = " m", animate = true, duration = 600, height = 180 }) {
@@ -14,9 +33,6 @@ export function BarChart({ data = [], valueSuffix = " m", animate = true, durati
     "Magnetic susceptibility": "Mag",
     "Cutting": "Cut",
   };
-  function shade(hex){
-    if(!hex || typeof hex!=='string' || !hex.startsWith('#') || (hex.length!==7 && hex.length!==4)) return hex;
-    let r,g,b; if(hex.length===7){ r=parseInt(hex.slice(1,3),16); g=parseInt(hex.slice(3,5),16); b=parseInt(hex.slice(5,7),16);} else { r=parseInt(hex[1]+hex[1],16); g=parseInt(hex[2]+hex[2],16); b=parseInt(hex[3]+hex[3],16);} r=Math.max(0,Math.min(255,Math.round(r*0.8))); g=Math.max(0,Math.min(255,Math.round(g*0.8))); b=Math.max(0,Math.min(255,Math.round(b*0.8))); return `rgb(${r} ${g} ${b})`; }
   return (
     <div className="w-full">
       <div className="flex items-end gap-3 px-2" style={{height}}>
@@ -31,17 +47,26 @@ export function BarChart({ data = [], valueSuffix = " m", animate = true, durati
                   className="w-full rounded-md relative overflow-hidden transition-all duration-500 ease-out border border-black/5 shadow-sm"
                   style={{
                     height: `${Math.max(4, barHeightPct * 100)}%`,
-                    background: `linear-gradient(180deg, ${d.color} 0%, ${shade(d.color)} 100%)`,
+                    background: `linear-gradient(180deg, ${shade(d.color, 1.08)} 0%, ${d.color} 28%, ${shade(d.color, 0.8)} 100%)`,
+                    boxShadow: `inset 1px 0 0 rgba(255,255,255,0.18), inset -1px 0 0 rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.22), 0 10px 18px rgba(2,6,23,0.14)`,
                     transitionDuration: duration + 'ms'
                   }}
                 >
-                  <span className="absolute top-1 left-1 right-1 text-[10px] leading-tight font-medium text-white/90 drop-shadow-sm text-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div
+                    className="pointer-events-none absolute inset-x-[10%] top-0 h-[24%] rounded-full opacity-70"
+                    style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0))" }}
+                  />
+                  <div
+                    className="pointer-events-none absolute right-0 top-0 h-full w-[14%]"
+                    style={{ background: "linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.14))" }}
+                  />
+                  <span className="absolute top-1 left-1 right-1 text-[10px] leading-tight font-semibold text-white drop-shadow-[0_2px_10px_rgba(2,6,23,0.65)] text-center opacity-0 group-hover:opacity-100 transition-opacity">
                     {formatNum(d.value)}{valueSuffix}
                   </span>
                 </div>
               </div>
-              <div className="mt-2 h-[28px] w-full text-center text-[11px] text-gray-700 truncate" title={d.label}>{shortLabel}</div>
-              <div className="text-[10px] font-medium text-gray-900 tabular-nums md:hidden">{formatNum(d.value)}{valueSuffix}</div>
+              <div className="mt-2 h-[28px] w-full text-center text-[11px] font-medium text-slate-200 truncate" title={d.label}>{shortLabel}</div>
+              <div className="text-[10px] font-semibold text-slate-50 tabular-nums md:hidden">{formatNum(d.value)}{valueSuffix}</div>
             </div>
           );
         })}
@@ -49,7 +74,7 @@ export function BarChart({ data = [], valueSuffix = " m", animate = true, durati
       {/* Desktop value row (keeps bars aligned) */}
       <div className="hidden md:flex gap-3 px-2 mt-1">
         {data.map(d => (
-          <div key={d.label} className="flex-1 min-w-0 text-center text-[11px] font-medium text-gray-900 tabular-nums">
+          <div key={d.label} className="flex-1 min-w-0 text-center text-[11px] font-semibold text-slate-50 tabular-nums">
             {formatNum(d.value)}{valueSuffix}
           </div>
         ))}
@@ -78,15 +103,28 @@ export function DonutChart({ data = [], size = 160, valueSuffix = " m" }) {
         aria-label={`Total ${formatNum(total)}${valueSuffix}`}
         title={`Total ${formatNum(total)}${valueSuffix}`}
       >
-        <div className="absolute inset-0 rounded-full" style={{ background: gradient }} />
+        <div
+          className="absolute inset-0 rounded-full"
+          style={{
+            background: gradient,
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -10px 18px rgba(15,23,42,0.18), 0 14px 26px rgba(2,6,23,0.16)",
+            WebkitMask: `radial-gradient(circle, transparent 0 ${(size * 0.3).toFixed(0)}px, black ${(size * 0.3 + 1).toFixed(0)}px 100%)`,
+            mask: `radial-gradient(circle, transparent 0 ${(size * 0.3).toFixed(0)}px, black ${(size * 0.3 + 1).toFixed(0)}px 100%)`,
+          }}
+        />
+        <div
+          className="pointer-events-none absolute inset-[8%] rounded-full"
+          style={{
+            background: "linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0) 34%, rgba(15,23,42,0.14) 100%)",
+            WebkitMask: `radial-gradient(circle, transparent 0 ${(size * 0.24).toFixed(0)}px, black ${(size * 0.24 + 1).toFixed(0)}px 100%)`,
+            mask: `radial-gradient(circle, transparent 0 ${(size * 0.24).toFixed(0)}px, black ${(size * 0.24 + 1).toFixed(0)}px 100%)`,
+          }}
+        />
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="rounded-full bg-white" style={{ width: size * 0.6, height: size * 0.6 }} />
-        </div>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center">
-            <div className="text-xs text-gray-500">Total</div>
-            <div className="text-lg font-semibold">{formatNum(total)}</div>
-            <div className="text-xs text-gray-500">{valueSuffix.trim()}</div>
+          <div className="text-center" style={{ textShadow: "0 2px 14px rgba(2,6,23,0.65)" }}>
+            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-300">Total</div>
+            <div className="text-lg font-semibold text-slate-50">{formatNum(total)}</div>
+            <div className="text-[11px] text-slate-300">{valueSuffix.trim()}</div>
           </div>
         </div>
       </div>
@@ -94,9 +132,9 @@ export function DonutChart({ data = [], size = 160, valueSuffix = " m" }) {
         {data.map((d) => (
           <li key={d.label} className="flex items-center gap-2">
             <span className="inline-block h-3 w-3 rounded" style={{ background: d.color }} />
-            <span className="text-gray-700">{d.label}</span>
-            <span className="ml-auto tabular-nums text-gray-900">{formatNum(d.value)}</span>
-            <span className="text-gray-500">{valueSuffix.trim()}</span>
+            <span className="text-slate-200">{d.label}</span>
+            <span className="ml-auto tabular-nums text-slate-50">{formatNum(d.value)}</span>
+            <span className="text-slate-400">{valueSuffix.trim()}</span>
           </li>
         ))}
       </ul>
@@ -104,7 +142,7 @@ export function DonutChart({ data = [], size = 160, valueSuffix = " m" }) {
   );
 }
 
-export function TrendChart({ points = [], height = 180, color = "#4f46e5" }) {
+export function TrendChart({ points = [], height = 180, color = ACCENT_CHART_COLOR }) {
   // Layout: reserve bottom band for x-axis labels so they don't overlap chart area
   const chartTop = 4;          // top padding
   const chartBottom = 82;      // baseline (leave ~18 units for labels)
@@ -162,15 +200,21 @@ export function TrendChart({ points = [], height = 180, color = "#4f46e5" }) {
             <stop offset="0%" stopColor={color} stopOpacity="0.18" />
             <stop offset="100%" stopColor={color} stopOpacity="0" />
           </linearGradient>
+          <linearGradient id="trendHighlight" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.4)" />
+            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+          </linearGradient>
         </defs>
         {/* Transparent background (no rect) */}
         {/* Horizontal grid / baseline */}
-        <line x1="0" x2="100" y1={chartBottom} y2={chartBottom} stroke="#e5e7eb" strokeWidth="0.5" />
+        <line x1="0" x2="100" y1={chartBottom} y2={chartBottom} stroke="rgba(148,163,184,0.35)" strokeWidth="0.5" />
         {areaPath && <path d={areaPath} fill="url(#trendFill)" stroke="none" />}
+        {linePath && <path d={linePath} stroke="rgba(2,6,23,0.22)" strokeWidth={2.5} fill="none" strokeLinejoin="round" strokeLinecap="round" transform="translate(0 0.8)" />}
         {linePath && <path d={linePath} stroke={color} strokeWidth={1.5} fill="none" strokeLinejoin="round" strokeLinecap="round" />}
+        {linePath && <path d={linePath} stroke="url(#trendHighlight)" strokeWidth={0.8} fill="none" strokeLinejoin="round" strokeLinecap="round" transform="translate(0 -0.45)" opacity="0.5" />}
         {/* X-axis month labels */}
         {monthLabels.map((m) => (
-          <text key={m.x} x={m.x} y={chartBottom + 10} fontSize={4} textAnchor="middle" fill="#6b7280">{m.text}</text>
+          <text key={m.x} x={m.x} y={chartBottom + 10} fontSize={4} textAnchor="middle" fill="#cbd5e1">{m.text}</text>
         ))}
       </svg>
     </div>
@@ -179,7 +223,7 @@ export function TrendChart({ points = [], height = 180, color = "#4f46e5" }) {
 
 // Fresh, simplified responsive line chart to avoid layout skew/stretch issues
 // Features: auto-thinning of x labels, aspect-preserving scaling, optional area fill.
-export function LineChart({ points = [], height = '100%', color = '#2563eb', area = true, fullBleed = false, animate = true, duration = 700, ease = 'ease-out' }) {
+export function LineChart({ points = [], height = '100%', color = PRIMARY_CHART_COLOR, area = true, fullBleed = false, animate = true, duration = 700, ease = 'ease-out' }) {
   const clean = (points || []).filter(p => p && typeof p.value === 'number');
   const n = clean.length;
   const max = Math.max(0, ...clean.map(p => p.value));
@@ -213,6 +257,10 @@ export function LineChart({ points = [], height = '100%', color = '#2563eb', are
             <stop offset="0%" stopColor={color} stopOpacity="0.3" />
             <stop offset="100%" stopColor={color} stopOpacity="0" />
           </linearGradient>
+          <linearGradient id={`lcStrokeHighlight-${unique}`} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.45)" />
+            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+          </linearGradient>
         </defs>
         {grids.map(g => (
           <line key={g} x1={pad.left} x2={100-pad.right} y1={pad.top + g*ih} y2={pad.top + g*ih} stroke="#e5e7eb" strokeWidth={0.4} />
@@ -220,10 +268,14 @@ export function LineChart({ points = [], height = '100%', color = '#2563eb', are
         <line x1={pad.left} x2={pad.left} y1={pad.top} y2={pad.top+ih} stroke="#cbd5e1" strokeWidth={0.5} />
         <line x1={pad.left} x2={100-pad.right} y1={pad.top+ih} y2={pad.top+ih} stroke="#cbd5e1" strokeWidth={0.5} />
         {areaPath && <path d={areaPath} fill={`url(#lcFill-${unique})`} stroke="none" style={animate ? {opacity: mounted ? 1:0, transition:`opacity ${duration}ms ${ease}`} : undefined} />}
+        {path && <path d={path} fill="none" stroke="rgba(2,6,23,0.18)" strokeWidth={2.2} strokeLinejoin="round" strokeLinecap="round" transform="translate(0 0.7)" />}
         {path && <path ref={pathRef} d={path} fill="none" stroke={color} strokeWidth={1.4} strokeLinejoin="round" strokeLinecap="round" style={animate ? { transition: `stroke-dashoffset ${duration}ms ${ease}` } : undefined} {...strokeDashProps} />}
+        {path && <path d={path} fill="none" stroke={`url(#lcStrokeHighlight-${unique})`} strokeWidth={0.8} strokeLinejoin="round" strokeLinecap="round" transform="translate(0 -0.35)" opacity="0.55" />}
         {clean.map((p,i)=>(
           <g key={i}>
+            <circle cx={xAt(i)} cy={yAt(p.value) + 0.5} r={1.45} fill="rgba(2,6,23,0.18)" />
             <circle cx={xAt(i)} cy={yAt(p.value)} r={1.2} fill={color} style={animate ? {opacity: mounted ? 1:0, transformOrigin:'center', transition:`opacity ${duration}ms ${ease} ${(i*50)}ms`} : undefined} />
+            <circle cx={xAt(i) - 0.2} cy={yAt(p.value) - 0.25} r={0.5} fill="rgba(255,255,255,0.45)" opacity="0.7" />
             <title>{p.label}: {formatNum(p.value)}</title>
           </g>
         ))}
@@ -237,9 +289,6 @@ export function StackedColumnChart({ data = [], height = 160, fullBleed = false,
   const [mounted, setMounted] = useState(false);
   useEffect(()=>{ if(animate){ const t=requestAnimationFrame(()=>setMounted(true)); return ()=>cancelAnimationFrame(t);} },[animate]);
   const max = Math.max(0, ...data.map(d => d.total || 0));
-  function shade(hex){
-    if(!hex || typeof hex!=='string' || !hex.startsWith('#') || (hex.length!==7 && hex.length!==4)) return hex;
-    let r,g,b; if(hex.length===7){ r=parseInt(hex.slice(1,3),16); g=parseInt(hex.slice(3,5),16); b=parseInt(hex.slice(5,7),16);} else { r=parseInt(hex[1]+hex[1],16); g=parseInt(hex[2]+hex[2],16); b=parseInt(hex[3]+hex[3],16);} r=Math.max(0,Math.min(255,Math.round(r*0.8))); g=Math.max(0,Math.min(255,Math.round(g*0.8))); b=Math.max(0,Math.min(255,Math.round(b*0.8))); return `rgb(${r} ${g} ${b})`; }
   return (
     <div className={`w-full ${fullBleed ? 'ml-[-1rem] mr-[-1rem] md:ml-[-1.25rem] md:mr-[-1.25rem]' : ''}`} style={{height}}>
       <div className="flex items-end h-full gap-2 px-2">
@@ -250,24 +299,27 @@ export function StackedColumnChart({ data = [], height = 160, fullBleed = false,
             return (
               <div key={day.date} className="flex flex-col items-center justify-end flex-1 min-w-0 h-full group" title={`${day.date}: ${formatNum(day.total)} m`}>
                 <div className="relative w-full flex-1 flex items-end">
-                  <div className="w-full relative rounded-md overflow-hidden border border-black/5 shadow-sm flex flex-col-reverse" style={{height: `${Math.max(4, barHeightPct*100)}%`, transition:`height ${duration}ms cubic-bezier(.4,.0,.2,1)`}}>
+                  <div className="w-full relative rounded-md overflow-hidden border border-black/5 shadow-sm flex flex-col-reverse" style={{height: `${Math.max(4, barHeightPct*100)}%`, transition:`height ${duration}ms cubic-bezier(.4,.0,.2,1)`, boxShadow: `inset 1px 0 0 rgba(255,255,255,0.14), inset -1px 0 0 rgba(15,23,42,0.14), inset 0 1px 0 rgba(255,255,255,0.18), 0 10px 18px rgba(2,6,23,0.12)`}}>
                     {day.segments.filter(s=>s.value>0).map(seg => {
                       const segPct = day.total>0 ? (seg.value/day.total)*100 : 0;
                       return (
-                        <div key={seg.key} className="w-full" style={{height: segPct+'%', background:`linear-gradient(180deg, ${seg.color} 0%, ${shade(seg.color)} 100%)`}} title={`${seg.label}: ${formatNum(seg.value)} m`} />
+                        <div key={seg.key} className="w-full relative" style={{height: segPct+'%', background:`linear-gradient(180deg, ${shade(seg.color, 1.08)} 0%, ${seg.color} 28%, ${shade(seg.color)} 100%)`}} title={`${seg.label}: ${formatNum(seg.value)} m`}>
+                          <div className="pointer-events-none absolute inset-x-[12%] top-0 h-[26%] rounded-full opacity-60" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0))" }} />
+                        </div>
                       );
                     })}
+                    <div className="pointer-events-none absolute right-0 top-0 h-full w-[12%]" style={{ background: "linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.12))" }} />
                     {day.total === 0 && (
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-[9px] text-gray-400">0</span>
+                        <span className="text-[9px] text-slate-400">0</span>
                       </div>
                     )}
-                    <span className="absolute top-1 left-1 right-1 text-[10px] leading-tight font-medium text-white/90 drop-shadow-sm text-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="absolute top-1 left-1 right-1 text-[10px] leading-tight font-semibold text-white drop-shadow-[0_2px_10px_rgba(2,6,23,0.65)] text-center opacity-0 group-hover:opacity-100 transition-opacity">
                       {formatNum(day.total)} m
                     </span>
                   </div>
                 </div>
-                <div className="mt-1 h-[18px] w-full text-center text-[10px] text-gray-600 truncate" title={day.date}>{label}</div>
+                <div className="mt-1 h-[18px] w-full text-center text-[10px] font-medium text-slate-300 truncate" title={day.date}>{label}</div>
               </div>
             );
         })}
@@ -279,7 +331,7 @@ export function StackedColumnChart({ data = [], height = 160, fullBleed = false,
             const seen = new Map();
             data.forEach(d => d.segments.forEach(s => { if(!seen.has(s.key)) seen.set(s.key, s); }));
             return Array.from(seen.values()).map(s => (
-              <div key={s.key} className="flex items-center gap-1 text-[10px] text-gray-600">
+              <div key={s.key} className="flex items-center gap-1 text-[10px] text-slate-300">
                 <span className="h-2 w-2 rounded-sm" style={{background:s.color}} />
                 <span>{s.label}</span>
               </div>

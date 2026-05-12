@@ -3,25 +3,22 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useOrg } from "@/lib/OrgContext";
 import { DEFAULT_TASK_TYPE_DEFS, TASK_TYPES, fetchOrgTaskTypes } from "@/lib/taskTypes";
+import { getChartColor } from "@/lib/chartPalette";
 import { buildLowConsumableRows, getConsumableStatusMeta } from "@/lib/consumableInventory";
 import { BarChart, DonutChart, StackedColumnChart } from "@/app/components/Charts";
 import { DashboardTabs } from "./components/DashboardTabs";
 import { DashboardFilters } from "./components/DashboardFilters";
 import { DashboardKpis } from "./components/DashboardKpis";
 
-const COLORS = [
-	"#4f46e5",
-	"#06b6d4",
-	"#22c55e",
-	"#f59e0b",
-	"#ef4444",
-	"#a855f7",
-];
-
 export default function UserDashboardPage() {
 	const supabase = supabaseBrowser();
 	const defaultTaskOptions = useMemo(
-		() => DEFAULT_TASK_TYPE_DEFS.map((task) => ({ key: task.key, label: shortLabelForTask(task.key, task.name), color: task.color })),
+		() =>
+			DEFAULT_TASK_TYPE_DEFS.map((task, index) => ({
+				key: task.key,
+				label: shortLabelForTask(task.key, task.name),
+				color: getChartColor(index),
+			})),
 		[]
 	);
 	const [user, setUser] = useState(null);
@@ -34,7 +31,7 @@ export default function UserDashboardPage() {
 
 	const [fromDate, setFromDate] = useState(() => {
 		const d = new Date();
-		d.setDate(d.getDate() - 29);
+		d.setMonth(d.getMonth() - 6);
 		return d.toISOString().slice(0, 10);
 	});
 	const [toDate, setToDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -78,7 +75,7 @@ export default function UserDashboardPage() {
 				const nextOptions = tasks.map((task, index) => ({
 					key: task.key,
 					label: shortLabelForTask(task.key, task.name),
-					color: task.color || COLORS[index % COLORS.length],
+					color: getChartColor(index),
 				}));
 				const nextKeys = nextOptions.map((option) => option.key);
 
@@ -190,7 +187,7 @@ export default function UserDashboardPage() {
 	);
 
 	useEffect(() => {
-		if (!orgId || !user) return;
+		if (!orgId) return;
 		(async () => {
 			setLoading(true);
 			try {
@@ -199,7 +196,10 @@ export default function UserDashboardPage() {
 				if (holeIds.length === 0) {
 					setByType([]);
 					setTrend([]);
+					setStacked14([]);
+					setOrientationAvg(0);
 					setUnloggedMeters(0);
+					setLoading(false);
 					return;
 				}
 
@@ -241,7 +241,7 @@ export default function UserDashboardPage() {
 						key: option.key,
 						label: option.label,
 						value: metersByType[option.key] || 0,
-						color: option.color || COLORS[index % COLORS.length],
+						color: option.color || getChartColor(index),
 					}))
 					.filter((d) => types.includes(d.key));
 				setByType(pie);
@@ -274,7 +274,7 @@ export default function UserDashboardPage() {
 						.map((option, idx) => ({
 							key: option.key,
 							label: option.label,
-							color: option.color || COLORS[idx % COLORS.length],
+							color: option.color || getChartColor(idx),
 							value: taskMap[option.key] || 0,
 						}))
 						.filter((s) => s.value > 0);
@@ -292,7 +292,7 @@ export default function UserDashboardPage() {
 				setLoading(false);
 			}
 		})();
-	}, [allTaskTypes.length, fromDate, orgId, supabase, toDate, typeOptions, types, user]);
+	}, [allTaskTypes.length, fromDate, orgId, supabase, toDate, typeOptions, types]);
 
 	const toggleType = (t) => {
 		setTypes((prev) => {
@@ -312,8 +312,14 @@ export default function UserDashboardPage() {
 		: selectedLabels.slice(0, 3).join(", ") + (selectedLabels.length > 3 ? ` +${selectedLabels.length - 3}` : "");
 
 	return (
-		<div className="max-w-6xl mx-auto p-4 md:p-6">
-			<h1 className="text-2xl font-semibold mb-4 text-slate-50">Report</h1>
+		<div className="mx-auto max-w-6xl p-4 md:p-6 space-y-5">
+			<section className="card p-4 md:p-5">
+				<h1 className="text-2xl font-semibold text-slate-100">Dashboard</h1>
+				<p className="mt-1 text-sm text-slate-300">
+					Track logged metres, activity mix, production trend, and consumable pressure from the same reporting workspace.
+				</p>
+			</section>
+
 			<DashboardTabs tab={tab} setTab={setTab} />
 
 			{tab === "dashboard" && (
@@ -336,35 +342,47 @@ export default function UserDashboardPage() {
 
 					<DashboardKpis byType={byType} orientationAvg={orientationAvg} unloggedMeters={unloggedMeters} trend={trend} />
 
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-						<div className="card p-4">
-							<div className="text-sm font-medium mb-2 text-slate-100">Meters by task type</div>
+					<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+						<div className="glass rounded-2xl border border-cyan-300/12 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-4 md:p-5 shadow-[0_18px_50px_rgba(8,47,73,0.16)]">
+							<div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Meters by task type</div>
+							<div className="mt-1 text-xs text-slate-300">Quick comparison across the selected reporting window.</div>
 							<BarChart data={byType} />
 						</div>
-						<div className="card p-4">
-							<div className="text-sm font-medium mb-2 text-slate-100">Distribution</div>
+						<div className="glass rounded-2xl border border-sky-300/12 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-4 md:p-5 shadow-[0_18px_50px_rgba(14,116,144,0.14)]">
+							<div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Distribution</div>
+							<div className="mt-1 text-xs text-slate-300">Share of logged metres by task type.</div>
 							<DonutChart data={byType} />
 						</div>
-						<div className="card p-4 md:col-span-2">
-							<div className="text-sm font-medium mb-2 text-slate-100">Daily production (last 14 days)</div>
+						<div className="glass rounded-2xl border border-indigo-300/12 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-4 md:col-span-2 md:p-5 shadow-[0_18px_50px_rgba(67,56,202,0.12)]">
+							<div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Daily production (last 14 days)</div>
+							<div className="mt-1 text-xs text-slate-300">Short-range production rhythm with stacked task contribution.</div>
 							<StackedColumnChart data={stacked14} height={160} fullBleed />
 						</div>
 					</div>
 
-					{loading && <div className="mt-4 text-sm text-slate-400">Loading...</div>}
-					{!loading && byType.length === 0 && <div className="mt-4 text-sm text-slate-400">No data in the selected range.</div>}
+					{loading && (
+						<section className="glass rounded-2xl border border-white/10 p-4 text-sm text-slate-300">
+							Loading dashboard…
+						</section>
+					)}
+					{!loading && byType.length === 0 && (
+						<section className="glass rounded-2xl border border-white/10 p-4 text-sm text-slate-300">
+							No data in the selected range.
+						</section>
+					)}
 				</>
 			)}
 
 			{tab === "activity" && (
-				<div className="card p-4">
-					<div className="text-sm font-medium mb-2 text-slate-100">My Logging Activity</div>
+				<section className="card p-4 md:p-5">
+					<div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Logging Activity</div>
+					<div className="mt-2 text-base font-semibold text-slate-100">My logging activity</div>
 					{activityLoading ? (
-						<div className="text-sm text-slate-400">Loading...</div>
+						<div className="mt-3 text-sm text-slate-400">Loading...</div>
 					) : activityRows.length === 0 ? (
-						<div className="text-sm text-slate-400">No logging activity found.</div>
+						<div className="mt-3 text-sm text-slate-400">No logging activity found.</div>
 					) : (
-						<div className="overflow-x-auto">
+						<div className="mt-4 overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/35">
 							<table className="w-full min-w-[500px] text-[10px] border border-slate-700/70">
 								<thead className="bg-slate-900/80 text-slate-100">
 									<tr>
@@ -456,7 +474,7 @@ export default function UserDashboardPage() {
 							</table>
 						</div>
 					)}
-				</div>
+				</section>
 			)}
 
 			{tab === "project" && <div />}
@@ -465,14 +483,15 @@ export default function UserDashboardPage() {
 			{tab === "consumables" && (
 				<div className="space-y-6">
 					<div className="grid grid-cols-1 gap-6">
-						<div className="card p-4">
-							<div className="text-sm font-medium mb-2 text-slate-100">Low / Reorder Inventory</div>
+						<section className="card p-4 md:p-5">
+							<div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Consumables</div>
+							<div className="mt-2 text-base font-semibold text-slate-100">Low / Reorder inventory</div>
 							{consumableLoading ? (
-								<div className="text-xs text-slate-400">Loading...</div>
+								<div className="mt-3 text-xs text-slate-400">Loading...</div>
 							) : consumableItems.length === 0 ? (
-								<div className="text-xs text-slate-400">No items currently Low or at Reorder threshold.</div>
+								<div className="mt-3 text-xs text-slate-400">No items currently Low or at Reorder threshold.</div>
 							) : (
-								<div className="overflow-x-auto">
+								<div className="mt-4 overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/35">
 									<table className="w-full text-xs md:text-sm">
 										<thead>
 											<tr className="text-left bg-slate-900/80 text-slate-100">
@@ -500,7 +519,7 @@ export default function UserDashboardPage() {
 									</table>
 								</div>
 							)}
-						</div>
+						</section>
 					</div>
 				</div>
 			)}

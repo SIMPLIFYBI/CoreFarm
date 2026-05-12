@@ -15,24 +15,30 @@ export function DashboardFilters({
 	selectedLabels,
 	toggleType,
 }) {
+	const openNativeDatePicker = (event) => {
+		event.currentTarget.showPicker?.();
+	};
+
 	return (
-		<div className="card p-4 mb-6 grid grid-cols-1 md:grid-cols-3 gap-4 relative z-30 overflow-visible">
+		<section className="glass rounded-2xl border border-white/10 p-4 md:p-5 mb-6 grid grid-cols-1 gap-4 md:grid-cols-3 relative z-30 overflow-visible">
 			<div>
-				<label className="block text-xs text-slate-300 mb-1">From</label>
+				<label className="block text-xs text-slate-300 mb-1">Date From</label>
 				<input
 					type="date"
 					value={fromDate}
 					onChange={(e) => setFromDate(e.target.value)}
-					className="input input-sm bg-slate-900/60 border-slate-600/60"
+					onClick={openNativeDatePicker}
+					className="input compact-mobile-date-input mt-1 h-10 w-full text-[11px]"
 				/>
 			</div>
 			<div>
-				<label className="block text-xs text-slate-300 mb-1">To</label>
+				<label className="block text-xs text-slate-300 mb-1">Date To</label>
 				<input
 					type="date"
 					value={toDate}
 					onChange={(e) => setToDate(e.target.value)}
-					className="input input-sm bg-slate-900/60 border-slate-600/60"
+					onClick={openNativeDatePicker}
+					className="input compact-mobile-date-input mt-1 h-10 w-full text-[11px]"
 				/>
 			</div>
 			<div className="relative">
@@ -40,7 +46,7 @@ export function DashboardFilters({
 				<button
 					type="button"
 					onClick={() => setTaskSelectOpen((o) => !o)}
-					className="input input-sm flex items-center justify-between cursor-pointer bg-slate-900/60 border-slate-600/60 hover:border-indigo-400/80"
+					className="input mt-1 flex h-10 items-center justify-between cursor-pointer hover:border-cyan-300/40"
 				>
 					<span className="flex items-center gap-2">
 						<span className="flex -space-x-1">
@@ -65,20 +71,20 @@ export function DashboardFilters({
 					<span className="text-slate-400 text-[10px]">{taskSelectOpen ? "\u25b2" : "\u25bc"}</span>
 				</button>
 				{taskSelectOpen && (
-						<div className="absolute mt-1 w-full max-h-64 overflow-auto rounded-xl bg-slate-900/95 border border-slate-700/80 shadow-2xl shadow-black/50 backdrop-blur-xl z-50 text-xs">
-							<div className="sticky top-0 bg-slate-900/98 p-2 flex items-center gap-2 border-b border-slate-700/80">
-								<button type="button" className="btn btn-xs" onClick={() => setTypes(allTaskTypes)}>
+						<div className="absolute mt-2 w-full max-h-64 overflow-auto rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))] shadow-[0_24px_70px_rgba(2,6,23,0.45)] backdrop-blur-xl z-50 text-xs">
+							<div className="sticky top-0 flex items-center gap-2 border-b border-white/10 bg-slate-950/95 p-2">
+								<button type="button" className="btn btn-3d-glass btn-xs" onClick={() => setTypes(allTaskTypes)}>
 								Select all
 							</button>
 							<button
 								type="button"
-								className="btn btn-xs"
+								className="btn btn-3d-glass btn-xs"
 									onClick={() => setTypes((prev) => (prev.length === allTaskTypes.length ? [allTaskTypes[0]] : allTaskTypes))}
 							>
 								Toggle bulk
 							</button>
 						</div>
-						<ul className="divide-y divide-slate-800/80">
+						<ul className="divide-y divide-white/5">
 							{typeOptions.map((opt) => {
 								const active = types.includes(opt.key);
 								return (
@@ -88,7 +94,7 @@ export function DashboardFilters({
 											onClick={() => toggleType(opt.key)}
 											className={`w-full flex items-center gap-2 px-2 py-1.5 text-left transition-colors ${
 												active
-													? "bg-indigo-500/15 hover:bg-indigo-500/25"
+													? "bg-cyan-400/10 hover:bg-cyan-400/16"
 													: "hover:bg-slate-800/70"
 											}`}
 										>
@@ -99,7 +105,7 @@ export function DashboardFilters({
 											<span className="flex-1 truncate text-slate-100">{opt.label}</span>
 											<span
 												className={`text-[10px] ${
-													active ? "text-indigo-300" : "text-slate-500"
+													active ? "text-cyan-300" : "text-slate-500"
 											}`}
 											>
 												{active ? "\u2714" : ""}
@@ -109,14 +115,14 @@ export function DashboardFilters({
 								);
 							})}
 						</ul>
-						<div className="p-2 text-right border-t border-slate-800/80 bg-slate-900/95">
-							<button type="button" className="btn btn-xs" onClick={() => setTaskSelectOpen(false)}>
+						<div className="border-t border-white/10 bg-slate-950/95 p-2 text-right">
+							<button type="button" className="btn btn-3d-glass btn-xs" onClick={() => setTaskSelectOpen(false)}>
 								Close
 							</button>
 						</div>
 					</div>
 				)}
 			</div>
-		</div>
+		</section>
 	);
 }
