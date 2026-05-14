@@ -66,21 +66,21 @@ export function HistoryTable({
             </div>
           </div>
 
-          <label className="block text-xs text-slate-300">
+          <label className="block min-w-0 overflow-hidden text-[10px] leading-tight text-slate-300 md:text-xs md:leading-normal">
             Date From
             <input
               type="date"
-              className="input mt-1 h-10 text-[11px]"
+              className="input compact-mobile-date-input mt-1 h-9 min-w-0 w-full px-1.5 md:h-10 md:px-3 md:text-[11px]"
               value={dateRange?.from || ""}
               onChange={(e) => onDateChange?.("from", e.target.value)}
             />
           </label>
 
-          <label className="block text-xs text-slate-300">
+          <label className="block min-w-0 overflow-hidden text-[10px] leading-tight text-slate-300 md:text-xs md:leading-normal">
             Date To
             <input
               type="date"
-              className="input mt-1 h-10 text-[11px]"
+              className="input compact-mobile-date-input mt-1 h-9 min-w-0 w-full px-1.5 md:h-10 md:px-3 md:text-[11px]"
               value={dateRange?.to || ""}
               onChange={(e) => onDateChange?.("to", e.target.value)}
             />

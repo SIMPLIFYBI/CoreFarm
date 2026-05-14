@@ -339,7 +339,7 @@ function HomePageInner() {
               <div className="inline-flex rounded-2xl border border-white/10 bg-white/[0.04] p-1">
                 <button
                   className={[
-                    "rounded-xl px-3 py-2 text-sm font-medium transition",
+                    "rounded-xl px-3 py-2 text-sm font-medium whitespace-nowrap transition",
                     mode === "signin" ? "bg-white/[0.08] text-white" : "text-slate-400 hover:text-white",
                   ].join(" ")}
                   onClick={() => switchMode("signin")}
@@ -349,7 +349,7 @@ function HomePageInner() {
                 </button>
                 <button
                   className={[
-                    "rounded-xl px-3 py-2 text-sm font-medium transition",
+                    "rounded-xl px-3 py-2 text-sm font-medium whitespace-nowrap transition",
                     mode === "signup" ? "bg-white/[0.08] text-white" : "text-slate-400 hover:text-white",
                   ].join(" ")}
                   onClick={() => switchMode("signup")}

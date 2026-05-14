@@ -452,14 +452,16 @@ function MapWorkflowStageStrip({ workflowVisual, selectedHole, canManageSelectio
                 type="button"
                 disabled={!phase}
                 onClick={() => phase && onSelectPhase(phase)}
+                data-pressable={phase ? "true" : "false"}
+                data-actionable={isToggleable ? "true" : "false"}
                 className={[
-                  "group relative flex w-full flex-col items-center text-center",
+                  "map-workflow-stagegate group relative flex w-full flex-col items-center text-center",
                   !phase ? "cursor-default" : "",
                 ].join(" ")}
               >
                 <div
                   className={[
-                    "relative flex h-[52px] w-[52px] items-center justify-center rounded-full border-[4px] bg-transparent transition-base md:h-[60px] md:w-[60px] lg:h-[64px] lg:w-[64px]",
+                    "map-workflow-stagegate-orb relative flex h-[52px] w-[52px] items-center justify-center rounded-full border-[4px] bg-transparent transition-base md:h-[60px] md:w-[60px] lg:h-[64px] lg:w-[64px]",
                     phaseMeta.ringClassName,
                     isSelected
                       ? "scale-[1.05] shadow-[0_0_0_6px_rgba(34,211,238,0.18),0_0_0_12px_rgba(34,211,238,0.08)]"
@@ -488,13 +490,13 @@ function MapWorkflowStageStrip({ workflowVisual, selectedHole, canManageSelectio
                   </div>
                 </div>
 
-                <div className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.16em] md:px-2.5 md:text-[10px] ${phaseMeta.chipClassName}`}>
+                <div className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[8px] font-medium uppercase tracking-[0.16em] md:px-2.5 md:text-[9px] ${phaseMeta.chipClassName}`}>
                   Stage {phaseNumber}
                 </div>
                 <div className={[
-                  "mt-1.5 text-xs font-semibold leading-tight md:text-sm lg:text-base lg:leading-none",
+                  "mt-1.5 h-[2.3em] w-full min-w-0 max-w-[58px] overflow-hidden text-center text-[8px] font-semibold leading-[1.15] whitespace-normal break-words md:h-[2.3em] md:max-w-[92px] md:text-[9px] lg:h-[2.3em] lg:max-w-[108px] lg:text-[9px]",
                   isSelected || isToggleable ? "text-cyan-50" : "text-white",
-                ].join(" ")}>{phase?.title || "Unused"}</div>
+                ].join(" ")} title={phase?.title || "Unused"}>{phase?.title || "Unused"}</div>
               </button>
             </div>
           );

@@ -9,6 +9,7 @@ import { BarChart, DonutChart, StackedColumnChart } from "@/app/components/Chart
 import { DashboardTabs } from "./components/DashboardTabs";
 import { DashboardFilters } from "./components/DashboardFilters";
 import { DashboardKpis } from "./components/DashboardKpis";
+import { KpiCard } from "./components/KpiCard";
 
 export default function UserDashboardPage() {
 	const supabase = supabaseBrowser();
@@ -28,6 +29,10 @@ export default function UserDashboardPage() {
 	const [consumableItems, setConsumableItems] = useState([]);
 	const [consumableTrend, setConsumableTrend] = useState([]);
 	const [consumableLoading, setConsumableLoading] = useState(false);
+	const [plodsLoading, setPlodsLoading] = useState(false);
+	const [plodsSummary, setPlodsSummary] = useState({ totalPlods: 0, totalActivities: 0, totalActivityHours: 0, approvalRate: 0 });
+	const [plodsByType, setPlodsByType] = useState([]);
+	const [plodActivityMix, setPlodActivityMix] = useState([]);
 
 	const [fromDate, setFromDate] = useState(() => {
 		const d = new Date();
@@ -179,6 +184,83 @@ export default function UserDashboardPage() {
 			}
 		})();
 	}, [tab, orgId, supabase]);
+
+	useEffect(() => {
+		if (tab !== "plods" || !orgId) return;
+
+		(async () => {
+			setPlodsLoading(true);
+			try {
+				const { data, error } = await supabase
+					.from("plods")
+					.select(`
+						id,
+						shift_date,
+						started_at,
+						finished_at,
+						approval_status,
+						plod_type,
+						plod_types:plod_type_id(name),
+						holes:hole_id(hole_id),
+						plod_activities(
+							id,
+							hole_id,
+							started_at,
+							finished_at,
+							activity_types:activity_type_id(activity_type),
+							holes:hole_id(hole_id)
+						)
+					`)
+					.eq("organization_id", orgId)
+					.gte("shift_date", fromDate)
+					.lte("shift_date", toDate)
+					.order("shift_date", { ascending: true })
+					.limit(5000);
+
+				if (error) throw error;
+
+				const rows = data || [];
+				const plodTypeCounts = {};
+				const activityTypeCounts = {};
+				let totalActivities = 0;
+				let totalActivityHours = 0;
+				let approvedCount = 0;
+
+				for (const row of rows) {
+					const plodTypeLabel = row?.plod_types?.name || row?.plod_type || "Untyped";
+					plodTypeCounts[plodTypeLabel] = (plodTypeCounts[plodTypeLabel] || 0) + 1;
+
+					const status = String(row?.approval_status || "submitted").toLowerCase();
+					if (status === "approved") approvedCount += 1;
+
+					const activities = Array.isArray(row?.plod_activities) ? row.plod_activities : [];
+					totalActivities += activities.length;
+
+					for (const activity of activities) {
+						const activityTypeLabel = activity?.activity_types?.activity_type || "Unknown";
+						activityTypeCounts[activityTypeLabel] = (activityTypeCounts[activityTypeLabel] || 0) + 1;
+						totalActivityHours += hoursBetween(activity?.started_at, activity?.finished_at);
+					}
+				}
+
+				setPlodsSummary({
+					totalPlods: rows.length,
+					totalActivities,
+					totalActivityHours: round1(totalActivityHours),
+					approvalRate: rows.length ? round1((approvedCount / rows.length) * 100) : 0,
+				});
+				setPlodsByType(buildChartSeries(plodTypeCounts, 8, "Other"));
+				setPlodActivityMix(buildChartSeries(activityTypeCounts, 6, "Other"));
+			} catch (e) {
+				console.error(e);
+				setPlodsSummary({ totalPlods: 0, totalActivities: 0, totalActivityHours: 0, approvalRate: 0 });
+				setPlodsByType([]);
+				setPlodActivityMix([]);
+			} finally {
+				setPlodsLoading(false);
+			}
+		})();
+	}, [fromDate, orgId, supabase, tab, toDate]);
 
 	const allTaskTypes = useMemo(() => typeOptions.map((option) => option.key), [typeOptions]);
 	const taskLabelMap = useMemo(
@@ -478,7 +560,55 @@ export default function UserDashboardPage() {
 			)}
 
 			{tab === "project" && <div />}
-			{tab === "plods" && <div />}
+			{tab === "plods" && (
+				<div className="space-y-6">
+					<section className="glass rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-4 md:p-5 shadow-[0_18px_50px_rgba(8,47,73,0.16)]">
+						<div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+							<div>
+								<div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Plods report</div>
+								<div className="mt-1 text-sm text-slate-300">Review plod volume, activity mix, approval performance, and the busiest holes across the selected period.</div>
+							</div>
+							<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+								<label className="text-xs text-slate-300">
+									<div className="mb-1 uppercase tracking-[0.16em] text-slate-400">From</div>
+									<input type="date" className="input" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+								</label>
+								<label className="text-xs text-slate-300">
+									<div className="mb-1 uppercase tracking-[0.16em] text-slate-400">To</div>
+									<input type="date" className="input" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+								</label>
+							</div>
+						</div>
+					</section>
+
+					<div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+						<KpiCard title="Total plods" value={plodsSummary.totalPlods} />
+						<KpiCard title="Activity entries" value={plodsSummary.totalActivities} />
+						<KpiCard title="Activity hours" value={plodsSummary.totalActivityHours} suffix=" hrs" />
+						<KpiCard title="Approval rate" value={plodsSummary.approvalRate} suffix=" %" />
+					</div>
+
+					<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+						<div className="glass rounded-2xl border border-cyan-300/12 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-4 md:p-5 shadow-[0_18px_50px_rgba(8,47,73,0.16)]">
+							<div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Plods by type</div>
+							<div className="mt-1 text-xs text-slate-300">Which plod types are driving most of the reporting volume.</div>
+							<BarChart data={plodsByType} valueSuffix=" plods" />
+						</div>
+						<div className="glass rounded-2xl border border-sky-300/12 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-4 md:p-5 shadow-[0_18px_50px_rgba(14,116,144,0.14)]">
+							<div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Activity mix</div>
+							<div className="mt-1 text-xs text-slate-300">Most common activity categories captured inside submitted plods.</div>
+							<DonutChart data={plodActivityMix} valueSuffix=" acts" />
+						</div>
+					</div>
+
+					{plodsLoading && (
+						<section className="glass rounded-2xl border border-white/10 p-4 text-sm text-slate-300">Loading plods report…</section>
+					)}
+					{!plodsLoading && plodsSummary.totalPlods === 0 && (
+						<section className="glass rounded-2xl border border-white/10 p-4 text-sm text-slate-300">No plod data in the selected range.</section>
+					)}
+				</div>
+			)}
 
 			{tab === "consumables" && (
 				<div className="space-y-6">
@@ -538,6 +668,41 @@ function shortLabelForTask(t, fallbackLabel) {
 			specific_gravity: "SG",
 		}[t] || fallbackLabel || t
 	);
+}
+
+function round1(value) {
+	return Math.round((Number(value || 0) + Number.EPSILON) * 10) / 10;
+}
+
+function hoursBetween(start, end) {
+	if (!start || !end) return 0;
+	const startMs = new Date(start).getTime();
+	const endMs = new Date(end).getTime();
+	if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return 0;
+	return (endMs - startMs) / 36e5;
+}
+
+function buildChartSeries(counts, limit = 6, otherLabel = "Other") {
+	const entries = Object.entries(counts || {})
+		.map(([label, value]) => ({ label, value: Number(value) || 0 }))
+		.filter((entry) => entry.value > 0)
+		.sort((a, b) => b.value - a.value);
+
+	if (entries.length <= limit) {
+		return entries.map((entry, index) => ({
+			...entry,
+			color: getChartColor(index),
+		}));
+	}
+
+	const visible = entries.slice(0, limit - 1);
+	const otherValue = entries.slice(limit - 1).reduce((sum, entry) => sum + entry.value, 0);
+	const merged = otherValue > 0 ? [...visible, { label: otherLabel, value: otherValue }] : visible;
+
+	return merged.map((entry, index) => ({
+		...entry,
+		color: getChartColor(index),
+	}));
 }
 
 function eachDay(from, to) {
