@@ -21,32 +21,32 @@ export function DashboardFilters({
 
 	return (
 		<section className="glass rounded-2xl border border-white/10 p-4 md:p-5 mb-6 grid grid-cols-1 gap-4 md:grid-cols-3 relative z-30 overflow-visible">
-			<div>
+			<div className="min-w-0">
 				<label className="block text-xs text-slate-300 mb-1">Date From</label>
 				<input
 					type="date"
 					value={fromDate}
 					onChange={(e) => setFromDate(e.target.value)}
 					onClick={openNativeDatePicker}
-					className="input compact-mobile-date-input mt-1 h-10 w-full text-[11px]"
+					className="input compact-mobile-date-input mt-1 h-9 min-w-0 w-full px-1.5 md:h-10 md:px-3 md:text-[11px]"
 				/>
 			</div>
-			<div>
+			<div className="min-w-0">
 				<label className="block text-xs text-slate-300 mb-1">Date To</label>
 				<input
 					type="date"
 					value={toDate}
 					onChange={(e) => setToDate(e.target.value)}
 					onClick={openNativeDatePicker}
-					className="input compact-mobile-date-input mt-1 h-10 w-full text-[11px]"
+					className="input compact-mobile-date-input mt-1 h-9 min-w-0 w-full px-1.5 md:h-10 md:px-3 md:text-[11px]"
 				/>
 			</div>
-			<div className="relative">
+			<div className="relative min-w-0">
 				<label className="block text-xs text-slate-300 mb-1">Task types</label>
 				<button
 					type="button"
 					onClick={() => setTaskSelectOpen((o) => !o)}
-					className="input mt-1 flex h-10 items-center justify-between cursor-pointer hover:border-cyan-300/40"
+					className="input mt-1 flex h-10 min-w-0 items-center justify-between cursor-pointer hover:border-cyan-300/40"
 				>
 					<span className="flex items-center gap-2">
 						<span className="flex -space-x-1">

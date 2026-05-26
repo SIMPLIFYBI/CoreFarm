@@ -138,21 +138,6 @@ export default function AssetsView() {
     };
   }, [orgId, activeTab]);
 
-  const activeTabMeta =
-    activeTab === "history"
-      ? {
-          eyebrow: "Asset Timeline",
-          title: "Review the latest asset changes",
-          description: "Track changes across the fleet with the same polished control surface used on the Activity page.",
-          badge: "Audit trail",
-        }
-      : {
-          eyebrow: "Asset Registry",
-          title: "Manage field equipment in one workspace",
-          description: "Browse, filter, and maintain the asset register with the same visual structure used across Activity.",
-          badge: "Operational assets",
-        };
-
   return (
     <div className="mx-auto max-w-6xl space-y-5 p-4 md:p-6">
       <section className="card p-4 md:p-5">
@@ -181,17 +166,6 @@ export default function AssetsView() {
               {tab.label}
             </button>
           ))}
-        </div>
-
-        <div className="mt-4 flex flex-col gap-3 rounded-[22px] border border-white/10 bg-[linear-gradient(145deg,rgba(15,23,42,0.94),rgba(8,47,73,0.28),rgba(30,41,59,0.58))] p-4 md:flex-row md:items-start md:justify-between">
-          <div className="min-w-0">
-            <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">{activeTabMeta.eyebrow}</div>
-            <div className="mt-1 text-base font-semibold text-slate-100">{activeTabMeta.title}</div>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">{activeTabMeta.description}</p>
-          </div>
-          <div className="shrink-0 rounded-[20px] border border-cyan-300/15 bg-cyan-300/10 px-4 py-3 text-sm text-cyan-100">
-            {activeTabMeta.badge}
-          </div>
         </div>
       </section>
 

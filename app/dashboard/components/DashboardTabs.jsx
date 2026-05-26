@@ -17,16 +17,6 @@ export function DashboardTabs({ tab, setTab }) {
 			</button>
 			<button
 				className={`rounded-xl px-4 py-2 font-medium text-sm transition-colors ${
-					tab === "project"
-						? "bg-white/[0.08] text-slate-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
-						: "text-slate-400 hover:bg-white/[0.04] hover:text-slate-200"
-				}`}
-				onClick={() => setTab("project")}
-			>
-				Project
-			</button>
-			<button
-				className={`rounded-xl px-4 py-2 font-medium text-sm transition-colors ${
 					tab === "plods"
 						? "bg-white/[0.08] text-slate-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
 						: "text-slate-400 hover:bg-white/[0.04] hover:text-slate-200"

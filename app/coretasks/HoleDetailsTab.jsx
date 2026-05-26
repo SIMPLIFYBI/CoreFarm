@@ -1277,7 +1277,7 @@ export default function HoleDetailsTab({ projectScope = "own" }) {
       const next = {};
 
       for (const group of groupedFilteredHoles) {
-        next[group.id] = current[group.id] ?? true;
+        next[group.id] = current[group.id] ?? false;
       }
 
       return next;

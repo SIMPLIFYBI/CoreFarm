@@ -25,7 +25,7 @@ export default function UserDashboardPage() {
 	const [user, setUser] = useState(null);
 	const [loading, setLoading] = useState(true);
 	const { orgId } = useOrg();
-	const [tab, setTab] = useState("dashboard"); // 'dashboard' | 'project' | 'plods' | 'activity' | 'consumables'
+	const [tab, setTab] = useState("dashboard"); // 'dashboard' | 'plods' | 'activity' | 'consumables'
 	const [consumableItems, setConsumableItems] = useState([]);
 	const [consumableTrend, setConsumableTrend] = useState([]);
 	const [consumableLoading, setConsumableLoading] = useState(false);
@@ -559,7 +559,6 @@ export default function UserDashboardPage() {
 				</section>
 			)}
 
-			{tab === "project" && <div />}
 			{tab === "plods" && (
 				<div className="space-y-6">
 					<section className="glass rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-4 md:p-5 shadow-[0_18px_50px_rgba(8,47,73,0.16)]">

@@ -74,7 +74,8 @@ export default function ActivityPage() {
   const [expandedPlods, setExpandedPlods] = useState({});
 
   const [dateFrom, setDateFrom] = useState(() => {
-    const date = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const date = new Date();
+    date.setMonth(date.getMonth() - 6);
     return date.toISOString().slice(0, 10);
   });
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));

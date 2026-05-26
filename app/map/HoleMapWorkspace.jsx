@@ -1180,12 +1180,24 @@ function ProjectAccordionList({
 
   return (
     <div className={compact ? "space-y-3 p-4" : "space-y-3 p-4 md:p-5"}>
+      <div className="rounded-[22px] border border-white/10 bg-white/[0.04] px-3 py-3 shadow-[0_12px_28px_rgba(2,6,23,0.14)]">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.22em] text-cyan-100/75">Projects</div>
+            <div className="mt-1 text-xs text-slate-300">Expand a project to reveal its holes.</div>
+          </div>
+          <div className="rounded-full border border-white/10 bg-slate-950/55 px-2.5 py-1 text-[11px] text-slate-300">
+            {projects.length} project{projects.length === 1 ? "" : "s"}
+          </div>
+        </div>
+      </div>
+
       {projects.map((project) => {
         const isExpanded = expandedProjects[project.id] === true;
         return (
           <div
             key={project.id}
-            className={`overflow-hidden border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.66),rgba(2,6,23,0.92))] ${compact ? "rounded-[26px]" : "rounded-3xl"}`}
+            className={`overflow-hidden border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.66),rgba(2,6,23,0.92))] shadow-[0_18px_40px_rgba(2,6,23,0.18)] ${compact ? "rounded-[26px]" : "rounded-3xl"}`}
           >
             <button
               type="button"
@@ -1193,6 +1205,7 @@ function ProjectAccordionList({
               onClick={() => onToggleProject(project, isExpanded)}
             >
               <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-[0.22em] text-cyan-100/70">Project</div>
                 <div className={`truncate font-semibold text-white ${compact ? "text-[15px]" : "text-sm"}`}>{project.name}</div>
                 <div className="mt-1 text-xs text-slate-400">{project.holes.length} mapped hole{project.holes.length === 1 ? "" : "s"}</div>
               </div>
@@ -1202,7 +1215,14 @@ function ProjectAccordionList({
             </button>
 
             {isExpanded ? (
-              <div className="space-y-2 border-t border-white/10 px-3 py-3">
+              <div className="border-t border-white/10 px-3 py-3">
+                <div className="mb-3 ml-1 flex items-center justify-between gap-3">
+                  <div className="text-[10px] uppercase tracking-[0.22em] text-slate-400">Holes</div>
+                  <div className="rounded-full border border-cyan-300/12 bg-cyan-300/[0.08] px-2 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-cyan-100/80">
+                    Level 2
+                  </div>
+                </div>
+                <div className="space-y-2 border-l border-white/10 pl-3">
                 {project.holes.map((hole) => {
                   const isSelected = selectedHoleId === hole.id;
                   return (
@@ -1213,6 +1233,7 @@ function ProjectAccordionList({
                       className={`grid w-full grid-cols-[1fr_auto] items-center gap-3 rounded-2xl border px-3 py-3 text-left transition ${isSelected ? "border-amber-300/50 bg-amber-300/12 shadow-[0_10px_32px_rgba(251,191,36,0.14)]" : "border-white/8 bg-white/[0.03] hover:border-cyan-300/30 hover:bg-cyan-300/[0.06]"}`}
                     >
                       <div className="min-w-0">
+                        <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Hole</div>
                         <div className="truncate text-sm font-semibold text-slate-100">{hole.hole_id}</div>
                         <div className="mt-1 truncate text-xs text-slate-400">
                           {formatValue(hole.planned_depth, "m")} planned · {formatValue(hole.depth, "m")} drilled
@@ -1224,6 +1245,7 @@ function ProjectAccordionList({
                     </button>
                   );
                 })}
+                </div>
               </div>
             ) : null}
           </div>

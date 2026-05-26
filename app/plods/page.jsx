@@ -89,9 +89,13 @@ export default function Page() {
   const [selectedPlod, setSelectedPlod] = useState(null);
   const [decisionSaving, setDecisionSaving] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [dateRange, setDateRange] = useState({
-    from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-    to: new Date().toISOString().split("T")[0],
+  const [dateRange, setDateRange] = useState(() => {
+    const fromDate = new Date();
+    fromDate.setMonth(fromDate.getMonth() - 6);
+    return {
+      from: fromDate.toISOString().split("T")[0],
+      to: new Date().toISOString().split("T")[0],
+    };
   });
   const [advancedFilters, setAdvancedFilters] = useState({
     status: "",
