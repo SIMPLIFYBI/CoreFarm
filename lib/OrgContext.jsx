@@ -77,6 +77,11 @@ export function OrgProvider({ children }) {
     } catch (_) {}
   }, []);
 
+  const applyOrgSelectionState = useCallback((nextOrgId, nextMode = "") => {
+    _setOrgId(nextOrgId || "");
+    setOrgSelectionMode(nextMode || "");
+  }, []);
+
   // Load user (initial) and listen for auth state changes
   useEffect(() => {
     let active = true;
@@ -103,7 +108,7 @@ export function OrgProvider({ children }) {
     if (!user) {
       setMemberships([]);
       if (publicDemoEnabled) {
-        persistOrgSelection(DEMO_ORG_ID, ORG_SELECTION_MODE_AUTO_DEMO);
+        applyOrgSelectionState(DEMO_ORG_ID, ORG_SELECTION_MODE_AUTO_DEMO);
       }
       setLoading(false);
       return;
@@ -124,18 +129,8 @@ export function OrgProvider({ children }) {
       const demoMembership = list.find((membership) => isDemoOrgName(membership.organizations?.name));
       const nonDemoMembership = list.find((membership) => !isDemoOrgName(membership.organizations?.name));
 
-      // If current orgId is valid, keep it (this is the "remember last org" behavior)
+      // If current orgId is valid, keep it. This is the primary "remember last org" path.
       if (orgId && list.find((m) => m.organization_id === orgId)) {
-        const currentMembership = list.find((membership) => membership.organization_id === orgId);
-        if (
-          orgSelectionMode === ORG_SELECTION_MODE_AUTO_DEMO
-          && currentMembership
-          && isDemoOrgName(currentMembership.organizations?.name)
-          && nonDemoMembership
-          && nonDemoMembership.organization_id !== orgId
-        ) {
-          persistOrgSelection(nonDemoMembership.organization_id, ORG_SELECTION_MODE_MANUAL);
-        }
         return;
       }
 
@@ -144,29 +139,12 @@ export function OrgProvider({ children }) {
       const storedMode = readStoredOrgSelectionMode();
 
       if (stored && list.find((m) => m.organization_id === stored)) {
-        const storedMembership = list.find((membership) => membership.organization_id === stored);
-        if (
-          storedMode === ORG_SELECTION_MODE_AUTO_DEMO
-          && storedMembership
-          && isDemoOrgName(storedMembership.organizations?.name)
-          && nonDemoMembership
-          && nonDemoMembership.organization_id !== stored
-        ) {
-          persistOrgSelection(nonDemoMembership.organization_id, ORG_SELECTION_MODE_MANUAL);
-          return;
-        }
-
         persistOrgSelection(stored, storedMode || ORG_SELECTION_MODE_MANUAL);
         return;
       }
 
-      if (demoMembership) {
-        persistOrgSelection(demoMembership.organization_id, ORG_SELECTION_MODE_AUTO_DEMO);
-        return;
-      }
-
       // Fallback when no demo membership exists.
-      const fallback = nonDemoMembership?.organization_id || list[0]?.organization_id || "";
+      const fallback = nonDemoMembership?.organization_id || demoMembership?.organization_id || list[0]?.organization_id || "";
 
       if (fallback) {
         persistOrgSelection(fallback, ORG_SELECTION_MODE_MANUAL);
@@ -189,17 +167,17 @@ export function OrgProvider({ children }) {
 
     if (!user) {
       if (publicDemoEnabled) {
-        persistOrgSelection(DEMO_ORG_ID, ORG_SELECTION_MODE_AUTO_DEMO);
+        applyOrgSelectionState(DEMO_ORG_ID, ORG_SELECTION_MODE_AUTO_DEMO);
       } else {
         persistOrgSelection("", "");
       }
     }
-  }, [user, authReady, persistOrgSelection, publicDemoEnabled]); // <-- UPDATE deps
+  }, [user, authReady, applyOrgSelectionState, persistOrgSelection, publicDemoEnabled]); // <-- UPDATE deps
 
   // Wrapped setter persists to localStorage
   const setOrgId = (val, options = {}) => {
     if (!user && publicDemoEnabled) {
-      persistOrgSelection(DEMO_ORG_ID, ORG_SELECTION_MODE_AUTO_DEMO);
+      applyOrgSelectionState(DEMO_ORG_ID, ORG_SELECTION_MODE_AUTO_DEMO);
       return;
     }
 
